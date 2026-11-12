@@ -1,0 +1,16 @@
+# Tabelas permitidas sem a coluna empresa_id.
+#
+# Uma tabela entra aqui apenas se for catálogo global da Tenaz ou controle da
+# própria plataforma — nunca dado de cliente. Acrescentar uma linha é decisão
+# de revisão de código, e o revisor é o agente tenaz-isolamento.
+#
+# Pergunta de controle antes de acrescentar: duas empresas diferentes podem
+# ver a mesma linha sem nenhum problema? Se a resposta tem qualquer "depende",
+# a tabela NÃO é global e precisa de empresa_id.
+#
+# A suíte de vazamento quebra o build quando aparece em app ou plataforma uma
+# tabela sem empresa_id que não esteja nesta lista.
+#
+# Formato: esquema.tabela  # justificativa
+
+plataforma.migracao   # controle de versão do esquema, do goose; não tem dado de negócio

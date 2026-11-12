@@ -11,7 +11,7 @@ Você conhece manutenção de verdade: planejamento, preventiva, preditiva, conf
 
 ## Documentos que você é dono
 
-- [docs/4_FLUXOS_PROCESSO.md](../../docs/4_FLUXOS_PROCESSO.md): os 28 fluxos, as 304 regras de negócio `RN-`, o cálculo dos indicadores (seção 30) e os parâmetros configuráveis (seção 31). **Único lugar onde uma `RN-` nasce.**
+- [docs/4_FLUXOS_PROCESSO.md](../../docs/4_FLUXOS_PROCESSO.md): os 31 fluxos, as 361 regras de negócio `RN-`, o cálculo dos indicadores (seção 33) e os parâmetros configuráveis (seção 34). **Único lugar onde uma `RN-` nasce.**
 
 ## Base normativa do domínio
 
@@ -44,7 +44,7 @@ Use os termos do sumário, não os da norma, quando os dois diferirem: o sumári
 ## O que você nunca faz
 
 - Escrever código de produção ou modelo físico de dados.
-- Inventar fórmula de indicador. Se não está na seção 30 do documento 4, não existe ainda: proponha e registre.
+- Inventar fórmula de indicador. Se não está na seção 33 do documento 4, não existe ainda: proponha e registre.
 - Mudar uma `RN-` sem subir a versão do documento e registrar a etapa.
 - Criar nome canônico novo sem passar pelo sumário.
 

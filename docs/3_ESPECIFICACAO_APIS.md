@@ -1,11 +1,13 @@
 # Especificação de APIs — Tenaz
 
-**Versão:** 0.3 · **Data:** 12/11/2026 · **Status:** Em elaboração
-**Alinhado ao sumário executivo 0.4.**
+**Versão:** 0.4 · **Data:** 12/11/2026 · **Status:** Em elaboração
+**Alinhado ao sumário executivo 0.5.**
 **Produto:** Tenaz · Gestão de Manutenção e Frota
 **Protocolo:** HTTPS (TLS 1.2 ou superior, preferência por 1.3) · **Formato:** JSON · **Contrato:** OpenAPI 3.1
 
-Este documento especifica a API REST da Tenaz: convenções, autenticação, limites, catálogo de endpoints por módulo, sincronização do app offline, webhooks, integrações, terceiros, estoque estendido, locação, gestão de serviços do prestador com conexão entre contas e política de versões. Usa os códigos de módulo, os nomes de entidade e os estados canônicos do [Sumário Executivo](0_SUMARIO_EXECUTIVO.md). Quando este documento e o sumário divergirem, vale o sumário, e a divergência deve ser registrada na seção 23.
+**Mudanças da versão 0.4:** configuração por segmento (sumário 0.5, seção 3.7). Entram no MVP as regras configuráveis de condição e efeito (`/v1/regras-automacao`, `/v1/disparos-regra`), os campos extras da OS (`/v1/campos-extras-os` e `campos_extras` na OS), a fase de ciclo de vida do ativo (`fase_ciclo_vida`, `data_entrada_operacao`, ação `colocar-em-operacao`, unitária e em lote) e o tipo de OS `implantacao`. Entram na Fase 2 os pacotes de segmento (`/v1/pacotes-segmento`, `/v1/aplicacoes-pacote`) e dois módulos novos: **PRJ** (`/v1/modelos-projeto`, `/v1/projetos`, etapas e `/v1/medicoes-etapa`) e **CTR** (`/v1/contratos-cliente`, itens, painel e `/v1/medicoes-contrato`). A OS ganha a origem `projeto` (e passa a usar `cliente_conectado`, que o sumário já tinha), `causa_externa` e `etapa_projeto_id`; a solicitação ganha a origem `regra`; o bloqueio de ativo ganha `origem`. Nove permissões novas, 9 eventos de webhook novos (um deles proposta) e 24 códigos de erro novos. Catálogo de 482 para 564 endpoints. Seções novas 23 a 25; as pendências passam para a seção 26.
+
+Este documento especifica a API REST da Tenaz: convenções, autenticação, limites, catálogo de endpoints por módulo, sincronização do app offline, webhooks, integrações, terceiros, estoque estendido, locação, gestão de serviços do prestador com conexão entre contas, configuração por segmento, projetos de implantação, contratos com clientes e política de versões. Usa os códigos de módulo, os nomes de entidade e os estados canônicos do [Sumário Executivo](0_SUMARIO_EXECUTIVO.md). Quando este documento e o sumário divergirem, vale o sumário, e a divergência deve ser registrada na seção 26.
 
 Tudo marcado como **proposta** é decisão de projeto ainda não validada. O restante decorre do sumário executivo ou do [estudo de mercado](pesquisa/reports/Benchmarking%20manuten%C3%A7%C3%A3o%20e%20frota%20Brasil.md). As regras de negócio citadas aqui são resumidas; a fonte definitiva será o [4_FLUXOS_PROCESSO.md](4_FLUXOS_PROCESSO.md), e os nomes de tabela e campo serão confirmados no [2_ARQUITETURA_BANCO_DADOS.md](2_ARQUITETURA_BANCO_DADOS.md).
 
@@ -35,7 +37,10 @@ Tudo marcado como **proposta** é decisão de projeto ainda não validada. O res
 20. [Estoque estendido: estoque em terceiros, peças serializadas e conserto](#20-estoque-estendido-estoque-em-terceiros-peças-serializadas-e-conserto)
 21. [Locação: contratos, vistorias e responsabilidade de custo](#21-locação-contratos-vistorias-e-responsabilidade-de-custo)
 22. [SRV: gestão de serviços do prestador e conexão entre contas](#22-srv-gestão-de-serviços-do-prestador-e-conexão-entre-contas)
-23. [Pendências e decisões em aberto](#23-pendências-e-decisões-em-aberto)
+23. [Configuração por segmento: regras, campos extras, fase de ciclo de vida e pacotes](#23-configuração-por-segmento-regras-campos-extras-fase-de-ciclo-de-vida-e-pacotes)
+24. [PRJ: projetos de implantação](#24-prj-projetos-de-implantação)
+25. [CTR: contratos com clientes](#25-ctr-contratos-com-clientes)
+26. [Pendências e decisões em aberto](#26-pendências-e-decisões-em-aberto)
 
 ---
 
@@ -85,11 +90,11 @@ O domínio depende da pendência P5 do sumário (disponibilidade do nome Tenaz).
 ### 2.1 REST e recursos
 
 - Recursos são substantivos no plural, em português, sem acento, em kebab-case: `/v1/ordens-servico`, `/v1/leituras-medidor`.
-- **Regra de plural (proposta):** a rota é o nome canônico da entidade com a **primeira palavra no plural** e `_` trocado por `-`. Exemplos: `ordem_servico` → `ordens-servico`; `plano_manutencao` → `planos-manutencao`; `classe_ativo` → `classes-ativo`; `leitura_medidor` → `leituras-medidor`; `documento_vencimento` → `documentos-vencimento`; `checklist_modelo` → `checklists-modelo`; `servico_fornecedor` → `servicos-fornecedor`; `contrato_locacao` → `contratos-locacao`; `cliente_servico` → `clientes-servico`; `especialidade_tecnico` → `especialidades-tecnico`; `conexao_empresa` → `conexoes-empresa`; `vinculo_os` → `vinculos-os`. Adjetivo concorda com o substantivo: `nota_fiscal_entrada` → `notas-fiscais-entrada`; `peca_serializada` → `pecas-serializadas`.
+- **Regra de plural (proposta):** a rota é o nome canônico da entidade com a **primeira palavra no plural** e `_` trocado por `-`. Exemplos: `ordem_servico` → `ordens-servico`; `plano_manutencao` → `planos-manutencao`; `classe_ativo` → `classes-ativo`; `leitura_medidor` → `leituras-medidor`; `documento_vencimento` → `documentos-vencimento`; `checklist_modelo` → `checklists-modelo`; `servico_fornecedor` → `servicos-fornecedor`; `contrato_locacao` → `contratos-locacao`; `cliente_servico` → `clientes-servico`; `especialidade_tecnico` → `especialidades-tecnico`; `conexao_empresa` → `conexoes-empresa`; `vinculo_os` → `vinculos-os`; `regra_automacao` → `regras-automacao`; `disparo_regra` → `disparos-regra`; `pacote_segmento` → `pacotes-segmento`; `aplicacao_pacote` → `aplicacoes-pacote`; `modelo_projeto` → `modelos-projeto`; `contrato_cliente` → `contratos-cliente`; `medicao_contrato` → `medicoes-contrato`. Adjetivo concorda com o substantivo: `nota_fiscal_entrada` → `notas-fiscais-entrada`; `peca_serializada` → `pecas-serializadas`; `campo_extra_os` → `campos-extras-os`.
 - **Exceção aceita (sumário 3.6):** `GET /v1/versao` é recurso único e público e fica no singular.
 - Sub-recursos expressam pertença: `/v1/ordens-servico/{id}/apontamentos`.
 - **Transições de estado são sub-recursos de ação**, sempre com `POST` e verbo no infinitivo: `POST /v1/ordens-servico/{id}/iniciar`. O campo `status` nunca é alterado por `PATCH`; a API devolve `422 campo_somente_leitura` se o cliente tentar.
-- Identificadores na rota são o `id` (UUID). Números legíveis (`OS-2026-004812`, `SS-2026-000731`, `OR-2026-000045`, `CL-2026-000012`) e TAGs servem como filtro: `GET /v1/ordens-servico?numero=OS-2026-004812`, `GET /v1/ativos?tag=CMP-0347`. **Nenhuma rota recebe token ou segredo no caminho nem na query string**: o token do link de uso único vai no corpo de `POST /v1/publico/links-execucao/ativar`, e o código de convite de conexão, no corpo de `aceitar` (19.4 e 22.5). Caminhos e queries aparecem em logs, histórico do navegador e cabeçalho `Referer`; corpos não.
+- Identificadores na rota são o `id` (UUID). A exceção são os catálogos globais mantidos pela Tenaz, identificados pelo código estável: `/v1/indicadores/{codigo}`, `/v1/relatorios/{codigo}/gerar` e `/v1/pacotes-segmento/{codigo}`. Números legíveis (`OS-2026-004812`, `SS-2026-000731`, `OR-2026-000045`, `CL-2026-000012`, `PJ-2026-000031`, `CT-2026-000004`) e TAGs servem como filtro: `GET /v1/ordens-servico?numero=OS-2026-004812`, `GET /v1/ativos?tag=CMP-0347`. **Nenhuma rota recebe token ou segredo no caminho nem na query string**: o token do link de uso único vai no corpo de `POST /v1/publico/links-execucao/ativar`, e o código de convite de conexão, no corpo de `aceitar` (19.4 e 22.5). Caminhos e queries aparecem em logs, histórico do navegador e cabeçalho `Referer`; corpos não.
 
 | Método | Uso | Corpo | Sucesso |
 |---|---|---|---|
@@ -283,7 +288,7 @@ Todo erro usa `Content-Type: application/problem+json` e o formato da RFC 9457, 
   "id_rastreio": "01JCZ4W8N0Q3R6S9T2V5X8Y1Z4",
   "erros": [
     { "campo": "ativo_id", "codigo": "obrigatorio", "mensagem": "Informe o ativo." },
-    { "campo": "tipo", "codigo": "valor_invalido", "mensagem": "Tipo de OS inválido.", "valores_aceitos": ["preventiva", "preditiva", "corretiva_planejada", "corretiva_emergencial", "inspecao_legal", "melhoria"] }
+    { "campo": "tipo", "codigo": "valor_invalido", "mensagem": "Tipo de OS inválido.", "valores_aceitos": ["preventiva", "preditiva", "corretiva_planejada", "corretiva_emergencial", "inspecao_legal", "melhoria", "implantacao"] }
   ]
 }
 ```
@@ -299,7 +304,7 @@ Todo erro usa `Content-Type: application/problem+json` e o formato da RFC 9457, 
 | `id_rastreio` | Igual ao `X-Request-Id`; o suporte usa para localizar o log |
 | `erros` | Lista de erros por campo, com `campo` em notação de ponto (`registro_nr12.indicacao_conclusiva`, `respostas[3].valor_numero`) |
 
-Membros adicionais aparecem quando úteis: `recurso_atual` (412), `estado_atual` e `transicoes_permitidas` (409 de transição), `plano_necessario` (403 de plano), `campos_faltantes` (422 de transição), `estado_conexao`, `lado_dono`, `campos` e `grupos` (erros de conexão entre contas, 22.8).
+Membros adicionais aparecem quando úteis: `recurso_atual` (412), `estado_atual` e `transicoes_permitidas` (409 de transição), `plano_necessario` (403 de plano), `campos_faltantes` (422 de transição e de campo extra obrigatório), `estado_conexao`, `lado_dono`, `campos` e `grupos` (erros de conexão entre contas, 22.8), `tipos_documento_faltantes`, `ordens_servico_pendentes`, `predecessoras_pendentes`, `etapas_pendentes` e `ativos` (erros de entrada em operação e de projeto, seções 23 e 24), `faixas` (contrato com cliente, 25.2), `limite` (erros de limite de configuração).
 
 ### 3.2 Códigos de erro estáveis
 
@@ -375,6 +380,30 @@ Membros adicionais aparecem quando úteis: `recurso_atual` (412), `estado_atual`
 | `contrato_locacao_sem_itens` | 422 | Ativação de contrato de locação sem ativos |
 | `vistoria_entrega_pendente` | 422 | Vistoria de devolução sem vistoria de entrega do mesmo item |
 | `vistoria_devolucao_pendente` | 422 | Encerramento de contrato com item sem vistoria de devolução; traz `itens_pendentes` |
+| `registro_imutavel` | 409 | Alteração de registro em estado final que não aceita edição: projeto `concluido` ou `cancelado`, contrato com cliente `encerrado` ou `cancelado`, medição `fechada` (de contrato ou de etapas); traz `estado_atual`. A OS mantém o seu código próprio, `os_encerrada_imutavel` |
+| `regra_combinacao_invalida` | 422 | Condição e efeito da regra configurável que não combinam, ou parâmetro exigido pela combinação ausente (por exemplo, `bloquear_ativo_ate_documento` sem o tipo de documento que levanta o bloqueio; `abrir_solicitacao` com `documento_a_vencer`) (23.1) |
+| `limite_regras_ativas_excedido` | 422 | Ativação de regra além do limite de regras ativas por empresa (proposta: 50); traz `limite` |
+| `limite_campos_extras_excedido` | 422 | Campo extra ativo além do limite por combinação de tipo de OS e classe de ativo (proposta: 30); traz `limite` |
+| `campo_extra_obrigatorio` | 422 | Campo extra obrigatório vazio na abertura ou na conclusão da OS, ou campo exigido pela etapa de projeto vazio; traz `campos_faltantes` com as chaves (`campos_extras.rompeu_lacre`) (23.2) |
+| `ativo_nao_em_implantacao` | 422 | `colocar-em-operacao` em ativo que já está `em_operacao`, ou OS `implantacao` em ativo `em_operacao` sem etapa de projeto (23.3) |
+| `ativo_em_implantacao` | 422 | Operação que exige ativo `em_operacao` feita em ativo `em_implantacao`, como reativá-lo por `alterar-status-operacional`; use `colocar-em-operacao` (23.3) |
+| `os_implantacao_pendente` | 422 | `colocar-em-operacao` com OS `implantacao` do ativo ainda não `encerrada` nem `cancelada`; traz `ordens_servico_pendentes` (números) (proposta) |
+| `documentos_exigidos_pendentes` | 422 | `colocar-em-operacao` sem os documentos críticos válidos exigidos pela classe, ou conclusão de etapa de projeto sem os documentos exigidos; traz `tipos_documento_faltantes` |
+| `ativos_nao_aptos_operacao` | 422 | Conclusão de projeto em que algum ativo `em_implantacao` não pode ser posto em operação; traz `ativos`, cada um com `tag` e o código do impedimento (24.6) |
+| `dependencia_ciclica` | 422 | Etapas do modelo de projeto com predecessoras em ciclo, ou predecessora de outro modelo |
+| `etapa_predecessora_pendente` | 409 | Ação em etapa de projeto `pendente` cujas predecessoras não estão `concluida` nem `dispensada`; traz `predecessoras_pendentes` |
+| `etapa_os_pendente` | 422 | Conclusão de etapa com OS que não está `encerrada` nem `cancelada`, ou sem nenhuma OS `encerrada` quando a etapa gera OS; traz `ordens_servico_pendentes` |
+| `etapa_entrega_nao_dispensavel` | 422 | Tentativa de dispensar a etapa de entrega do projeto (proposta) |
+| `projeto_etapas_pendentes` | 422 | Conclusão de projeto com etapa que não está `concluida` nem `dispensada`; traz `etapas_pendentes` |
+| `projeto_com_os_em_execucao` | 422 | Cancelamento de projeto com OS em `em_execucao`; pause-as antes; traz `ordens_servico_pendentes` |
+| `ativo_em_outro_projeto` | 409 | Ativo incluído num projeto quando já está em outro projeto não concluído nem cancelado (proposta) |
+| `etapa_ja_medida` | 409 | Etapa de projeto incluída numa medição de etapas quando já está em outra (proposta) |
+| `contrato_cliente_sem_itens` | 422 | Ativação de contrato com cliente sem ativos cobertos |
+| `faixas_desconto_invalidas` | 422 | Faixas de desconto do contrato com cliente sobrepostas, com lacuna ou fora da ordem da meta para baixo; traz `faixas` |
+| `ativo_em_outro_contrato_cliente` | 409 | Ativo já coberto por outro contrato com cliente vigente no mesmo período |
+| `medicao_periodo_duplicado` | 409 | Abertura de medição de contrato para período que já tem medição |
+| `medicao_exclusoes_pendentes` | 422 | Fechamento de medição com parada de causa externa em `decisao_exclusao = pendente`; traz `ordens_servico_pendentes` |
+| `causa_externa_nao_aceita` | 422 | Aprovação da exclusão de uma parada cuja causa externa não está entre as aceitas pelo contrato |
 | `versao_app_nao_suportada` | 400 | App abaixo da versão mínima (18.5) |
 | `limite_requisicoes_excedido` | 429 | Rate limit; ver `Retry-After` |
 | `erro_interno` | 500 | Falha inesperada; o `id_rastreio` localiza o log |
@@ -462,6 +491,9 @@ O app é um cliente público OAuth 2.1, sem segredo embutido.
 | `locacao:leitura` / `locacao:escrita` | Locatários, contratos de locação, itens, matriz de responsabilidade, vistorias, relatório de cobrança |
 | `servicos:leitura` / `servicos:escrita` | SRV: clientes atendidos, especialidades de técnico, serviços a realizar da OS (`servico_os`) e relatório da OS em PDF. Equipamentos de clientes usam `ativos:*`; OS, apontamentos e componentes, `ordens_servico:*` |
 | `conexoes:leitura` | Conexões entre contas, ativos compartilhados e vínculos de OS, só leitura (22.10) |
+| `configuracao:leitura` / `configuracao:escrita` | Regras configuráveis e seus disparos, definições de campos extras da OS, catálogo de pacotes de segmento e aplicações de pacote (só leitura). Os valores dos campos extras numa OS usam `ordens_servico:*`; a entrada em operação do ativo usa `ativos:escrita` |
+| `projetos:leitura` / `projetos:escrita` | PRJ: modelos de projeto, projetos, etapas, lançamentos de custo, termo de entrega e medições de etapas. As OS de implantação usam `ordens_servico:*` |
+| `contratos_cliente:leitura` / `contratos_cliente:escrita` | CTR: contratos com clientes, itens cobertos, painel e medições do contrato. O cadastro de clientes atendidos usa `servicos:*` |
 | `frota:leitura` / `frota:escrita` | Dados de veículo, pneus, abastecimentos, multas, sinistros |
 | `conformidade:leitura` / `conformidade:escrita` | Documentos com vencimento, capacitações, NR-12, NR-13, bloqueios |
 | `despacho:consulta` | Só a consulta de bloqueio de despacho (seção 16), para TMS |
@@ -472,7 +504,7 @@ O app é um cliente público OAuth 2.1, sem segredo embutido.
 | `auditoria:leitura` | Eventos de auditoria |
 | `exportacao:empresa` | Exportação completa (seção 17) |
 
-Ações administrativas sensíveis (criar tokens, alterar SSO, alterar perfis, alterar parâmetros de cobrança, convidar, aceitar, recusar, suspender, reativar ou encerrar conexão entre contas e alterar `campos_compartilhados`) **não** estão disponíveis para tokens de API (proposta). Dados de saúde de pessoas (ASO, exame toxicológico) também não: nenhum escopo os cobre, e eles só saem para usuários com a permissão `pessoa.saude.ler` (4.8).
+Ações administrativas sensíveis (criar tokens, alterar SSO, alterar perfis, alterar parâmetros de cobrança, convidar, aceitar, recusar, suspender, reativar ou encerrar conexão entre contas e alterar `campos_compartilhados`, aplicar pacote de segmento, ativar regra configurável, reabrir medição de contrato) **não** estão disponíveis para tokens de API (proposta). Dados de saúde de pessoas (ASO, exame toxicológico) também não: nenhum escopo os cobre, e eles só saem para usuários com a permissão `pessoa.saude.ler` (4.8).
 
 ### 4.5 SSO OIDC (Profissional)
 
@@ -531,19 +563,39 @@ Perfis padrão do sumário (seção 3.1): `administrador`, `gestor`, `planejador
 | **Compras** | Estoque + `comprador` |
 | **Liberação** | Quem tem a permissão `os.encerrar` (padrão em `gestor` e `planejador`; o `administrador` pode concedê-la a outros perfis internos, nunca a `prestador` nem a `locatario`) |
 | **Destino de peça** | Quem tem a permissão `est.decidir_destino` (padrão em `gestor`, `planejador` e `almoxarife`): decide o destino de peça com defeito na quarentena (conserto, sucata, devolução) |
+| **Regras** | Quem tem a permissão `adm.gerenciar_regras` (padrão em `administrador` e `gestor`): cria, altera, ativa, inativa e exclui regras configuráveis |
+| **Configuração** | Quem tem a permissão `adm.gerenciar_configuracao` (padrão em `administrador` e `gestor`): mantém as definições de campos extras da OS e aplica pacotes de segmento |
+| **Entrada em operação** | Quem tem a permissão `atv.colocar_em_operacao` (padrão em `administrador`, `gestor` e `planejador`): coloca em operação ativo `em_implantacao` |
+| **Projetos** | Quem tem a permissão `prj.gerenciar` (padrão em `administrador`, `gestor` e `planejador`): mantém modelos e projetos e executa as ações do projeto e das etapas |
+| **Dispensa de etapa** | Quem tem a permissão `prj.dispensar_etapa` (padrão em `administrador` e `gestor`): dispensa etapa de projeto |
+| **Ajuste de medição** | Quem tem a permissão `prj.ajustar_medicao` (padrão em `administrador` e `gestor`): ajusta o valor de uma linha da medição de etapas |
+| **Contratos** | Quem tem a permissão `ctr.gerenciar` (padrão em `administrador` e `gestor`): mantém contratos com clientes e itens e executa `ativar`, `encerrar` e `cancelar` |
+| **Fechamento de medição** | Quem tem a permissão `ctr.fechar_medicao` (padrão em `administrador` e `gestor`): decide as exclusões de paradas e fecha a medição do contrato |
+| **Reabertura de medição** | Quem tem a permissão `ctr.reabrir_medicao` (padrão em `administrador` e `gestor`): reabre medição de contrato `fechada` |
 | **Admin** | `administrador` |
 | **Externos** | `prestador` e `locatario`, sempre com o alcance da seção 4.9 |
 | **Integração** | Somente token de API com o escopo indicado |
 
 Quando um perfil específico aparece no catálogo (por exemplo `motorista`, `plh`, `prestador`), ele se soma ao grupo. Os perfis externos (`prestador`, `locatario`) só acessam as rotas em que aparecem nomeados e as rotas de sessão e infraestrutura do próprio usuário (`/v1/auth/*`, `/oauth/*`, `GET /v1/usuarios/eu`, `PATCH /v1/usuarios/eu`, anexos, processamentos, notificações, dispositivos e, para `prestador`, sincronização). Qualquer outra rota devolve `404 recurso_nao_encontrado` para eles, não `403`, para não revelar a estrutura de dados da empresa contratante.
 
-A matriz completa de permissões fica no documento 1. Perfis personalizados (proposta: plano Profissional) combinam permissões finas no formato `<módulo>.<ação>` (sumário 3.6), com o código do módulo em minúsculas, listadas em `GET /v1/permissoes`. Três permissões finas aparecem neste documento:
+A matriz completa de permissões fica no documento 1. Perfis personalizados (proposta: plano Profissional) combinam permissões finas no formato `<módulo>.<ação>` (sumário 3.6), com o código do módulo em minúsculas, listadas em `GET /v1/permissoes`. Doze permissões finas aparecem neste documento:
 
 | Permissão | Dá direito a | Perfis padrão |
 |---|---|---|
 | `os.encerrar` | Liberar (`encerrar`) a OS e recusar a liberação (`recusar-liberacao`). Substitui os nomes `os.liberar` e `ordem_servico.liberar` das versões anteriores | `gestor`, `planejador`; nunca `prestador` nem `locatario` |
 | `est.decidir_destino` | Decidir o destino de peça com defeito: abrir ordem de reparo, baixar como sucata, declarar irreparável, devolver ao fornecedor | `gestor`, `planejador`, `almoxarife` |
 | `pessoa.saude.ler` | Ler dados de saúde (ASO, exame toxicológico). Exceção aceita ao formato `<módulo>.<ação>` | Nenhum |
+| `adm.gerenciar_regras` | Criar, alterar, ativar, inativar e excluir regras configuráveis (`/v1/regras-automacao`, RF-ADM-016). Ler regras e disparos fica com o grupo Gestão | `administrador`, `gestor` |
+| `adm.gerenciar_configuracao` | Criar, alterar, ordenar e inativar definições de campos extras da OS (`/v1/campos-extras-os`, RF-OS-021) e pré-visualizar e aplicar pacotes de segmento (RF-ADM-017) | `administrador`, `gestor` |
+| `atv.colocar_em_operacao` | Executar `colocar-em-operacao`, unitário ou em lote, e concluir projeto com ativos `em_implantacao` (RF-ATV-013, RF-PRJ-007) | `administrador`, `gestor`, `planejador` |
+| `prj.gerenciar` | Criar e manter modelos de projeto e projetos; `iniciar`, `suspender`, `retomar`, `concluir` e `cancelar` o projeto; manter etapas, gerar OS, iniciar e concluir etapas, gerar e fechar medição de etapas (as três últimas por extensão, proposta) | `administrador`, `gestor`, `planejador` |
+| `prj.dispensar_etapa` | Dispensar etapa de projeto `pendente` ou `disponivel`, com motivo (RF-PRJ-003) | `administrador`, `gestor` |
+| `prj.ajustar_medicao` | Ajustar, com motivo, o valor de uma linha da medição de etapas (RF-PRJ-006) | `administrador`, `gestor` |
+| `ctr.gerenciar` | Criar e manter contratos com clientes e itens; `ativar`, `encerrar` e `cancelar`; abrir medição (por extensão, proposta) (RF-CTR-001, RF-CTR-002) | `administrador`, `gestor` |
+| `ctr.fechar_medicao` | Decidir a exclusão de paradas com causa externa (`decisao_exclusao`) e fechar a medição do contrato (RF-CTR-004) | `administrador`, `gestor` |
+| `ctr.reabrir_medicao` | Reabrir medição de contrato `fechada`, com motivo (RF-CTR-004) | `administrador`, `gestor` |
+
+As nove permissões acrescentadas na versão 0.4 (`adm.*`, `atv.*`, `prj.*` e `ctr.*` acima, sumário 3.6) nunca são concedidas a `prestador` nem a `locatario` (proposta).
 
 Na conta de uma subcontratada (SRV), `os.encerrar` vale só para OS sem vínculo com conta de cliente; numa OS vinculada, a liberação é sempre do cliente (22.8).
 
@@ -559,8 +611,9 @@ O filtro de alcance desses perfis é **adicional** ao isolamento por empresa (RL
 
 | Recurso | `prestador` vê e faz | `locatario` vê e faz | Fora do alcance (404) |
 |---|---|---|---|
-| `ordens-servico` | Lista e detalha OS com `executor_tipo = fornecedor` e `fornecedor_id` igual ao do usuário, exceto as OS com vínculo para a conta própria do fornecedor (essas são executadas na conta dele, 22.8). Executa `reconhecer`, `assumir` (OS do seu fornecedor sem responsável), `iniciar`, `pausar`, `retomar`, `concluir`; nunca `encerrar` nem `recusar-liberacao`; aponta horas, comenta, anexa fotos, registra assinatura, consome peças do almoxarifado `em_terceiro` do seu fornecedor. Não vê `custos` da empresa, só o valor do próprio orçamento | Lista e detalha OS dos ativos locados a ele em contrato `vigente` (ou encerrado há até 90 dias, proposta): número, tipo, status, datas, descrição, `responsavel_custo`. Comenta. Não vê apontamentos, peças, custos internos nem dados de técnicos | OS de outro fornecedor, OS retirada do fornecedor, OS de ativo não locado a ele |
+| `ordens-servico` | Lista e detalha OS com `executor_tipo = fornecedor` e `fornecedor_id` igual ao do usuário, exceto as OS com vínculo para a conta própria do fornecedor (essas são executadas na conta dele, 22.8). Executa `reconhecer`, `assumir` (OS do seu fornecedor sem responsável), `iniciar`, `pausar`, `retomar`, `concluir`; nunca `encerrar` nem `recusar-liberacao`; aponta horas, comenta, anexa fotos, registra assinatura, consome peças do almoxarifado `em_terceiro` do seu fornecedor; marca `causa_externa`. Vê e preenche só os campos extras com `preenchido_pelo_prestador = true` (23.2). Não vê `custos` da empresa, só o valor do próprio orçamento, nem `etapa_projeto_id` (vem `null`) | Lista e detalha OS dos ativos locados a ele em contrato `vigente` (ou encerrado há até 90 dias, proposta): número, tipo, status, datas, descrição, `responsavel_custo`. Comenta. Não vê apontamentos, peças, custos internos nem dados de técnicos | OS de outro fornecedor, OS retirada do fornecedor, OS de ativo não locado a ele |
 | `ordens-servico/{id}/custos` | 404 | Só o valor das OS com `responsavel_custo = locatario` (base da cobrança) | Qualquer outra OS |
+| `ordens-servico/{id}/campos-extras` | Lê as definições com `preenchido_pelo_prestador = true` e grava os valores delas, nas OS no seu alcance (23.2) | Não acessa; `campos_extras` não sai na OS para o `locatario` (proposta) | Campos extras sem `preenchido_pelo_prestador`, OS fora do alcance |
 | `solicitacoes` | Não acessa | Abre solicitação para ativo locado a ele (`origem = portal_locatario`); lista e detalha as próprias; comenta; desiste com `recusar` e motivo `desistencia` | Solicitações de outros usuários e de ativos não locados a ele |
 | `ativos` | Detalha (resumo: TAG, nome, classe, marca, modelo, localização) só os ativos de OS no seu alcance; lê medidores e registra leituras desses ativos durante a execução | Lista e detalha (resumo) os ativos locados a ele, com medidores e últimas leituras | Demais ativos; `historico`, `documentos-tecnicos` (salvo os marcados como compartilháveis, proposta) |
 | `leituras-medidor` | Registra leitura de ativo de OS no seu alcance (origem `os`) | Lê as leituras dos ativos locados a ele | Leituras de outros ativos |
@@ -575,6 +628,7 @@ O filtro de alcance desses perfis é **adicional** ao isolamento por empresa (RL
 | `contratos-locacao` | Não acessa | Lê os próprios contratos (itens, vigência, local de uso, franquia, matriz de responsabilidade) e o relatório de cobrança | Contratos de outros locatários e todos os `tomado` |
 | `vistorias-locacao` | Não acessa | Lê as vistorias dos seus contratos e registra a assinatura da sua parte | Vistorias de outros contratos |
 | `pessoas`, `usuarios` (exceto `eu`), `unidades`, `localizacoes`, `classes-ativo`, planos, indicadores, conformidade, frota, integrações, auditoria | Não acessa | Não acessa | Sempre 404 |
+| Configuração e módulos PRJ e CTR: `regras-automacao`, `disparos-regra`, `campos-extras-os`, `pacotes-segmento`, `aplicacoes-pacote`, `modelos-projeto`, `projetos` (e etapas), `medicoes-etapa`, `contratos-cliente` (e itens e painel), `medicoes-contrato`; ação `colocar-em-operacao` | Não acessa | Não acessa | Sempre 404, também para o escopo `link` |
 | `ordens-reparo` | Lê as ordens de reparo enviadas ao seu fornecedor e registra orçamento (Fase 2, proposta) | Não acessa | Ordens de outros fornecedores |
 
 Webhooks, tokens de API e exportação nunca são acessíveis a perfis externos. O app de campo (seção 12) monta o escopo offline do `prestador` com os mesmos filtros; o `locatario` usa só o portal web no lançamento do LOC (sumário 3.6), e o app recusa o login dele.
@@ -610,6 +664,10 @@ Limites específicos, em todos os planos (proposta):
 | Convites de conexão entre contas (`POST /v1/conexoes-empresa`) | 20 por dia por empresa; 5 tentativas de aceite com código errado por convite bloqueiam o convite, que precisa ser reenviado |
 | Relatório da OS em PDF (`GET /v1/ordens-servico/{id}/relatorio-pdf`) | 30 por minuto por usuário |
 | `GET /v1/versao` (público) | 60 req/min por IP |
+| Simulação de regra configurável (`POST /v1/regras-automacao/{id}/simular`) | 10 por minuto por usuário |
+| Pré-visualização e aplicação de pacote de segmento | 20 pré-visualizações por hora e 5 aplicações por dia, por empresa |
+| Entrada em operação em lote (`POST /v1/ativos/colocar-em-operacao`) | Até 100 ativos por requisição; 10 requisições por minuto por usuário |
+| Painel do contrato com cliente (`GET /v1/contratos-cliente/{id}/painel`) | 30 por minuto por usuário |
 | Importações e relatórios assíncronos | 5 simultâneos por empresa |
 | Exportação completa | 1 em andamento por empresa; 4 por dia |
 | IA (consultas e rascunhos) | Pelos créditos do plano (seção 6.16) e 20 req/min por usuário |
@@ -660,7 +718,7 @@ RateLimit-Reset: 12
 
 Legenda das colunas:
 
-- **Perfil:** grupo da seção 4.8 (Todos, Leitura, Gestão, Execução, Estoque, Compras, Liberação, Destino de peça, Admin, Externos, Integração) ou perfil nomeado. `prestador` e `locatario` aparecem nomeados onde têm acesso, sempre com o alcance da seção 4.9. "Público" = sem autenticação; "Link" = sem login, autorizado pela sessão curta do link de uso único (19.4), salvo a ativação, autorizada pelo token no corpo.
+- **Perfil:** grupo da seção 4.8 (Todos, Leitura, Gestão, Execução, Estoque, Compras, Liberação, Destino de peça, Regras, Configuração, Entrada em operação, Projetos, Dispensa de etapa, Ajuste de medição, Contratos, Fechamento de medição, Reabertura de medição, Admin, Externos, Integração) ou perfil nomeado. `prestador` e `locatario` aparecem nomeados onde têm acesso, sempre com o alcance da seção 4.9. "Público" = sem autenticação; "Link" = sem login, autorizado pela sessão curta do link de uso único (19.4), salvo a ativação, autorizada pelo token no corpo.
 - **Plano:** plano mínimo do recurso. `E` = Essencial, `P` = Profissional, `Ent` = Enterprise, `S` = Serviços (conta de subcontratada, sumário 2.2). `E, S` = disponível nos dois. As rotas `E` de ADM, ATV, MED, SOL, OS, CHK, estoque básico, IND essencial e MOB também valem no plano Serviços (22.2). Por token de API, o mínimo é sempre `P` (1.1).
 - **Fase:** `MVP` (meses 0 a 6), `F2` (6 a 12), `F3` (12 a 24), conforme a seção 4 do sumário.
 - Rotas em `/v1/` salvo indicação. Os métodos de recurso seguem a seção 2: `GET` lista com cursor e filtros, `POST` cria com `Idempotency-Key`, `PATCH` exige `If-Match`, `DELETE` inativa quando há histórico.
@@ -739,8 +797,27 @@ Legenda das colunas:
 | GET | `/v1/exportacoes-empresa/{id}` | Situação e links de download | Admin | E | MVP |
 | DELETE | `/v1/exportacoes-empresa/{id}` | Cancela ou apaga o arquivo gerado | Admin | E | MVP |
 | PUT | `/v1/exportacoes-empresa/agendamento` | Define exportação periódica | Admin | E | F2 |
+| GET | `/v1/regras-automacao` | Lista regras configuráveis (`situacao`, `condicao`, `efeito`, `classe_ativo_id`, `unidade_id`, `origem_pacote`, `busca`) | Gestão | E | MVP |
+| POST | `/v1/regras-automacao` | Cria regra `inativa`: condição e efeito dos catálogos fechados, parâmetros e filtro (23.1) | Regras | E | MVP |
+| GET | `/v1/regras-automacao/{id}` | Detalha regra, com contagem de disparos e bloqueios vigentes criados por ela | Gestão | E | MVP |
+| PATCH | `/v1/regras-automacao/{id}` | Altera nome, descrição, parâmetros e filtro; a alteração vale para os próximos fatos | Regras | E | MVP |
+| DELETE | `/v1/regras-automacao/{id}` | Apaga regra que nunca disparou; regra com disparos é só inativada (2.12) | Regras | E | MVP |
+| POST | `/v1/regras-automacao/{id}/ativar` | `inativa` → `ativa`; respeita o limite de regras ativas (`422 limite_regras_ativas_excedido`) | Regras | E | MVP |
+| POST | `/v1/regras-automacao/{id}/inativar` | `ativa` → `inativa`; não levanta bloqueios já criados e devolve a lista deles em `bloqueios_vigentes` | Regras | E | MVP |
+| POST | `/v1/regras-automacao/{id}/simular` | Avalia a regra agora, sem gravar nada nem aplicar efeito: ativos e fatos que disparariam (23.1) | Gestão | E | MVP |
+| GET | `/v1/regras-automacao/{id}/disparos` | Histórico de disparos da regra | Gestão | E | MVP |
+| GET | `/v1/disparos-regra` | Histórico de disparos de todas as regras (`ativo_id`, `regra_automacao_id`, `efeito`, `condicao`, período) | Gestão | E | MVP |
+| GET | `/v1/disparos-regra/{id}` | Detalha disparo: fato, ativo, efeito aplicado e registros criados (solicitação, bloqueio, notificação) | Gestão | E | MVP |
+| GET | `/v1/pacotes-segmento` | Catálogo global de pacotes de segmento (`segmento`, `busca`), só leitura | Admin, Gestão | E | F2 |
+| GET | `/v1/pacotes-segmento/{codigo}` | Conteúdo do pacote na versão publicada mais recente (`versao` escolhe outra) | Admin, Gestão | E | F2 |
+| POST | `/v1/pacotes-segmento/{codigo}/pre-visualizar` | Mostra, sem gravar, o que a aplicação criaria e o que ignoraria (já existe, módulo não contratado) (23.4) | Configuração | E | F2 |
+| POST | `/v1/pacotes-segmento/{codigo}/aplicar` | Aplica o pacote: só cria o que falta, numa transação; devolve a `aplicacao_pacote` | Configuração | E | F2 |
+| GET | `/v1/aplicacoes-pacote` | Aplicações de pacote da conta (`pacote_codigo`, período) | Admin, Gestão | E | F2 |
+| GET | `/v1/aplicacoes-pacote/{id}` | Detalha a aplicação: versão, quem aplicou, itens criados e itens ignorados com o motivo | Admin, Gestão | E | F2 |
 
 **Pessoa e usuário.** `pessoa` é quem executa, conduz ou responde por algo, com ou sem login; `usuario` é o login e pode apontar para uma pessoa (`usuario.pessoa_id`, opcional). CNH, ASO, capacitações e documentos pessoais ligam-se à pessoa (`pessoa_id` em `documentos-vencimento` e `capacitacoes`), nunca ao usuário. Condutor eventual sem login é uma pessoa sem usuário, não um usuário sem acesso. Documentos de tipo marcado como dado de saúde (ASO, exame toxicológico) só aparecem, em qualquer rota, para quem tem `pessoa.saude.ler`; para os demais, a lista os omite e o detalhe devolve `404`.
+
+**Regras configuráveis e pacotes de segmento** (RF-ADM-016, RF-ADM-017; sumário 3.6 e 3.7). Ficam em ADM, no pacote Go `configuracao`. Regras exigem `adm.gerenciar_regras`; a aplicação de pacote, `adm.gerenciar_configuracao`. As regras e os campos extras são do Essencial, no MVP; os pacotes são do Essencial, na Fase 2. As rotas `E` também valem no plano Serviços (22.2). O detalhamento está na seção 23.
 
 ### 6.2 ATV — Ativos
 
@@ -756,14 +833,16 @@ Legenda das colunas:
 | GET | `/v1/classes-ativo/{id}` | Detalha classe | Leitura | E | MVP |
 | PATCH | `/v1/classes-ativo/{id}` | Altera classe | Gestão | E | MVP |
 | DELETE | `/v1/classes-ativo/{id}` | Inativa classe sem ativos | Gestão | E | MVP |
-| GET | `/v1/ativos` | Lista ativos (`tipo`, `classe_ativo_id`, `localizacao_id`, `criticidade`, `status_operacional`, `propriedade`, `em_locacao`, `contrato_locacao_id`, `cliente_servico_id`, `conexao_empresa_id`, `sincronizado`, `pai_id`, `tag`, `placa`, `nr12`) | Todos, `prestador`, `locatario` | E | MVP |
-| POST | `/v1/ativos` | Cria ativo; com `propriedade = de_cliente`, exige `cliente_servico_id` (conta SRV, 22.4) | Gestão | E | MVP |
+| GET | `/v1/ativos` | Lista ativos (`tipo`, `classe_ativo_id`, `localizacao_id`, `criticidade`, `status_operacional`, `fase_ciclo_vida`, `propriedade`, `em_locacao`, `contrato_locacao_id`, `cliente_servico_id`, `conexao_empresa_id`, `sincronizado`, `projeto_id`, `pai_id`, `tag`, `placa`, `nr12`) | Todos, `prestador`, `locatario` | E | MVP |
+| POST | `/v1/ativos` | Cria ativo; com `propriedade = de_cliente`, exige `cliente_servico_id` (conta SRV, 22.4); aceita `fase_ciclo_vida = em_implantacao` (23.3) | Gestão | E | MVP |
 | GET | `/v1/ativos/{id}` | Detalha ativo | Todos, `prestador`, `locatario` | E | MVP |
 | PATCH | `/v1/ativos/{id}` | Altera ativo | Gestão | E | MVP |
 | DELETE | `/v1/ativos/{id}` | Inativa ativo (status `inativo`) | Gestão | E | MVP |
 | GET | `/v1/ativos/{id}/arvore` | Descendentes até o 6º nível | Todos | E | MVP |
 | POST | `/v1/ativos/{id}/mover` | Troca pai ou localização (valida profundidade e ciclo) | Gestão | E | MVP |
-| POST | `/v1/ativos/{id}/alterar-status-operacional` | Inativa (`inativo`, com motivo: baixa, venda, reserva) ou reativa o ativo; `em_manutencao` e `parado` são derivados das causas e não aceitam alteração manual | Gestão | E | MVP |
+| POST | `/v1/ativos/{id}/alterar-status-operacional` | Inativa (`inativo`, com motivo: baixa, venda, reserva) ou reativa o ativo; `em_manutencao` e `parado` são derivados das causas e não aceitam alteração manual; ativo `em_implantacao` não é reativado por aqui (`422 ativo_em_implantacao`) | Gestão | E | MVP |
+| POST | `/v1/ativos/{id}/colocar-em-operacao` | Ação `colocar_em_operacao`: `em_implantacao` → `em_operacao`, status `operando`, grava `data_entrada_operacao` e ativa os planos (23.3) | Entrada em operação | E | MVP |
+| POST | `/v1/ativos/colocar-em-operacao` | A mesma ação em lote, até 100 ativos, com resultado por ativo (23.3) | Entrada em operação | E | MVP |
 | GET | `/v1/ativos/{id}/historico` | Linha do tempo: OS, leituras, checklists, documentos, peças | Leitura | E | MVP |
 | GET | `/v1/ativos/qr/{codigo_qr}` | Resolve o QR code para o ativo | Todos | E | MVP |
 | GET | `/v1/ativos/{id}/etiqueta-qr` | Etiqueta em PNG ou PDF | Gestão | E | MVP |
@@ -779,9 +858,11 @@ Legenda das colunas:
 | `operando` | Nenhuma das causas abaixo |
 | `em_manutencao` | Há OS em `em_execucao` ou `pausada` com o ativo retirado de operação de forma programada (preventiva, preditiva, inspeção legal, corretiva planejada com `ativo_parado = true`) |
 | `parado` | Falha que parou o ativo (solicitação ou OS com `ativo_parado = true` por falha), `corretiva_emergencial` em curso, registro NR-12 com indicação `inapto` ou bloqueio de conformidade (`bloqueio_ativo`) |
-| `inativo` | Baixado, vendido ou em reserva (`alterar-status-operacional`) |
+| `inativo` | Baixado, vendido ou em reserva (`alterar-status-operacional`), ou em implantação (`fase_ciclo_vida = em_implantacao`, 23.3) |
 
 - `parado` prevalece sobre `em_manutencao`.
+- **Em implantação** (sumário 3.3): o ativo `em_implantacao` tem `status_operacional = inativo`, fica fora dos KPIs e da contagem de veículos cobrados e tem os planos suspensos; a interface mostra "Em implantação". Só `colocar-em-operacao` o leva a `operando`. A fase não volta para `em_implantacao`.
+- `bloqueio_ativo` com `origem = regra` (efeito `bloquear_ativo` ou `bloquear_ativo_ate_documento` de uma regra configurável, 23.1) deixa o ativo `parado` como o bloqueio manual.
 - O status volta a `operando` no **encerramento** da OS, se não restar outra causa. A ação `encerrar` não recebe mais o status do ativo; a resposta informa o status resultante em `status_operacional_ativo`.
 - MTTR e disponibilidade usam `data_inicio`, `data_conclusao` e os registros de parada, não o encerramento administrativo.
 - **Atenção** não é status: é calculada sobre `operando` e vem no campo só leitura `alertas` (`plano_vencendo`, `documento_vencendo`, `leitura_fora_faixa`).
@@ -804,6 +885,13 @@ Legenda das colunas:
 | `dias_operacao_semana` | inteiro | Regime de operação, de 1 a 7 |
 | `contrato_locacao_id` | UUID, só leitura | Contrato de locação vigente que inclui o ativo, cedido ou tomado; `null` fora de locação |
 | `alertas` | lista, só leitura | Condições de Atenção calculadas |
+| `fase_ciclo_vida` | enum | `em_implantacao` ou `em_operacao` (padrão). Aceito só na criação (`POST /v1/ativos`, importação ou projeto); depois é só leitura e muda apenas por `colocar-em-operacao` (`422 campo_somente_leitura` no `PATCH`). Vale também para ativo `de_cliente` e `de_terceiro` (RF-ATV-013) |
+| `data_entrada_operacao` | data-hora, só leitura | Gravada por `colocar-em-operacao`; `null` enquanto `em_implantacao`. Ativo criado já `em_operacao` recebe a data de criação (proposta) |
+| `colocado_em_operacao_por_id` | UUID, só leitura | Usuário que executou a ação (proposta) |
+| `projeto_id` | UUID, só leitura | Projeto de implantação de origem (PRJ, Fase 2); `null` sem projeto |
+| `termo_entrega_anexo_id` | UUID | Documento de entrega ou termo de recebimento, opcional, informado em `colocar-em-operacao` (proposta) |
+
+A fase de ciclo de vida **não** é campo compartilhado na conexão entre contas no lançamento (RF-ATV-013): a cópia `de_cliente` na conta da subcontratada fica com `fase_ciclo_vida = em_operacao` (ver 26.1, A-31).
 
 A árvore de ativos e a de localizações têm até 6 níveis (`422 hierarquia_profundidade_excedida`). Pneu é entidade própria (`/v1/pneus`), não ativo.
 
@@ -844,7 +932,7 @@ A árvore de ativos e a de localizações têm até 6 níveis (`422 hierarquia_p
 
 | Método | Rota | Descrição | Perfil | Plano | Fase |
 |---|---|---|---|---|---|
-| GET | `/v1/ordens-servico` | Lista OS (`status`, `tipo`, `origem`, `ativo_id`, `responsavel_id`, `prioridade`, `unidade_id`, `executor_tipo`, `fornecedor_id`, `responsavel_custo`, `contrato_locacao_id`, `cliente_servico_id`, `vinculada`, `estado_sincronizacao`, `sem_responsavel`, períodos) | Leitura, `prestador`, `locatario` | E, S | MVP |
+| GET | `/v1/ordens-servico` | Lista OS (`status`, `tipo`, `origem`, `ativo_id`, `responsavel_id`, `prioridade`, `unidade_id`, `executor_tipo`, `fornecedor_id`, `responsavel_custo`, `contrato_locacao_id`, `cliente_servico_id`, `vinculada`, `estado_sincronizacao`, `sem_responsavel`, `causa_externa`, `projeto_id`, `etapa_projeto_id`, `campos_extras.<chave>`, períodos) | Leitura, `prestador`, `locatario` | E, S | MVP |
 | POST | `/v1/ordens-servico` | Cria OS (seção 8.1; OS de serviço do SRV em 22.7) | Execução | E, S | MVP |
 | GET | `/v1/ordens-servico/{id}` | Detalha OS; OS com vínculo entre contas traz o objeto `vinculo` (22.8) | Leitura, `prestador`, `locatario` | E, S | MVP |
 | PATCH | `/v1/ordens-servico/{id}` | Altera campos editáveis no estado atual; em OS vinculada, só os campos do próprio lado (`409 os_vinculada_somente_leitura`) | Execução | E, S | MVP |
@@ -887,8 +975,18 @@ A árvore de ativos e a de localizações têm até 6 níveis (`422 hierarquia_p
 | POST | `/v1/codigos-falha` | Cria código de falha (catálogo personalizável) | Gestão | P | F2 |
 | PATCH | `/v1/codigos-falha/{id}` | Altera código | Gestão | P | F2 |
 | DELETE | `/v1/codigos-falha/{id}` | Inativa código | Gestão | P | F2 |
+| GET | `/v1/campos-extras-os` | Definições de campos extras da OS (`tipo_os`, `classe_ativo_id`, `situacao`, `obrigatorio_em`, `preenchido_pelo_prestador`) | Leitura | E, S | MVP |
+| POST | `/v1/campos-extras-os` | Cria definição: chave, rótulo, tipo, opções, unidade, tipos de OS, classes de ativo, obrigatoriedade, ajuda (23.2) | Configuração | E, S | MVP |
+| GET | `/v1/campos-extras-os/{id}` | Detalha definição | Leitura | E, S | MVP |
+| PATCH | `/v1/campos-extras-os/{id}` | Altera rótulo, opções, ajuda, aplicação e obrigatoriedade; `chave` e `tipo` ficam só leitura depois de haver valor gravado | Configuração | E, S | MVP |
+| DELETE | `/v1/campos-extras-os/{id}` | Inativa definição; os valores gravados nas OS são mantidos | Configuração | E, S | MVP |
+| PUT | `/v1/campos-extras-os/ordem` | Substitui a ordem de exibição por inteiro (lista de ids) (proposta) | Configuração | E, S | MVP |
+| GET | `/v1/ordens-servico/{id}/campos-extras` | Definições que se aplicam à OS (tipo e classe do ativo), com os valores atuais e o rótulo vigente na data do registro | Leitura, `prestador` | E, S | MVP |
+| PATCH | `/v1/ordens-servico/{id}/campos-extras` | Grava valores de campos extras (JSON Merge Patch sobre `campos_extras`, `If-Match` da OS); é a única escrita na OS aberta ao `prestador` além das ações de execução | Execução, `prestador` | E, S | MVP |
 
 As ações de atribuição a prestador (`atribuir-fornecedor`, `retirar-fornecedor`) também ficam em `/v1/ordens-servico/{id}/`, mas são listadas e contadas no módulo TER (6.9). `assumir`, `servicos` e `relatorio-pdf` servem a qualquer conta e são contados aqui, embora nasçam da necessidade do SRV (seção 22).
+
+**Campos extras, tipo `implantacao` e causa externa** (RF-OS-021, RF-OS-002, RF-OS-001; sumário 3.6 e 3.7). As definições ficam em `/v1/campos-extras-os` e os valores em `ordem_servico.campos_extras`, gravados pela chave da definição (23.2). A OS `implantacao` instala um ativo ou executa uma etapa de projeto, fica fora dos KPIs de manutenção e tem custo de implantação (23.3 e 24.5). `causa_externa` é opcional e só tem efeito na medição de contrato com cliente (25.4). A ação que gera a OS de uma etapa de projeto (`gerar-os`) fica em `/v1/projetos/{id}/etapas/{etapa_id}/` e é contada em PRJ (6.18).
 
 ### 6.6 PRE — Planos de manutenção
 
@@ -1058,11 +1156,11 @@ Rotas próprias do módulo. Na conta da subcontratada, "Leitura", "Gestão" e "E
 | GET | `/v1/especialidades-tecnico/{id}` | Detalha especialidade, com a contagem de técnicos | Leitura | E, S | MVP |
 | PATCH | `/v1/especialidades-tecnico/{id}` | Altera especialidade | Gestão | E, S | MVP |
 | DELETE | `/v1/especialidades-tecnico/{id}` | Inativa especialidade; as ligações `pessoa_especialidade` ficam no histórico | Gestão | E, S | MVP |
-| GET | `/v1/clientes-servico` | Lista clientes atendidos (`tipo_pessoa`, `documento`, `municipio`, `uf`, `conectado`, `busca`) | Leitura | S | MVP |
-| POST | `/v1/clientes-servico` | Cadastra cliente atendido (pessoa jurídica ou física, CNPJ ou CPF, contatos, endereços de atendimento) | Gestão | S | MVP |
-| GET | `/v1/clientes-servico/{id}` | Detalha cliente, com resumo de equipamentos, OS abertas e conexão | Leitura | S | MVP |
-| PATCH | `/v1/clientes-servico/{id}` | Altera cliente; os dados vindos da conexão (razão social, CNPJ) ficam só leitura | Gestão | S | MVP |
-| DELETE | `/v1/clientes-servico/{id}` | Inativa cliente sem OS em aberto | Gestão | S | MVP |
+| GET | `/v1/clientes-servico` | Lista clientes atendidos (`tipo_pessoa`, `documento`, `municipio`, `uf`, `conectado`, `busca`) | Leitura | S, P | MVP |
+| POST | `/v1/clientes-servico` | Cadastra cliente atendido (pessoa jurídica ou física, CNPJ ou CPF, contatos, endereços de atendimento) | Gestão | S, P | MVP |
+| GET | `/v1/clientes-servico/{id}` | Detalha cliente, com resumo de equipamentos, OS abertas e conexão | Leitura | S, P | MVP |
+| PATCH | `/v1/clientes-servico/{id}` | Altera cliente; os dados vindos da conexão (razão social, CNPJ) ficam só leitura | Gestão | S, P | MVP |
+| DELETE | `/v1/clientes-servico/{id}` | Inativa cliente sem OS em aberto | Gestão | S, P | MVP |
 | GET | `/v1/conexoes-empresa` | Lista as conexões em que a conta é parte, com o papel dela (`cliente` ou `prestador`) e `estado` | Gestão | E, S | MVP |
 | POST | `/v1/conexoes-empresa` | Ação `convidar`: o cliente convida a conta do fornecedor; cria a conexão em `convidada` e envia o código por e-mail (22.5) | Admin (cliente) | E | MVP |
 | GET | `/v1/conexoes-empresa/{id}` | Detalha a conexão (`campos_compartilhados`, ativos compartilhados, datas) | Gestão | E, S | MVP |
@@ -1076,6 +1174,8 @@ Rotas próprias do módulo. Na conta da subcontratada, "Leitura", "Gestão" e "E
 | GET | `/v1/vinculos-os` | Vínculos de OS da conta (`conexao_empresa_id`, `lado_origem`, `estado_sincronizacao`, período) | Gestão | E, S | MVP |
 | GET | `/v1/vinculos-os/{id}` | Detalha o vínculo, com o histórico de sincronizações e o último erro | Gestão | E, S | MVP |
 | POST | `/v1/vinculos-os/{id}/reprocessar` | Reenfileira a sincronização de um vínculo em `erro`; exige conexão `ativa` (`409 conexao_inativa`) | Gestão | E, S | MVP |
+
+**Clientes atendidos fora do SRV.** `cliente_servico` também existe nas contas com CTR (sumário 3.1): numa conta do plano Profissional, `/v1/clientes-servico` fica disponível a partir da Fase 2, junto com o CTR, para cadastrar o cliente do contrato (por exemplo, a prefeitura). Daí o plano `S, P` nas cinco rotas acima; o `P` vale só a partir da Fase 2.
 
 Rotas de outros módulos usadas pelo SRV, contadas nos seus módulos: `/v1/pessoas` e `/v1/usuarios` (técnicos), `/v1/ativos` com `propriedade = de_cliente` (equipamentos de clientes), `/v1/ordens-servico` com `assumir`, `servicos`, `pecas`, `apontamentos`, `assinaturas` e `relatorio-pdf`, `/v1/servicos-fornecedor` (catálogo próprio da subcontratada, 22.7), `POST /v1/relatorios/servicos_por_cliente/gerar` (relatório de serviços por cliente) e a sincronização do app (seção 12).
 
@@ -1165,9 +1265,9 @@ A oficina externa saiu de FRO: veículo enviado a oficina é uma OS atribuída a
 | POST | `/v1/documentos-vencimento/{id}/renovar` | Registra o documento novo e arquiva o anterior | Gestão | E | MVP |
 | GET | `/v1/inventario-nr12` | Inventário atualizado das máquinas NR-12 (item 12.18.1), JSON ou PDF | Leitura | E | MVP |
 | GET | `/v1/cronograma-nr12` | Cronograma das preventivas ligadas à segurança (item 12.11.2.2) | Leitura | E | MVP |
-| GET | `/v1/bloqueios-ativo` | Bloqueios de conformidade (`bloqueio_ativo`) vigentes e históricos | Leitura | E | MVP |
-| POST | `/v1/bloqueios-ativo` | Cria bloqueio manual; o ativo passa a `parado` | Gestão | E | MVP |
-| POST | `/v1/bloqueios-ativo/{id}/liberar` | Libera bloqueio manual com motivo; o status do ativo é recalculado | Gestão | E | MVP |
+| GET | `/v1/bloqueios-ativo` | Bloqueios de conformidade (`bloqueio_ativo`) vigentes e históricos (`ativo_id`, `origem`, `regra_automacao_id`, `vigente`) | Leitura | E | MVP |
+| POST | `/v1/bloqueios-ativo` | Cria bloqueio manual (`origem = manual`); o ativo passa a `parado` | Gestão | E | MVP |
+| POST | `/v1/bloqueios-ativo/{id}/liberar` | Libera bloqueio de origem `manual` ou `regra`, com motivo; o status do ativo é recalculado | Gestão | E | MVP |
 | GET | `/v1/bloqueios-despacho/consulta` | Verificação calculada "apto para despacho" por placa ou VIN, para TMS (seção 16); não é entidade | Leitura, Integração (`despacho:consulta`) | P | MVP |
 | POST | `/v1/bloqueios-despacho/consultas` | Verificação em lote, até 100 veículos | Integração (`despacho:consulta`) | P | MVP |
 | GET | `/v1/capacitacoes` | Lista capacitações de pessoas (`pessoa_id`; NR-10, NR-11, NR-12, NR-35, MOPP) | Gestão | P | F2 |
@@ -1185,6 +1285,8 @@ A oficina externa saiu de FRO: veículo enviado a oficina é uma OS atribuída a
 | POST | `/v1/pontos-bloqueio` | Cadastra ponto de bloqueio (tipo de energia, localização, dispositivo, procedimento, foto) | Gestão | P | F2 |
 | PATCH | `/v1/pontos-bloqueio/{id}` | Altera ponto de bloqueio | Gestão | P | F2 |
 | DELETE | `/v1/pontos-bloqueio/{id}` | Inativa ponto de bloqueio | Gestão | P | F2 |
+
+**Origem do bloqueio de ativo** (sumário 3.6). `bloqueio_ativo.origem` é definida pelo servidor e não é aceita no corpo: `manual` (`POST /v1/bloqueios-ativo`), `conformidade` (gerado pelas regras padrão de conformidade, como o parecer NR-12) ou `regra` (efeito de uma regra configurável, 23.1). Campos só leitura acrescentados: `origem`, `regra_automacao_id` e `disparo_regra_id` (preenchidos com `origem = regra`), `levanta_com_tipo_documento_id` (tipo de documento que levanta o bloqueio sozinho, no efeito `bloquear_ativo_ate_documento`) e `levantado_automaticamente` (proposta). Bloqueio de origem `regra` também pode ser liberado à mão, com motivo, por quem tem o perfil Gestão (proposta). Bloqueio de origem `conformidade` segue a regra do seu documento (por exemplo, nova indicação `apto` no registro NR-12).
 
 O registro de bloqueio e etiquetagem do item 12.11.3 da NR-12 é do Essencial, no MVP. O LOTO com pontos de bloqueio cadastrados e procedimento é do Profissional, na Fase 2 (sumário 2.1).
 
@@ -1296,30 +1398,103 @@ Regras de IA para a API: nenhum endpoint de IA grava dado de negócio sem confir
 | POST | `/v1/sincronizacao/comandos` | Push de lote de comandos idempotentes (seção 12.4) | Todos, `prestador` | E | MVP |
 | GET | `/v1/sincronizacao/comandos/{id_comando}` | Resultado de um comando já enviado | Todos, `prestador` | E | MVP |
 
-### 6.18 Resumo do catálogo
+### 6.18 PRJ — Projetos e implantação
 
-| Módulo | Endpoints | MVP | F2 | F3 | Variação desde a versão 0.2 |
+Módulo da Fase 2, plano Profissional (sumário 2.1 e 4; RF-PRJ-001 a RF-PRJ-007). Pacote Go `projetos`. O projeto não executa trabalho: organiza OS `implantacao`, que seguem as rotas de OS (6.5). Detalhamento na seção 24.
+
+| Método | Rota | Descrição | Perfil | Plano | Fase |
 |---|---|---|---|---|---|
-| ADM | 70 | 52 | 18 | 0 | — (`/v1/pessoas` passa a aceitar `especialidade_tecnico_ids`) |
-| ATV | 25 | 25 | 0 | 0 | — (campos `de_cliente`, `cliente_servico_id`, `conexao_empresa_id`, `sincronizado`) |
+| GET | `/v1/modelos-projeto` | Lista modelos de projeto (`classe_ativo_id`, `situacao`, `busca`) | Gestão | P | F2 |
+| POST | `/v1/modelos-projeto` | Cria modelo com as etapas (`modelo_etapa_projeto`), dependências e exigências (24.2) | Projetos | P | F2 |
+| GET | `/v1/modelos-projeto/{id}` | Detalha modelo na versão mais recente (`numero_versao` escolhe outra) | Gestão | P | F2 |
+| PATCH | `/v1/modelos-projeto/{id}` | Altera modelo; mudança nas etapas gera `numero_versao` nova, sem afetar projetos existentes | Projetos | P | F2 |
+| DELETE | `/v1/modelos-projeto/{id}` | Inativa modelo | Projetos | P | F2 |
+| POST | `/v1/modelos-projeto/{id}/copiar` | Cria modelo novo a partir de outro | Projetos | P | F2 |
+| GET | `/v1/modelos-projeto/{id}/versoes` | Versões do modelo | Gestão | P | F2 |
+| GET | `/v1/projetos` | Lista projetos (`status`, `unidade_id`, `modelo_projeto_id`, `cliente_servico_id`, `contrato_cliente_id`, `responsavel_id`, `fornecedor_id`, `ativo_id`, `atrasado`, `numero`, períodos); traz avanço físico e desvio de prazo | Leitura | P | F2 |
+| POST | `/v1/projetos` | Cria projeto `rascunho` a partir de um modelo, com etapas copiadas e datas previstas calculadas (24.3) | Projetos | P | F2 |
+| GET | `/v1/projetos/{id}` | Detalha projeto, com etapas resumidas | Leitura | P | F2 |
+| PATCH | `/v1/projetos/{id}` | Altera projeto; em `rascunho`, também ativos e localização; `concluido` ou `cancelado` devolve `409 registro_imutavel` | Projetos | P | F2 |
+| POST | `/v1/projetos/{id}/iniciar` | `rascunho` → `em_andamento`; torna `disponivel` as etapas sem predecessoras | Projetos | P | F2 |
+| POST | `/v1/projetos/{id}/suspender` | `em_andamento` → `suspenso`, com motivo; pausa os prazos das etapas, não as OS | Projetos | P | F2 |
+| POST | `/v1/projetos/{id}/retomar` | `suspenso` → `em_andamento` | Projetos | P | F2 |
+| POST | `/v1/projetos/{id}/concluir` | `em_andamento` → `concluido`; coloca em operação os ativos ainda `em_implantacao` (24.6) | Projetos + Entrada em operação | P | F2 |
+| POST | `/v1/projetos/{id}/cancelar` | `rascunho`, `em_andamento` ou `suspenso` → `cancelado`, com motivo e o destino de cada ativo `em_implantacao` | Projetos | P | F2 |
+| GET | `/v1/projetos/{id}/acompanhamento` | Cronograma previsto e real com dependências, avanço físico, etapas atrasadas, custo previsto e realizado por etapa e total, desvio de prazo (RF-PRJ-005) | Leitura | P | F2 |
+| GET | `/v1/projetos/{id}/lancamentos-custo` | Lançamentos avulsos de custo do projeto (proposta) | Gestão | P | F2 |
+| POST | `/v1/projetos/{id}/lancamentos-custo` | Registra lançamento avulso (etapa, descrição, valor, data, anexo) (proposta) | Projetos | P | F2 |
+| DELETE | `/v1/projetos/{id}/lancamentos-custo/{lancamento_id}` | Exclui lançamento de projeto não concluído (proposta) | Projetos | P | F2 |
+| GET | `/v1/projetos/{id}/termo-entrega` | Termo de entrega em PDF: ativos, etapas, documentos, fotos e assinaturas (RF-PRJ-007) | Leitura | P | F2 |
+| POST | `/v1/projetos/{id}/assinaturas` | Registra a assinatura do responsável ou do representante do cliente atendido no termo de entrega | Projetos | P | F2 |
+| GET | `/v1/projetos/{id}/etapas` | Etapas do projeto, com situação, predecessoras, exigências, OS e atraso | Leitura | P | F2 |
+| GET | `/v1/projetos/{id}/etapas/{etapa_id}` | Detalha etapa | Leitura | P | F2 |
+| PATCH | `/v1/projetos/{id}/etapas/{etapa_id}` | Altera executor (`executor_tipo`, `fornecedor_id`), responsável, datas previstas, valor e campos exigidos de etapa sem OS | Projetos | P | F2 |
+| POST | `/v1/projetos/{id}/etapas/{etapa_id}/gerar-os` | Gera a OS `implantacao` da etapa, uma só ou uma por ativo do projeto (24.5) | Projetos | P | F2 |
+| POST | `/v1/projetos/{id}/etapas/{etapa_id}/iniciar` | `disponivel` → `em_andamento` em etapa sem OS; com OS, a etapa inicia sozinha quando a primeira OS inicia | Projetos | P | F2 |
+| POST | `/v1/projetos/{id}/etapas/{etapa_id}/concluir` | → `concluida`; torna `disponivel` as sucessoras cujas predecessoras terminaram e notifica seus responsáveis (24.4) | Projetos | P | F2 |
+| POST | `/v1/projetos/{id}/etapas/{etapa_id}/dispensar` | `pendente` ou `disponivel` → `dispensada`, com motivo | Dispensa de etapa | P | F2 |
+| GET | `/v1/medicoes-etapa` | Medições de etapas por fornecedor (`fornecedor_id`, `situacao`, período) (proposta) | Gestão, Compras | P | F2 |
+| POST | `/v1/medicoes-etapa` | Gera a medição de um fornecedor e período com as etapas `concluida` ainda não medidas (24.7) | Projetos | P | F2 |
+| GET | `/v1/medicoes-etapa/{id}` | Detalha medição: linhas (projeto, etapa, ativo, data de conclusão, valor, ajuste), total | Gestão, Compras | P | F2 |
+| DELETE | `/v1/medicoes-etapa/{id}` | Apaga medição `em_apuracao`; as etapas voltam a poder entrar em outra medição | Projetos | P | F2 |
+| POST | `/v1/medicoes-etapa/{id}/ajustar` | Ajusta o valor de uma linha, com motivo | Ajuste de medição | P | F2 |
+| POST | `/v1/medicoes-etapa/{id}/fechar` | `em_apuracao` → `fechada` (proposta) | Projetos | P | F2 |
+| GET | `/v1/medicoes-etapa/{id}/relatorio` | Medição em PDF ou XLSX | Gestão, Compras | P | F2 |
+
+A criação de vários projetos de uma vez, um por ponto ou por ativo, usa a importação por CSV com o tipo `projetos` (14.3), não uma rota própria.
+
+### 6.19 CTR — Contratos com clientes
+
+Módulo da Fase 2, plano Profissional (sumário 2.1 e 4; RF-CTR-001 a RF-CTR-005). Pacote Go `contratos`. Usa o cadastro `cliente_servico` (`/v1/clientes-servico`, 6.10), as OS e os registros de parada, sem mudar o cálculo técnico da disponibilidade. Detalhamento na seção 25.
+
+| Método | Rota | Descrição | Perfil | Plano | Fase |
+|---|---|---|---|---|---|
+| GET | `/v1/contratos-cliente` | Lista contratos com clientes (`cliente_servico_id`, `status`, `vigente_em`, `ativo_id`, `unidade_id`, `numero`) | Gestão | P | F2 |
+| POST | `/v1/contratos-cliente` | Cria contrato em `rascunho`: vigência, meta, calendário de apuração, prazos por prioridade, faixas de desconto, causas externas aceitas (25.2) | Contratos | P | F2 |
+| GET | `/v1/contratos-cliente/{id}` | Detalha contrato | Gestão | P | F2 |
+| PATCH | `/v1/contratos-cliente/{id}` | Altera contrato; em `vigente`, só data de fim, renovação, contatos e anexos; `encerrado` ou `cancelado` devolve `409 registro_imutavel` | Contratos | P | F2 |
+| POST | `/v1/contratos-cliente/{id}/ativar` | `rascunho` → `vigente` | Contratos | P | F2 |
+| POST | `/v1/contratos-cliente/{id}/encerrar` | `vigente` → `encerrado`, com motivo quando antes do fim da vigência | Contratos | P | F2 |
+| POST | `/v1/contratos-cliente/{id}/cancelar` | Só `rascunho` → `cancelado`, com motivo | Contratos | P | F2 |
+| GET | `/v1/contratos-cliente/{id}/itens` | Ativos cobertos (`item_contrato_cliente`), com datas de inclusão e exclusão e disponibilidade corrente | Gestão | P | F2 |
+| POST | `/v1/contratos-cliente/{id}/itens` | Inclui ativo (em `rascunho`, ou em `vigente` como aditivo) (25.3) | Contratos | P | F2 |
+| PATCH | `/v1/contratos-cliente/{id}/itens/{item_id}` | Altera meta própria, valor mensal ou registra a data de exclusão | Contratos | P | F2 |
+| DELETE | `/v1/contratos-cliente/{id}/itens/{item_id}` | Remove item de contrato em `rascunho`; em `vigente`, use a data de exclusão | Contratos | P | F2 |
+| GET | `/v1/contratos-cliente/{id}/painel` | Disponibilidade parcial do mês por item e do contrato, itens abaixo da meta, desconto projetado, OS abertas com prazos, paradas aguardando decisão (25.6) | Gestão | P | F2 |
+| GET | `/v1/medicoes-contrato` | Medições (`contrato_cliente_id`, `periodo`, `situacao`) | Gestão | P | F2 |
+| POST | `/v1/medicoes-contrato` | Abre a medição de um período (também aberta sozinha no primeiro dia do mês seguinte, proposta) | Contratos | P | F2 |
+| GET | `/v1/medicoes-contrato/{id}` | Detalha medição: por item, horas requeridas, paradas, exclusões, disponibilidade contratual, faixa e desconto; memória de cálculo (25.5) | Gestão | P | F2 |
+| POST | `/v1/medicoes-contrato/{id}/decidir-exclusao` | Grava `decisao_exclusao` (`aprovada` ou `recusada`) de uma parada com causa externa, com motivo | Fechamento de medição | P | F2 |
+| POST | `/v1/medicoes-contrato/{id}/fechar` | `em_apuracao` → `fechada` | Fechamento de medição | P | F2 |
+| POST | `/v1/medicoes-contrato/{id}/reabrir` | `fechada` → `em_apuracao`, com motivo; mostra as divergências desde o fechamento | Reabertura de medição | P | F2 |
+| GET | `/v1/medicoes-contrato/{id}/relatorio` | Medição em PDF ou XLSX, com a memória de cálculo | Gestão | P | F2 |
+
+### 6.20 Resumo do catálogo
+
+| Módulo | Endpoints | MVP | F2 | F3 | Variação desde a versão 0.3 |
+|---|---|---|---|---|---|
+| ADM | 87 | 63 | 24 | 0 | +17: regras configuráveis (9) e disparos (2), no MVP; pacotes de segmento (4) e aplicações (2), na Fase 2 |
+| ATV | 27 | 27 | 0 | 0 | +2: `colocar-em-operacao`, unitária e em lote (campos `fase_ciclo_vida`, `data_entrada_operacao`, `projeto_id`) |
 | MED | 12 | 12 | 0 | 0 | — |
-| SOL | 11 | 11 | 0 | 0 | +1: `reabrir-como-nova` |
-| OS | 43 | 40 | 3 | 0 | +6: `assumir`, `relatorio-pdf`, serviços a realizar (`/servicos`, 4) |
+| SOL | 11 | 11 | 0 | 0 | — (origem `regra`) |
+| OS | 51 | 48 | 3 | 0 | +8: definições de campos extras (6) e campos extras da OS (2) (tipo `implantacao`, origens `projeto` e `cliente_conectado`, `causa_externa`, `etapa_projeto_id`) |
 | PRE | 19 | 19 | 0 | 0 | — |
 | CHK | 11 | 11 | 0 | 0 | — |
-| EST | 59 | 18 | 41 | 0 | — (destino de peça com `est.decidir_destino`) |
-| TER | 35 | 20 | 15 | 0 | +1: as 3 rotas públicas com `{token}` viram 4 (`ativar` e `atual/*`) |
-| SRV | 23 | 23 | 0 | 0 | Novo módulo: especialidades de técnico (5), clientes atendidos (5), conexões entre contas (10), vínculos de OS (3) |
-| LOC | 25 | 0 | 25 | 0 | — (`cancelar` só de `rascunho`) |
+| EST | 59 | 18 | 41 | 0 | — |
+| TER | 35 | 20 | 15 | 0 | — |
+| SRV | 23 | 23 | 0 | 0 | — (clientes atendidos também no Profissional com CTR) |
+| PRJ | 36 | 0 | 36 | 0 | Novo módulo: modelos (7), projetos com ações (9), acompanhamento (1), lançamentos de custo (3), termo de entrega (2), etapas (7), medições de etapas (7) |
+| CTR | 19 | 0 | 19 | 0 | Novo módulo: contratos com ações (7), itens (4), painel (1), medições do contrato (7) |
+| LOC | 25 | 0 | 25 | 0 | — |
 | FRO | 32 | 4 | 28 | 0 | — |
-| CON | 31 | 19 | 12 | 0 | — (`/v1/bloqueios-despacho` de cadastro vira `/v1/bloqueios-ativo`) |
+| CON | 31 | 19 | 12 | 0 | — (`bloqueio_ativo.origem`) |
 | IND | 12 | 12 | 0 | 0 | — |
 | INT | 52 | 26 | 26 | 0 | — |
 | IA | 13 | 0 | 9 | 4 | — |
 | MOB | 9 | 9 | 0 | 0 | — |
-| **Total** | **482** | **301** | **177** | **4** | **+31** |
+| **Total** | **564** | **322** | **238** | **4** | **+82** |
 
-ADM inclui autenticação (10 rotas, entre elas as de OAuth fora de `/v1`), SCIM (10 rotas em `/scim/v2`), pessoas, versão do produto, anexos, processamentos, notificações e exportação completa. Os sub-recursos de frota e de conformidade pendurados em `ativos` e `ordens-servico` (dados de veículo, pneus no mapa, registro de bloqueio, NR-13) são contados nos módulos FRO e CON; as ações `atribuir-fornecedor` e `retirar-fornecedor` e as 4 rotas públicas do link de uso único, em TER; `assumir`, `servicos` e `relatorio-pdf`, em OS. O SRV conta só as rotas próprias (22.2); a conta da subcontratada usa também as rotas de ADM, ATV, MED, OS, CHK, EST, IND e MOB.
+ADM inclui autenticação (10 rotas, entre elas as de OAuth fora de `/v1`), SCIM (10 rotas em `/scim/v2`), pessoas, versão do produto, anexos, processamentos, notificações e exportação completa. Os sub-recursos de frota e de conformidade pendurados em `ativos` e `ordens-servico` (dados de veículo, pneus no mapa, registro de bloqueio, NR-13) são contados nos módulos FRO e CON; as ações `atribuir-fornecedor` e `retirar-fornecedor` e as 4 rotas públicas do link de uso único, em TER; `assumir`, `servicos` e `relatorio-pdf`, em OS. O SRV conta só as rotas próprias (22.2); a conta da subcontratada usa também as rotas de ADM, ATV, MED, OS, CHK, EST, IND e MOB. As regras configuráveis e os pacotes de segmento contam em ADM; as definições e os valores de campos extras, em OS; `colocar-em-operacao`, em ATV; `gerar-os` da etapa, em PRJ; as medições de etapas (`/v1/medicoes-etapa`), em PRJ; as medições do contrato (`/v1/medicoes-contrato`), em CTR.
 
 ---
 
@@ -1368,7 +1543,7 @@ Content-Type: application/json
 
 - `id` é opcional. O app envia o id gerado offline; a web e as integrações podem omitir.
 - `localizacao_id` substitui `ativo_id` quando o problema é predial e não há ativo cadastrado.
-- `origem` é definida pelo servidor (`web`, `app`, `qr_code`, `checklist`, `telematica`, `api`, `portal_locatario`) e não é aceita no corpo. Solicitação aberta por usuário `locatario` recebe sempre `portal_locatario` (sumário 3.6).
+- `origem` é definida pelo servidor (`web`, `app`, `qr_code`, `checklist`, `telematica`, `api`, `regra`, `portal_locatario`) e não é aceita no corpo. Solicitação aberta por usuário `locatario` recebe sempre `portal_locatario` (sumário 3.6). A de origem `regra` é criada pelo efeito `abrir_solicitacao` de uma regra configurável (RF-SOL-001, RF-ADM-016), traz `disparo_regra_id` (só leitura, proposta), tem como solicitante o autor de sistema `{ "tipo": "regra_automacao", "id": "<id da regra>" }` e segue a triagem normal (23.1).
 - `ativo_parado: true` ("o ativo parou?") por falha coloca o ativo em `parado` desde a abertura (6.2).
 - O solicitante é sempre o usuário da credencial; integrações registram o token e podem informar `solicitante_nome` e `solicitante_contato`.
 
@@ -1469,6 +1644,8 @@ A OS herda ativo, descrição, anexos e `ativo_parado` da solicitação. Webhook
   "executor_tipo": "interno",
   "fornecedor_id": null,
   "responsavel_custo": null,
+  "campos_extras": { "numero_protocolo_concessionaria": null },
+  "causa_externa": null,
   "tarefas": [
     { "descricao": "Aplicar bloqueio e etiquetagem da fonte elétrica", "obrigatoria": true },
     { "descricao": "Substituir retentor do eixo principal", "obrigatoria": true },
@@ -1482,8 +1659,8 @@ A OS herda ativo, descrição, anexos e `ativo_parado` da solicitação. Webhook
 
 | Campo | Obrigatório | Regra |
 |---|---|---|
-| `tipo` | Sim | `preventiva`, `preditiva`, `corretiva_planejada`, `corretiva_emergencial`, `inspecao_legal`, `melhoria` |
-| `ativo_id` | Sim | Ativo ativo da empresa, em unidade acessível ao usuário |
+| `tipo` | Sim | `preventiva`, `preditiva`, `corretiva_planejada`, `corretiva_emergencial`, `inspecao_legal`, `melhoria`, `implantacao`. `implantacao` só em ativo `em_implantacao` ou em OS gerada por etapa de projeto (`422 ativo_nao_em_implantacao`); plano nunca gera OS `implantacao` (RF-OS-002) |
+| `ativo_id` | Sim | Ativo ativo da empresa, em unidade acessível ao usuário. Ativo `em_implantacao` (status `inativo`) é aceito só em OS `implantacao` (`422 ativo_em_implantacao` nos demais tipos, proposta) |
 | `titulo` | Sim | Até 200 caracteres |
 | `descricao` | Não | Até 10.000 caracteres |
 | `prioridade` | Não | `baixa`, `media`, `alta`, `urgente`. Padrão pela criticidade do ativo: A → `alta`, B → `media`, C → `baixa`; `corretiva_emergencial` nasce `urgente` |
@@ -1500,6 +1677,11 @@ A OS herda ativo, descrição, anexos e `ativo_parado` da solicitação. Webhook
 | `tarefas`, `pecas_previstas` | Não | Criadas junto com a OS, na mesma transação |
 | `solicitacao_id`, `plano_manutencao_id` | Não | Só leitura quando a OS nasce de solicitação ou plano. OS gerada por plano nasce `planejada` |
 | `contrato_locacao_id` | — | Só leitura: preenchido pelo servidor quando o ativo está em contrato de locação vigente, cedido ou tomado |
+| `campos_extras` | Quando há campo obrigatório na abertura | Objeto com os valores dos campos extras, pela `chave` da definição (23.2). Campo obrigatório na abertura vazio: `422 campo_extra_obrigatorio`. Chave desconhecida, inativa ou que não se aplica ao tipo e à classe do ativo: `422 validacao_falhou` (`campos_extras.<chave>`, `nao_encontrado` ou `inativo`) |
+| `causa_externa` | Não | Causa externa da parada (sumário 3.6): `vandalismo`, `acidente_terceiro`, `falta_energia`, `obra_terceiro`, `solicitacao_cliente`, `caso_fortuito`. Pode ser marcada também durante a execução, por `PATCH`; não muda MTTR nem a disponibilidade técnica (25.4) |
+| `etapa_projeto_id` | — | Só leitura: etapa de projeto de origem, preenchida quando a OS nasce de `gerar-os` da etapa (24.5). `null` para `prestador` e `locatario` (4.9) |
+
+O tipo `implantacao` fica fora dos KPIs de manutenção (MTBF, MTTR, disponibilidade, % planejada, cumprimento de preventiva, backlog) e seu custo sai como custo de implantação, separado do custo de manutenção (RF-OS-002, RF-IND-005).
 
 **Resposta `201 Created`** (`Location: /v1/ordens-servico/0193a2f0-...`, `ETag: "1"`)
 
@@ -1528,6 +1710,9 @@ A OS herda ativo, descrição, anexos e `ativo_parado` da solicitação. Webhook
   "responsavel_custo": "empresa",
   "justificativa_responsavel_custo": null,
   "contrato_locacao_id": null,
+  "etapa_projeto_id": null,
+  "campos_extras": { "numero_protocolo_concessionaria": null },
+  "causa_externa": null,
   "responsavel_id": null,
   "executores_ids": [],
   "tempo_estimado_min": null,
@@ -1572,6 +1757,10 @@ A OS herda ativo, descrição, anexos e `ativo_parado` da solicitação. Webhook
 | `rascunho_ia` | Criada a partir de um rascunho do assistente confirmado pelo usuário (6.16) |
 | `vistoria_locacao` | Avaria encontrada na vistoria de devolução (21.4) |
 | `prestador` | Na conta do cliente, OS aberta pela subcontratada conectada num ativo compartilhado; nasce `aberta` e segue a triagem do cliente (22.8) |
+| `cliente_conectado` | Na conta da subcontratada, OS criada pela sincronização a partir de uma OS do cliente conectado (22.8) |
+| `projeto` | Gerada pela ação `gerar-os` de uma etapa de projeto, com `tipo = implantacao` e `etapa_projeto_id` (24.5) |
+
+O enum `origem` é extensível (`x-enum-extensivel`, 18.3). Não existe origem `regra` na OS (sumário 3.6): nenhum efeito de regra configurável abre OS; a regra abre solicitação (origem `regra` da solicitação, 7.2), e a OS gerada pela aprovação dela tem `origem = solicitacao`.
 
 - `vinculo` é `null` em OS sem vínculo entre contas; nas vinculadas, traz o resumo da seção 22.8.
 - Webhook: `ordem_servico.criada`.
@@ -1605,7 +1794,7 @@ aberta | planejada | programada | pausada ──cancelar──→ cancelada
 | `iniciar` | `programada`; `aberta` só em `corretiva_emergencial` | `em_execucao` | `data_inicio` (padrão: agora) | `ativo_parado`, `leituras` | Grava `data_reconhecimento` se vazia; com `ativo_parado`, recalcula o status do ativo (`parado` em corretiva emergencial ou falha; `em_manutencao` em retirada programada; 6.2); o usuário entra em `executores_ids`; abre apontamento automático (proposta) |
 | `pausar` | `em_execucao` | `pausada` | `motivo_pausa`; `observacao_pausa` quando o motivo é `outro` | `data_pausa` | Fecha o apontamento aberto |
 | `retomar` | `pausada` | `em_execucao` | — | `data_retomada` | Abre apontamento automático (proposta) |
-| `concluir` | `em_execucao` | `concluida` | `data_conclusao`, `servico_realizado`, tarefas obrigatórias concluídas, ao menos um apontamento (proposta); `leituras` quando a OS veio de plano por medidor; códigos de falha em corretivas, quando o parâmetro exigir | `registro_nr12` (rascunho), `anexos_ids`, `assinatura_anexo_id` | Fecha apontamentos abertos; registra leituras; notifica quem tem `os.encerrar` |
+| `concluir` | `em_execucao` | `concluida` | `data_conclusao`, `servico_realizado`, tarefas obrigatórias concluídas, ao menos um apontamento (proposta); `leituras` quando a OS veio de plano por medidor; códigos de falha em corretivas, quando o parâmetro exigir; campos extras obrigatórios na conclusão (`422 campo_extra_obrigatorio`, 23.2) | `registro_nr12` (rascunho), `anexos_ids`, `assinatura_anexo_id`, `campos_extras`, `causa_externa` | Fecha apontamentos abertos; registra leituras; avalia as regras com condição `os_concluida_com_campo` (23.1); notifica quem tem `os.encerrar` |
 | `encerrar` (liberação) | `concluida` | `encerrada` | Permissão `os.encerrar`; `registro_nr12` completo quando `exige_registro_nr12` (8.4) | `observacao_encerramento`, `assinatura_anexo_id` | Consolida custos; recalcula o status do ativo (volta a `operando` se não restar outra causa) e o devolve em `status_operacional_ativo`; plano recalcula o próximo vencimento; OS fica imutável |
 | `recusar-liberacao` | `concluida` | `em_execucao` | Permissão `os.encerrar`; `motivo_recusa_liberacao` | `anexos_ids` | Limpa `data_conclusao`; notifica o responsável e os executores; conta como retrabalho no first-time fix (proposta) |
 | `cancelar` | `aberta`, `planejada`, `programada`, `pausada` | `cancelada` | `motivo_cancelamento` | — | Grava `data_cancelamento`; libera reservas; mantém apontamentos para custo; revoga links de uso único abertos |
@@ -1617,6 +1806,8 @@ Valores de `motivo_pausa`: `aguardando_peca`, `aguardando_aprovacao`, `aguardand
 **Assumir** — `POST /v1/ordens-servico/0193a2f0-.../assumir`, `If-Match: "1"`, corpo vazio ou `{ "observacao": "Estou no setor, atendo agora." }`. Resposta `200` com a OS (estado inalterado), `responsavel_id` igual ao usuário, `data_reconhecimento` preenchida e `transicoes_permitidas` atualizadas. Pelo app offline, é o comando `ordem_servico.assumir` (12.4); se dois técnicos assumirem a mesma OS offline, vence o primeiro a chegar ao servidor e o segundo recebe `conflito`.
 
 **Executor fornecedor.** Em OS com `executor_tipo = fornecedor`, o `prestador` executa `reconhecer`, `assumir`, `iniciar`, `pausar`, `retomar` e `concluir`; a liberação (`encerrar` ou `recusar-liberacao`) é sempre da empresa contratante, por quem tem `os.encerrar`. O mesmo vale para OS vinculada a uma conta de subcontratada (22.8).
+
+**Campos extras obrigatórios em OS vinculada (proposta).** Os campos extras não trafegam na conexão entre contas (sumário 3.6). Numa OS vinculada, a conclusão que chega da subcontratada não é recusada por campo extra obrigatório vazio na conta do cliente: a OS fica `concluida` com o aviso `campos_extras_pendentes`, e quem libera preenche os campos antes de `encerrar`, que então exige os obrigatórios na conclusão (`422 campo_extra_obrigatorio`). Ver 26.1, A-30.
 
 Datas de transição (`data_inicio`, `data_pausa`, `data_conclusao`) aceitam o horário do dispositivo, para registros offline. O servidor recusa data mais de 5 minutos no futuro em relação ao recebimento e data anterior à transição anterior da mesma OS (`422 validacao_falhou`).
 
@@ -2231,6 +2422,7 @@ App                                   API
 | `bloqueio_ativo` e a verificação "apto para despacho" | Dos veículos do motorista (a verificação vem calculada pelo servidor, 16) |
 | `cliente_servico` (conta SRV) | Resumo (nome, endereço de atendimento, contato) dos clientes das OS no escopo |
 | `especialidade_tecnico` (conta SRV) | Catálogo da conta, para filtrar a fila de OS que o técnico pode assumir |
+| `campo_extra_os` | Definições ativas que se aplicam aos tipos de OS e às classes de ativo no escopo, no cache de configuração (RF-OS-021); para o `prestador`, só as com `preenchido_pelo_prestador = true` |
 
 Para o `prestador`, o escopo segue o alcance da seção 4.9: só OS com `executor_tipo = fornecedor` do seu fornecedor, os ativos dessas OS em formato resumido, seus medidores, e o saldo do almoxarifado `em_terceiro` do fornecedor. Quando a OS é retirada do fornecedor, o pull traz `remocao` com `motivo: "saiu_do_escopo"`. O `locatario` não usa o app de campo no lançamento (sumário 3.6).
 
@@ -2347,6 +2539,8 @@ Content-Type: application/json
 
 **Tipos de comando (MVP):** `solicitacao.criar`, `solicitacao.comentar`, `ordem_servico.criar`, `ordem_servico.atualizar`, `ordem_servico.reconhecer`, `ordem_servico.assumir`, `ordem_servico.iniciar`, `servico_os.atualizar`, `ordem_servico.pausar`, `ordem_servico.retomar`, `ordem_servico.concluir`, `tarefa_os.atualizar`, `apontamento.criar`, `apontamento.atualizar`, `peca_os.consumir`, `comentario_os.criar`, `assinatura_os.criar`, `leitura_medidor.criar`, `checklist_execucao.criar`, `bloqueio_energia.aplicar`, `bloqueio_energia.retirar`. **Fase 2:** `abastecimento.criar`, `pneu.aferir`, `sinistro.criar`, `peca_serializada.instalar`, `peca_serializada.remover`, `vistoria_locacao.criar`. Cada tipo usa o mesmo validador do endpoint REST equivalente e as mesmas regras de alcance (o `prestador` só envia comandos sobre OS no seu alcance). `encerrar`, `recusar-liberacao` e `cancelar` exigem conexão (proposta): são decisões de gestão sobre o estado consolidado. Em OS vinculada, comando sobre campo do outro lado volta `rejeitado` com `os_vinculada_somente_leitura`; a sincronização com a conta do cliente só começa depois que o comando é aplicado no servidor (22.6).
 
+**Campos extras offline.** `ordem_servico.criar`, `ordem_servico.atualizar` e `ordem_servico.concluir` aceitam `campos_extras` e `causa_externa`. O app valida os campos obrigatórios com as definições do cache antes de enfileirar o comando (RF-OS-021). No servidor, a obrigatoriedade é avaliada pelas definições vigentes no `criado_em_dispositivo` do comando (proposta): campo que passou a ser obrigatório depois que o técnico concluiu offline não rejeita a conclusão: o comando volta `aplicado` com o aviso `campos_extras_pendentes`, e a OS fica sinalizada para revisão (RF-OS-021). Campo que já era obrigatório quando o comando foi criado e chegou vazio volta `rejeitado` com `campo_extra_obrigatorio`.
+
 **Resposta `200 OK`**
 
 ```json
@@ -2392,7 +2586,7 @@ Content-Type: application/json
 | Tipo de dado | Estratégia |
 |---|---|
 | **Só acréscimo** (apontamento, leitura, comentário, foto, execução de checklist, assinatura) | Não conflita. Só passa pela validação de domínio (por exemplo, leitura regressiva vinda do app vira `suspeita` em vez de ser recusada, para não perder o registro de campo, proposta) |
-| **Edição de campos** (descrição, observação, tarefa marcada) | Mesclagem por campo contra `versao_base`: campo não alterado no servidor desde `versao_base` é aplicado; campo alterado nos dois lados segue "último a escrever vence" por campo, comparando o horário do dispositivo (corrigido pelo deslocamento de relógio) com o horário da alteração no servidor. O lado perdedor volta em `campos_descartados` |
+| **Edição de campos** (descrição, observação, tarefa marcada, cada chave de `campos_extras`) | Mesclagem por campo contra `versao_base` (em `campos_extras`, cada chave conta como um campo, proposta): campo não alterado no servidor desde `versao_base` é aplicado; campo alterado nos dois lados segue "último a escrever vence" por campo, comparando o horário do dispositivo (corrigido pelo deslocamento de relógio) com o horário da alteração no servidor. O lado perdedor volta em `campos_descartados` |
 | **Transição de estado** | Validada contra o estado atual, não contra `versao_base`. Se o estado atual permitir, aplica. Se o estado já é o pretendido (dois técnicos iniciaram a mesma OS), aplica sem nova transição e inclui o usuário em `executores_ids` |
 | **OS cancelada ou encerrada no servidor** | Transições e edições: `conflito`. Apontamentos e leituras: aplicados, porque registram fatos, e a gestão é notificada (proposta) |
 | **OS reatribuída a outro técnico durante o offline** | Aplica, com aviso `os_reatribuida`, e notifica a gestão |
@@ -2439,11 +2633,12 @@ Regra de nome (sumário 3.4): `<entidade>.<fato_no_particípio>`, sempre com o *
 | `ativo.criado` | Ativo cadastrado | P | MVP |
 | `ativo.atualizado` | Dados do ativo alterados | P | MVP |
 | `ativo.status_alterado` | Mudança de `status_operacional` | P | MVP |
+| `ativo.colocado_em_operacao` | Ativo passou de `em_implantacao` para `em_operacao` (com `data_entrada_operacao` e `projeto_id`, quando houver); um evento por ativo, inclusive no lote e na conclusão de projeto (RF-ATV-013) | P | MVP |
 | `leitura_medidor.registrada` | Leitura de medidor gravada (inclui `origem` e `status_validacao`) | P | MVP |
 | `solicitacao.criada` | Solicitação aberta | P | MVP |
 | `solicitacao.aprovada` | Solicitação aprovada (com `ordem_servico_id`) | P | MVP |
 | `solicitacao.recusada` | Solicitação recusada (inclusive por desistência) ou marcada duplicada | P | MVP |
-| `ordem_servico.criada` | OS criada, com `origem` (`manual`, `solicitacao`, `plano`, `checklist`, `telematica`, `rascunho_ia`, `vistoria_locacao`, `prestador`) | P | MVP |
+| `ordem_servico.criada` | OS criada, com `origem` (`manual`, `solicitacao`, `plano`, `checklist`, `telematica`, `rascunho_ia`, `vistoria_locacao`, `prestador`, `cliente_conectado`, `projeto`) | P | MVP |
 | `ordem_servico.atualizada` | Campos da OS alterados sem transição, inclusive `assumir`, atribuição ou retirada de fornecedor, troca de `responsavel_custo` e dados recebidos da conta conectada | P | MVP |
 | `ordem_servico.status_alterado` | Qualquer transição, inclusive `desprogramar` e `recusar-liberacao` (com `status_anterior` e motivo) | P | MVP |
 | `ordem_servico.programada` | OS programada | P | MVP |
@@ -2465,6 +2660,7 @@ Regra de nome (sumário 3.4): `<entidade>.<fato_no_particípio>`, sempre com o *
 | `conexao_empresa.encerrada` | Conexão recusada ou encerrada; a sincronização parou; emitido nas duas contas | P | MVP |
 | `vinculo_os.sincronizado` | Uma alteração da OS vinculada foi gravada na outra conta (criação, transição, apontamentos, componentes, fotos); emitido na conta que recebeu os dados | P | MVP |
 | `vinculo_os.erro` | A sincronização de um vínculo falhou e esgotou as novas tentativas (`estado_sincronizacao = erro`); emitido na conta de origem da alteração | P | MVP |
+| `regra_automacao.disparada` | **(proposta)** Uma regra configurável disparou e aplicou o efeito; `dados` traz o `disparo_regra` (regra, condição, fato, ativo, efeito e os ids criados na própria conta: solicitação ou bloqueio). Um evento por disparo; a rotina diária não repete disparo do mesmo fato (23.1) | P | MVP |
 | `importacao.concluida` | Importação terminou (com resumo) | P | MVP |
 | `exportacao.concluida` | Exportação completa disponível | P | MVP |
 | `webhook.teste` | Disparado por `POST /v1/webhooks/{id}/testar` | P | MVP |
@@ -2485,6 +2681,13 @@ Regra de nome (sumário 3.4): `<entidade>.<fato_no_particípio>`, sempre com o *
 | `contrato_locacao.encerrado` | Contrato de locação encerrado | P | F2 |
 | `vistoria_locacao.registrada` | Vistoria de entrega ou devolução registrada (com avarias e OS geradas) | P | F2 |
 | `fornecedor.sla_violado` | OS ou substituição de ativo fora do SLA de atendimento, de solução ou de substituição do contrato (prestação ou locação tomada) | P | F2 |
+| `projeto.iniciado` | Projeto passou a `em_andamento` (RF-PRJ-002) | P | F2 |
+| `projeto.concluido` | Projeto concluído, com os ativos colocados em operação (RF-PRJ-007) | P | F2 |
+| `projeto.cancelado` | Projeto cancelado, com motivo e o destino de cada ativo `em_implantacao` | P | F2 |
+| `contrato_cliente.ativado` | Contrato com cliente passou a `vigente` (RF-CTR-001) | P | F2 |
+| `contrato_cliente.encerrado` | Contrato com cliente encerrado | P | F2 |
+| `contrato_cliente.sla_violado` | OS de item coberto fora do prazo de atendimento ou de solução do contrato com cliente, com o prazo e o atraso | P | F2 |
+| `medicao_contrato.fechada` | Medição do contrato fechada, com o total, o desconto e o link do relatório (RF-CTR-004) | P | F2 |
 
 Só usuários internos da própria conta assinam webhooks (administrador ou token com `webhooks:gerenciar`); usuários `prestador` e `locatario` não recebem eventos. A conta de uma subcontratada (SRV) assina os eventos **da própria conta**, se o plano incluir webhooks (22.10); ela nunca recebe eventos da conta do cliente, e vice-versa. Os eventos de conexão e de vínculo trazem só dados da conta que os recebe: o número da OS do outro lado (`numero_os_remota`) e a razão social da outra empresa, nunca ids de outra conta.
 
@@ -2865,6 +3068,9 @@ MVP, todos os planos (web); por token de API, Profissional.
 | `pneus` | `numero_fogo` | F2 |
 | `pecas_serializadas` | Código do item + `numero_serie` | F2 |
 | `locatarios` | `cnpj` ou `cpf` | F2 |
+| `projetos` | Nome do projeto + código do modelo; um projeto por linha, com TAG do ativo ou caminho da localização (RF-PRJ-002) (proposta) | F2 |
+
+O tipo `ativos` aceita a coluna `fase_ciclo_vida` (padrão `em_operacao`) só na inserção; na atualização a coluna é ignorada, porque a fase só muda por `colocar-em-operacao` (23.3).
 
 Formato: UTF-8 com ou sem BOM; separador `;` (padrão do Excel em português) ou `,`; separador decimal declarado (`,` ou `.`); datas `DD/MM/AAAA`, `DD/MM/AAAA HH:MM` (no fuso da unidade) ou ISO 8601; primeira linha com os nomes de coluna iguais aos campos da API; referências por chave natural (TAG, código, CNPJ), nunca por UUID. Limite: 50.000 linhas e 20 MB por arquivo (proposta). O modelo de cada tipo está em `GET /v1/importacoes/modelos/{tipo}`.
 
@@ -2980,7 +3186,7 @@ Configuração de exemplo (`POST /v1/conectores-erp`):
 
 Regra de negócio do estudo de mercado: **veículo com documento crítico vencido gera bloqueio de despacho, exposto por API para o TMS.** A Tenaz informa; a decisão de despachar continua do TMS e do operador.
 
-"Apto para despacho" é uma **verificação calculada** na consulta, não uma entidade (sumário 3.6). As rotas mantêm o nome `/v1/bloqueios-despacho/consulta` por compatibilidade com o texto já distribuído a integradores (ver 23.1, A-3). O bloqueio manual de um veículo é um `bloqueio_ativo` (`/v1/bloqueios-ativo`, 6.13), que também deixa o ativo `parado`.
+"Apto para despacho" é uma **verificação calculada** na consulta, não uma entidade (sumário 3.6). As rotas mantêm o nome `/v1/bloqueios-despacho/consulta` por compatibilidade com o texto já distribuído a integradores (ver 26.1, A-3). O bloqueio manual de um veículo é um `bloqueio_ativo` (`/v1/bloqueios-ativo`, 6.13), que também deixa o ativo `parado`.
 
 ### 16.1 Motivos de bloqueio
 
@@ -2989,7 +3195,7 @@ Regra de negócio do estudo de mercado: **veículo com documento crítico vencid
 | `documento_vencido` | Documento com vencimento de tipo marcado `critico_despacho` (CRLV-e, cronotacógrafo, CIV, CIPP, seguro obrigatório, conforme configuração) vencido | MVP |
 | `ativo_parado` | Veículo com `status_operacional` `parado` ou `em_manutencao` | MVP |
 | `checklist_item_critico_reprovado` | Checklist com item `critico_despacho` reprovado, sem OS encerrada depois | MVP |
-| `bloqueio_ativo` | Bloqueio de conformidade vigente (`bloqueio_ativo`), manual ou automático | MVP |
+| `bloqueio_ativo` | Bloqueio de conformidade vigente (`bloqueio_ativo`), de qualquer `origem`: `manual`, `conformidade` ou `regra` (6.13) | MVP |
 | `implemento_bloqueado` | Implemento acoplado (carreta) com bloqueio próprio | MVP |
 | `dtc_critico_ativo` | DTC ativo com regra que manda bloquear | F2 |
 | `pneu_abaixo_sulco_minimo` | Pneu montado abaixo do sulco mínimo configurado | F2 |
@@ -3446,7 +3652,10 @@ Content-Type: application/json
       { "id": "0193a2f1-0000-7aaa-8bbb-000000000002", "descricao": "Substituir retentor do eixo principal", "obrigatoria": true },
       { "id": "0193a2f1-0000-7aaa-8bbb-000000000003", "descricao": "Testar proteções e dispositivos de parada de emergência", "obrigatoria": true }
     ],
-    "medidores": [ { "id": "0192f7d1-2222-7ccc-8ddd-000000000031", "tipo": "horas", "unidade": "h" } ]
+    "medidores": [ { "id": "0192f7d1-2222-7ccc-8ddd-000000000031", "tipo": "horas", "unidade": "h" } ],
+    "campos_extras": [
+      { "chave": "rompeu_lacre", "rotulo": "Rompeu lacre?", "tipo": "sim_nao", "obrigatorio_em": "conclusao", "ajuda": "Marque sim se algum lacre do equipamento foi retirado.", "valor": null }
+    ]
   },
   "ativo": { "tag": "CMP-0347", "nome": "Compressor de parafuso 75 cv", "localizacao": "Planta 1 / Casa de compressores" },
   "executor": { "nome": "José Aparecido Lima" },
@@ -3501,6 +3710,8 @@ Content-Type: application/json
   },
   "anexos_ids": ["0193b2c1-0000-7aaa-8bbb-0000000000f1", "0193b2c1-0000-7aaa-8bbb-0000000000f2"],
   "assinatura_anexo_id": "0193b2c1-0000-7aaa-8bbb-0000000000f3",
+  "campos_extras": { "rompeu_lacre": false },
+  "causa_externa": null,
   "aceite_termo": true
 }
 ```
@@ -3525,6 +3736,7 @@ Regras do registro:
 - Peças: só descrição e quantidade. O link nunca movimenta estoque; peça do estoque da empresa é baixada depois por um usuário interno. `fornecida_por`: `empresa` ou `fornecedor`.
 - Assinatura eletrônica avançada (sumário 2.1): o registro guarda hash SHA-256 do conteúdo, carimbo de tempo, IP e aceite do termo. A validade jurídica para registro NR-12 depende da pendência P1.
 - Validações e erros de campo seguem as mesmas regras do `concluir` (8.2); erro de validação **não** consome o link.
+- **Campos extras pelo link** (RF-OS-021): a consulta mostra só as definições com `preenchido_pelo_prestador = true` que se aplicam à OS, pela `chave` (sem o id da definição), e o registro aceita só essas chaves; outra chave devolve `422 validacao_falhou`. Campo obrigatório na conclusão vazio devolve `422 campo_extra_obrigatorio` sem consumir o link. Campo obrigatório sem `preenchido_pelo_prestador` não impede o registro pelo link: a OS fica `concluida` com o aviso `campos_extras_pendentes`, e a empresa preenche antes de `encerrar` (8.2). O link também aceita `causa_externa` (RF-CTR-003), com as evidências em `anexos_ids`.
 
 ### 19.5 Orçamentos, contratos de prestação e avaliação (Fase 2)
 
@@ -4030,7 +4242,7 @@ O SRV reaproveita as entidades do restante da Tenaz, com o significado do lado d
 - Fora do plano Serviços: API v1 e webhooks, multi-unidade, estoque e compras completos, LOC, FRO, NR-13 e o restante do Profissional. A conta pode contratar também um dos planos da seção 2.1 do sumário, e então soma os recursos. Rota fora do plano: `403 plano_nao_inclui_recurso`.
 - **Técnico cobrado** na conta da subcontratada: usuário ativo com perfil `tecnico`; `gestor` e `planejador` não pagam. No cliente, o técnico da subcontratada com conta própria **não** conta como técnico cobrado (ele nem tem usuário lá). `GET /v1/empresa/plano` mostra a contagem.
 - Uma mesma empresa pode ser cliente numa conexão e subcontratada em outra; o papel vem de cada `conexao_empresa`.
-- Na conta da subcontratada, o próprio catálogo de serviços é `servico_fornecedor` com `fornecedor_id = null` (serviço da própria conta, proposta; ver 23.1, A-20).
+- Na conta da subcontratada, o próprio catálogo de serviços é `servico_fornecedor` com `fornecedor_id = null` (serviço da própria conta, proposta; ver 26.1, A-20).
 
 ### 22.3 Técnicos e especialidades
 
@@ -4267,6 +4479,8 @@ Ação fora do estado: `409 transicao_invalida`. Todas exigem `If-Match`; motivo
 | `assinatura_cliente` | subcontratada → cliente | Assinatura do responsável do cliente coletada em campo | Não | Sim |
 | `registro_nr12` | subcontratada → cliente | Rascunho dos campos do item 12.11.2 preenchidos na conclusão | Não | Sim |
 | `valores` | subcontratada → cliente | Preço dos serviços e dos componentes; no cliente, vira custo de terceiros previsto | Não | Não |
+
+**Nunca compartilhados no lançamento** (sumário 3.6, RF-OS-021, RF-ATV-013, RF-PRJ-004): os campos extras da OS (`campos_extras`), a causa externa da parada (`causa_externa`, `decisao_exclusao`), a etapa de projeto da OS (`etapa_projeto_id`) e a fase de ciclo de vida do ativo (`fase_ciclo_vida`, `data_entrada_operacao`); também ficam fora o projeto e as etapas, as regras configuráveis e seus disparos, os contratos com clientes e as medições. Eles só passam a trafegar por um grupo novo, decidido no sumário. A OS `implantacao` trafega como qualquer OS, com o `tipo` no grupo `os_dados_basicos`.
 
 Os ativos compartilhados ficam em `ativos_compartilhados`: lista de `ativo_ids`, `classe_ativo_ids`, `localizacao_ids` ou o `contrato_prestacao_id` (Fase 2) cujos ativos cobertos entram (sumário 3.5).
 
@@ -4630,7 +4844,7 @@ Resposta `200` (`ETag: "3"`), trecho:
   "numero": "OS-2026-000231",
   "versao": 1,
   "status": "aberta",
-  "origem": "manual",
+  "origem": "cliente_conectado",
   "tipo": "corretiva_planejada",
   "prioridade": "alta",
   "titulo": "Compressor 2 desarmando por temperatura",
@@ -4655,7 +4869,7 @@ Resposta `200` (`ETag: "3"`), trecho:
 }
 ```
 
-Na conta da subcontratada, a OS é executada por técnico próprio (`executor_tipo = interno`) e recebe `origem` igual à da OS do cliente (`manual` no exemplo); que ela veio da conexão está em `vinculo.lado_origem = cliente` (ver 23.1, A-21). Webhooks na conta da subcontratada: `ordem_servico.criada` e `vinculo_os.sincronizado`.
+Na conta da subcontratada, a OS é executada por técnico próprio (`executor_tipo = interno`) e recebe `origem = cliente_conectado` (sumário 3.6); o vínculo traz também `vinculo.lado_origem = cliente` (ver 26.1, A-21, resolvido). Uma OS `implantacao` do cliente chega com o mesmo `tipo`, sem `etapa_projeto_id`, e a cópia não passa pela validação de fase do ativo, que não é compartilhada (ver 26.1, A-31). Webhooks na conta da subcontratada: `ordem_servico.criada` e `vinculo_os.sincronizado`.
 
 **Passo 3 — o técnico assume e executa** (conta da subcontratada). `POST .../0193e300-.../assumir` (`If-Match: "1"`), depois `iniciar`, `pecas` com `tipo_material = substituido`, `apontamentos` e `concluir`, iguais aos exemplos da 22.7. Cada passo gera uma entrega para o cliente com os grupos de `os_execucao`, `apontamentos_horas`, `componentes` e `fotos_anexos`.
 
@@ -4807,7 +5021,7 @@ A conta da subcontratada é uma empresa como as outras: o integrador dela (ERP, 
 | Escrita em campo do cliente numa OS vinculada ou em equipamento sincronizado | `409 os_vinculada_somente_leitura` e `409 ativo_sincronizado_somente_leitura` |
 | Eventos da conta do cliente | Cada conta assina só os próprios webhooks (13.2) |
 
-**Plano.** Tokens de API e webhooks não estão no plano Serviços (sumário 2.2). A conta da subcontratada que contratar também o Profissional ganha tokens e webhooks com os limites dele (seção 5). Proposta a validar: incluir no plano Serviços um token de **leitura** (`servicos:leitura`, `ordens_servico:leitura`, `ativos:leitura`, `conexoes:leitura`) para o faturamento da subcontratada (23.1, A-22).
+**Plano.** Tokens de API e webhooks não estão no plano Serviços (sumário 2.2). A conta da subcontratada que contratar também o Profissional ganha tokens e webhooks com os limites dele (seção 5). Proposta a validar: incluir no plano Serviços um token de **leitura** (`servicos:leitura`, `ordens_servico:leitura`, `ativos:leitura`, `conexoes:leitura`) para o faturamento da subcontratada (26.1, A-22).
 
 Do lado do cliente, o integrador vê a OS vinculada como OS atribuída a fornecedor, com o objeto `vinculo`, e recebe os dados da subcontratada nos campos de execução, apontamentos e componentes (marcados `origem_remota: true`), sem ids da conta dela.
 
@@ -4832,11 +5046,537 @@ Do lado do cliente, o integrador vê a OS vinculada como OS atribuída a fornece
 
 ---
 
-## 23. Pendências e decisões em aberto
+## 23. Configuração por segmento: regras, campos extras, fase de ciclo de vida e pacotes
 
-### 23.1 Inconsistências e lacunas encontradas no sumário executivo
+A Tenaz atende segmentos diferentes **configurando blocos que o sistema já conhece** (sumário 3.7). A API reflete isso com catálogos fechados: condição, efeito, tipo de campo e tipo de item de pacote são enums **não extensíveis por configuração**; valor novo só entra por requisito no documento 1, com teste, e chega ao contrato como mudança compatível (18.1). Os estados canônicos, as fórmulas dos indicadores, as regras do app offline, o isolamento e a lista de grupos da conexão entre contas **não são configuráveis** por nenhuma rota (risco R7). Pacote Go: `configuracao` (regras e pacotes); os campos extras ficam no módulo OS e a fase de ciclo de vida, em ATV.
 
-Os 15 pontos da versão 0.1 (I-1 a I-15) foram resolvidos pelo sumário 0.3 e já estavam aplicados na versão 0.2 deste documento; a única parte que seguia aberta, a lista de entidades sem nome canônico de I-14, continua em A-2. A tabela abaixo mostra a situação de cada ponto registrado na versão 0.2 e dos que surgiram no alinhamento com o sumário 0.4.
+| Bloco | Rotas | Plano | Fase | Requisito |
+|---|---|---|---|---|
+| Regras configuráveis | `/v1/regras-automacao`, `/v1/disparos-regra` | E | MVP | RF-ADM-016 |
+| Campos extras da OS | `/v1/campos-extras-os`, `/v1/ordens-servico/{id}/campos-extras` | E | MVP | RF-OS-021 |
+| Fase de ciclo de vida | `/v1/ativos/{id}/colocar-em-operacao`, `/v1/ativos/colocar-em-operacao` | E | MVP | RF-ATV-013 |
+| Pacotes de segmento | `/v1/pacotes-segmento`, `/v1/aplicacoes-pacote` | E | F2 | RF-ADM-017 |
+
+### 23.1 Regras configuráveis (`regra_automacao`)
+
+Uma regra tem **uma condição e um efeito**, escolhidos dos catálogos fechados do sumário 3.7, com parâmetros e um filtro opcional por classe de ativo, unidade e criticidade. Toda regra nasce `inativa` (proposta), para que a empresa simule antes de ativar; as que vêm de pacote também (RF-ADM-017). Criar, alterar, ativar, inativar e excluir exigem `adm.gerenciar_regras` (grupo Regras, 4.8).
+
+**Catálogo de condições** (`condicao`):
+
+| Valor | Parâmetros (`parametros_condicao`) | Quando é avaliada | Fase |
+|---|---|---|---|
+| `documento_vencido` | `tipo_documento_id` | No vencimento do documento do ativo e na rotina diária | MVP |
+| `documento_a_vencer` | `tipo_documento_id`, `dias_antecedencia` | Na rotina diária | MVP |
+| `os_concluida_com_campo` | `campo_extra_os_id` (campo do tipo `sim_nao`), `valor` (padrão `true`) | Na ação `concluir` da OS, inclusive pelo link e pelo app | MVP |
+| `item_checklist_reprovado` | `checklist_modelo_id`, `item_id` (proposta) | No envio da execução do checklist | MVP |
+| `leitura_fora_faixa` | `tipo_medidor` (opcional); a faixa é a do próprio medidor | No registro da leitura | MVP |
+| `capacitacao_vencida` | `tipo_capacitacao` (proposta) | No vencimento da capacitação e na rotina diária | F2 (P) |
+| `etapa_projeto_atrasada` | `dias_atraso` (padrão 0), `modelo_projeto_id` (opcional) | Na rotina diária | F2 (P, PRJ) |
+
+**Catálogo de efeitos** (`efeito`):
+
+| Valor | Parâmetros (`parametros_efeito`) | O que a API grava | Fase |
+|---|---|---|---|
+| `notificar` | `destinatarios` (perfis, `usuario_ids`, `responsavel_ativo`), `canais` (`app`, `email`, `push`) | Notificações (`/v1/notificacoes`) | MVP |
+| `abrir_solicitacao` | `prioridade_sugerida`, `titulo` (com marcadores do fato, proposta) | `solicitacao` com `origem = regra` e `disparo_regra_id`, que segue a triagem normal (7.2) | MVP |
+| `bloquear_ativo` | `motivo` | `bloqueio_ativo` com `origem = regra`: o ativo fica `parado` até a liberação manual com motivo (6.13) | MVP |
+| `bloquear_ativo_ate_documento` | `motivo`, `tipo_documento_id` que levanta o bloqueio | O mesmo bloqueio, levantado sozinho quando um documento desse tipo é registrado no ativo com emissão posterior ao fato que disparou a regra (sumário 3.6) | MVP |
+| `impedir_atribuicao` | — | Recusa a atribuição de OS a pessoa na condição (`422 capacitacao_vencida`) | F2 (P) |
+
+**Combinações** (proposta, a confirmar no documento 4): `bloquear_ativo_ate_documento` exige `tipo_documento_id`; `abrir_solicitacao` não é aceito com `documento_a_vencer`, para não abrir solicitação repetida a cada dia; `impedir_atribuicao` só com `capacitacao_vencida`; `capacitacao_vencida` só com `notificar` ou `impedir_atribuicao`; `etapa_projeto_atrasada` só com `notificar`. Fora disso: `422 regra_combinacao_invalida`. Condição ou efeito da Fase 2 sem o módulo ou o plano: `403 plano_nao_inclui_recurso`.
+
+**Criar** — `POST /v1/regras-automacao` (grupo Regras), com `Idempotency-Key`:
+
+```json
+{
+  "nome": "Verificação metrológica vencida bloqueia o radar",
+  "descricao": "O radar não volta a operar sem nova verificação do Inmetro.",
+  "condicao": "documento_vencido",
+  "parametros_condicao": { "tipo_documento_id": "0194a100-0000-7aaa-8bbb-000000000a01" },
+  "filtro": { "classe_ativo_ids": ["0194a000-0000-7aaa-8bbb-000000000c01"], "unidade_ids": [], "criticidades": [] },
+  "efeito": "bloquear_ativo_ate_documento",
+  "parametros_efeito": {
+    "tipo_documento_id": "0194a100-0000-7aaa-8bbb-000000000a01",
+    "motivo": "Verificação metrológica vencida"
+  }
+}
+```
+
+**Resposta `201 Created`** (`Location: /v1/regras-automacao/0194a200-...`, `ETag: "1"`):
+
+```json
+{
+  "id": "0194a200-0000-7aaa-8bbb-000000000r01",
+  "versao": 1,
+  "nome": "Verificação metrológica vencida bloqueia o radar",
+  "situacao": "inativa",
+  "condicao": "documento_vencido",
+  "efeito": "bloquear_ativo_ate_documento",
+  "parametros_condicao": { "tipo_documento_id": "0194a100-0000-7aaa-8bbb-000000000a01" },
+  "parametros_efeito": { "tipo_documento_id": "0194a100-0000-7aaa-8bbb-000000000a01", "motivo": "Verificação metrológica vencida" },
+  "filtro": { "classe_ativo_ids": ["0194a000-0000-7aaa-8bbb-000000000c01"], "unidade_ids": [], "criticidades": [] },
+  "origem_pacote": null,
+  "total_disparos": 0,
+  "bloqueios_vigentes": 0,
+  "transicoes_permitidas": ["ativar", "simular"],
+  "criado_em": "2026-11-12T16:00:00Z",
+  "atualizado_em": "2026-11-12T16:00:00Z",
+  "criado_por_id": "0192f800-aaaa-7bbb-8ccc-000000000001"
+}
+```
+
+`condicao` e `efeito` não mudam depois de criados (`422 campo_somente_leitura`): para trocar, cria-se outra regra. `origem_pacote` (proposta) traz o código do pacote quando a regra veio de uma aplicação (23.4).
+
+**Simular** — `POST /v1/regras-automacao/{id}/simular` (Gestão), sem corpo ou com `{ "limite": 200 }`. Avalia a regra agora, ativa ou inativa, **sem gravar nada**: não cria disparo, solicitação, bloqueio nem notificação, e não exige `If-Match`. Para condições de evento (`os_concluida_com_campo`, `item_checklist_reprovado`, `leitura_fora_faixa`), considera os fatos dos últimos 30 dias (proposta). Resposta `200`:
+
+```json
+{
+  "avaliado_em": "2026-11-12T16:05:00Z",
+  "total_afetados": 2,
+  "limite": 200,
+  "ativos": [
+    {
+      "ativo_id": "0194a300-0000-7aaa-8bbb-000000000001",
+      "tag": "RDR-0012",
+      "fato": { "entidade": "documento_vencimento", "id": "0194a400-0000-7aaa-8bbb-000000000001", "descricao": "Verificação metrológica vencida em 02/11/2026." },
+      "efeito_previsto": "bloquear_ativo_ate_documento",
+      "ja_disparada": false
+    }
+  ]
+}
+```
+
+**Ativar e inativar.** `ativar` respeita o limite de regras ativas por empresa (proposta: 50; `422 limite_regras_ativas_excedido`). `inativar` não levanta os bloqueios já criados pela regra (RF-ADM-016): a resposta traz `bloqueios_vigentes` com o `id` e a TAG de cada um, para a gestão decidir em `/v1/bloqueios-ativo/{id}/liberar`. Alteração por `PATCH` vale para os fatos seguintes; não refaz disparos passados.
+
+**Avaliação e disparos.** A regra é avaliada no fato que a dispara e numa rotina diária idempotente: o par regra e fato dispara no máximo uma vez. Cada disparo gera um `disparo_regra`, visível em `GET /v1/regras-automacao/{id}/disparos` e `GET /v1/disparos-regra` (por ativo, por regra, por período), com `regra_automacao_id`, `condicao`, `efeito`, `ativo_id`, `fato` (`entidade` e `id`), `ocorrido_em`, `resultado` (`aplicado` ou `sem_efeito`, quando o efeito já estava em vigor, proposta) e os registros criados (`solicitacao_id`, `bloqueio_ativo_id`, `notificacoes`). Nos eventos e na auditoria, o autor é `{ "tipo": "regra_automacao", "id": "<id da regra>" }`. A exportação da lista de regras e de disparos usa `POST /v1/exportacoes-lista`.
+
+**Limites do que a regra faz** (sumário 3.7). Uma regra nunca muda o estado de uma OS, nunca altera fórmula de indicador e nunca grava dado em outra conta. Os comportamentos padrão (alertas de documentos, item reprovado de checklist gerando solicitação) continuam sem regra; a regra acrescenta efeitos, não desliga os padrões.
+
+Fluxo do exemplo dos radares (sumário 3.7), com as duas regras ativas:
+
+```
+Documento vence ──→ regra "verificação vencida" ──→ bloqueio_ativo (origem regra) ──→ ativo parado
+OS concluída com rompeu_lacre = true ──→ regra "rompeu lacre" ──→ bloqueio_ativo (origem regra) ──→ ativo parado
+Nova verificação registrada no ativo (emissão posterior ao fato) ──→ bloqueio levantado ──→ status recalculado
+```
+
+O pacote `fiscalizacao_eletronica` entrega essas regras `inativa` até a pendência **P9** (RF-ADM-017).
+
+### 23.2 Campos extras da OS (`campo_extra_os`)
+
+**Definição** — `POST /v1/campos-extras-os` (grupo Configuração, permissão `adm.gerenciar_configuracao`):
+
+```json
+{
+  "chave": "rompeu_lacre",
+  "rotulo": "Rompeu lacre?",
+  "tipo": "sim_nao",
+  "tipos_os": ["corretiva_planejada", "corretiva_emergencial", "preventiva"],
+  "classe_ativo_ids": ["0194a000-0000-7aaa-8bbb-000000000c01"],
+  "obrigatorio_em": "conclusao",
+  "preenchido_pelo_prestador": true,
+  "ajuda": "Marque sim se algum lacre do equipamento foi retirado."
+}
+```
+
+| Campo | Regra |
+|---|---|
+| `chave` | Obrigatória, única na empresa, minúsculas sem acento (`^[a-z][a-z0-9_]{1,49}$`). Só leitura depois de haver valor gravado |
+| `rotulo` | Obrigatório, até 80 caracteres. A OS mostra o rótulo vigente na data do registro |
+| `tipo` | `texto`, `numero`, `data`, `lista`, `sim_nao`. Só leitura depois de haver valor gravado (cria-se outro campo) |
+| `opcoes` | Obrigatória em `lista`: `[{ "valor": "...", "rotulo": "..." }]`; valor removido continua válido nas OS antigas |
+| `unidade` | Opcional em `numero` (`mm`, `kWh`, texto livre) |
+| `tipos_os`, `classe_ativo_ids` | Onde o campo aparece; lista vazia = todos |
+| `obrigatorio_em` | `nenhum` (padrão), `abertura` ou `conclusao` (proposta de nome para o "momento da obrigatoriedade" do RF-OS-021) |
+| `preenchido_pelo_prestador` | Marcação "preenchido pelo prestador" do RF-OS-021 (proposta; o nome do campo também é proposta). `false` por padrão. Com `true`, o campo aparece e é preenchido nos escopos `prestador` e `link`; sem ela, esses escopos não veem o campo |
+| `ajuda`, `ordem`, `situacao` | Texto de ajuda; ordem de exibição (`PUT /v1/campos-extras-os/ordem`); `ativo` ou `inativo` |
+
+Limite: 30 campos ativos por combinação de tipo de OS e classe de ativo (proposta; `422 limite_campos_extras_excedido`). Inativar (`DELETE`) não apaga valores gravados. Criar, editar, ordenar e inativar definições exigem `adm.gerenciar_configuracao` (sumário 3.6).
+
+**Valores na OS.** `ordem_servico.campos_extras` é um objeto pela `chave`: `{ "rompeu_lacre": true, "lacres_retirados": "A1234, A1235" }`. Formato por tipo: `texto` (string, até 2.000 caracteres), `numero` (string decimal, 2.5), `data` (`YYYY-MM-DD`), `lista` (o `valor` de uma opção), `sim_nao` (booleano). São gravados por `POST` e `PATCH /v1/ordens-servico`, pelo corpo de `concluir`, por `PATCH /v1/ordens-servico/{id}/campos-extras`, pelo app (12.4) e pelo link (19.4). `PATCH` segue o JSON Merge Patch: chave com `null` apaga o valor.
+
+`GET /v1/ordens-servico/{id}/campos-extras` devolve as definições que se aplicam à OS, com o valor atual:
+
+```json
+{
+  "dados": [
+    { "chave": "rompeu_lacre", "rotulo": "Rompeu lacre?", "tipo": "sim_nao", "obrigatorio_em": "conclusao", "preenchido_pelo_prestador": true, "valor": true },
+    { "chave": "lacres_instalados", "rotulo": "Lacres instalados", "tipo": "texto", "obrigatorio_em": "conclusao", "preenchido_pelo_prestador": true, "valor": null }
+  ]
+}
+```
+
+**Obrigatoriedade.** Campo `abertura` vazio recusa a criação da OS; campo `conclusao` vazio recusa `concluir`; os dois com `422 campo_extra_obrigatorio`:
+
+```json
+{
+  "type": "https://api.tenaz.com.br/erros/campo_extra_obrigatorio",
+  "title": "Campo extra obrigatório não preenchido",
+  "status": 422,
+  "detail": "Preencha \"Lacres instalados\" antes de concluir a OS-2026-005120.",
+  "codigo": "campo_extra_obrigatorio",
+  "campos_faltantes": ["campos_extras.lacres_instalados"],
+  "id_rastreio": "01JD2K4M6P8R0T2V4X6Z8B0D2F"
+}
+```
+
+- A obrigatoriedade vale pelas definições vigentes na data da ação (no app, no `criado_em_dispositivo` do comando, 12.4). Campo novo obrigatório não afeta OS já concluídas (RF-OS-021).
+- Campo obrigatório sem `preenchido_pelo_prestador` não impede a conclusão feita pelo `prestador`, pelo link ou pela subcontratada conectada (8.2): a OS fica `concluida` com o aviso `campos_extras_pendentes`, e `encerrar` passa a exigir o campo (proposta; ver 26.1, A-30).
+- Os campos extras não entram em fórmula de indicador, não trafegam na conexão entre contas no lançamento (22.5) e aparecem no relatório da OS em PDF e na impressão.
+- Filtro e exportação: `GET /v1/ordens-servico?campos_extras.rompeu_lacre=true` (igualdade e lista; faixa em `numero` e `data`, proposta) e `POST /v1/exportacoes-lista`.
+
+### 23.3 Fase de ciclo de vida e entrada em operação
+
+O ativo nasce `em_operacao` (padrão) ou `em_implantacao` (`POST /v1/ativos`, importação ou projeto). Enquanto `em_implantacao`, tem status `inativo`, fica fora dos KPIs e da cobrança de veículo, e seus planos ficam suspensos (6.2). Recebe OS `implantacao` (8.1). A passagem para `em_operacao` é única, pela ação `colocar_em_operacao`.
+
+**Colocar em operação** — `POST /v1/ativos/{id}/colocar-em-operacao` (grupo Entrada em operação), com `If-Match` e `Idempotency-Key`:
+
+```json
+{
+  "data_entrada_operacao": "2026-11-20T09:00:00Z",
+  "termo_entrega_anexo_id": "0194a500-0000-7aaa-8bbb-000000000f01",
+  "observacao": "Aferição aprovada; radar liberado pela prefeitura."
+}
+```
+
+| Validação | Erro |
+|---|---|
+| O ativo está `em_implantacao` | `422 ativo_nao_em_implantacao` |
+| Não há OS `implantacao` do ativo fora de `encerrada` ou `cancelada` (proposta) | `422 os_implantacao_pendente`, com `ordens_servico_pendentes` |
+| Campos obrigatórios da classe preenchidos (proposta) | `422 campos_obrigatorios_transicao`, com `campos_faltantes` |
+| Documentos críticos válidos, quando a classe os exige (ex.: verificação metrológica) (proposta) | `422 documentos_exigidos_pendentes`, com `tipos_documento_faltantes` |
+| `data_entrada_operacao` (padrão: agora) não futura nem anterior à criação do ativo | `422 validacao_falhou` |
+| Permissão `atv.colocar_em_operacao` | `403 permissao_negada` |
+
+Resposta `200` com o ativo: `fase_ciclo_vida = em_operacao`, `status_operacional` recalculado (`operando`, ou `parado` se houver bloqueio vigente), `data_entrada_operacao`, `colocado_em_operacao_por_id` e `planos_ativados` (ids dos planos ativados a partir da data). Eventos: `ativo.colocado_em_operacao` e `ativo.status_alterado`. Se o ativo é item de contrato com cliente incluído "a partir da entrada em operação", o item passa a contar na medição dessa data (25.3).
+
+**Em lote** — `POST /v1/ativos/colocar-em-operacao`, com `Idempotency-Key`, até 100 ativos. Cada ativo leva a sua `versao` (no lugar do `If-Match`) e é processado na própria transação, como os comandos do app (12.4); a falha de um não desfaz os outros:
+
+```json
+{
+  "data_entrada_operacao": "2026-11-20T09:00:00Z",
+  "ativos": [
+    { "ativo_id": "0194a300-0000-7aaa-8bbb-000000000001", "versao": 6 },
+    { "ativo_id": "0194a300-0000-7aaa-8bbb-000000000002", "versao": 3 }
+  ]
+}
+```
+
+```json
+{
+  "resultados": [
+    { "ativo_id": "0194a300-0000-7aaa-8bbb-000000000001", "tag": "RDR-0012", "status": "aplicado", "versao": 7 },
+    {
+      "ativo_id": "0194a300-0000-7aaa-8bbb-000000000002",
+      "tag": "RDR-0013",
+      "status": "rejeitado",
+      "erro": { "codigo": "os_implantacao_pendente", "status": 422, "detail": "A OS-2026-005131 (montagem) ainda está em execução.", "ordens_servico_pendentes": ["OS-2026-005131"] }
+    }
+  ]
+}
+```
+
+A fase **não volta** para `em_implantacao`: a reinstalação num outro ponto é transferência com OS `implantacao` ou projeto (RF-ATV-013). `alterar-status-operacional` não reativa ativo `em_implantacao` (`422 ativo_em_implantacao`).
+
+### 23.4 Pacotes de segmento (Fase 2)
+
+O catálogo de pacotes (`pacote_segmento`) é **global**, mantido pela Tenaz, fora do RLS por empresa e só leitura para as contas (RF-ADM-017). Pacotes iniciais (sumário 3.7, proposta): `fiscalizacao_eletronica`, `transportadora`, `industria`, `comercio`, `locadora`, `prestador_servicos`. O pacote é identificado pelo `codigo` na rota (2.1) e tem `versao` inteira.
+
+`GET /v1/pacotes-segmento/fiscalizacao_eletronica` devolve o conteúdo agrupado por `tipo_item`: `classe_ativo`, `campo_extra_os`, `procedimento`, `plano_manutencao`, `checklist_modelo`, `tipo_documento`, `regra_automacao`, `modelo_projeto`, `codigo_falha`, mais `modulos_recomendados` (só informativo).
+
+**Pré-visualizar** — `POST /v1/pacotes-segmento/{codigo}/pre-visualizar` (grupo Configuração), corpo `{ "versao": 2 }` (padrão: a mais recente). Não grava nada:
+
+```json
+{
+  "pacote_codigo": "fiscalizacao_eletronica",
+  "versao": 2,
+  "resumo": { "a_criar": 41, "a_ignorar": 6 },
+  "itens": [
+    { "tipo_item": "classe_ativo", "chave_natural": "RDR", "nome": "Radar fixo", "acao": "criar" },
+    { "tipo_item": "tipo_documento", "chave_natural": "verificacao_metrologica", "nome": "Verificação metrológica", "acao": "ignorar", "motivo": "ja_existe" },
+    { "tipo_item": "modelo_projeto", "chave_natural": "Implantação de ponto de fiscalização", "acao": "ignorar", "motivo": "modulo_nao_contratado" }
+  ]
+}
+```
+
+**Aplicar** — `POST /v1/pacotes-segmento/{codigo}/aplicar` (grupo Configuração, permissão `adm.gerenciar_configuracao`, com `Idempotency-Key`), corpo `{ "versao": 2 }`. Resposta `201 Created` com `Location: /v1/aplicacoes-pacote/{id}` e a `aplicacao_pacote` (pacote, versão, data, quem aplicou, `itens_criados` e `itens_ignorados` com o motivo).
+
+- A aplicação **só cria o que falta**, identificado pela chave natural do item (sigla da classe, código do tipo de documento, chave do campo extra, nome da regra, do procedimento, do plano, do checklist e do modelo de projeto). Nunca altera nem apaga o que a conta já tem ou editou.
+- Tudo o que o pacote cria vira configuração comum da conta, editável como se a empresa tivesse criado. Regras nascem `inativa`.
+- Itens de módulo ou plano não contratado não são criados: aparecem como ignorados (`modulo_nao_contratado`, `plano_nao_inclui`).
+- A aplicação é **atômica** (RF-ADM-017): roda numa transação e cria tudo o que falta ou nada. Falha em qualquer item desfaz a aplicação inteira e devolve o erro do item, sem `aplicacao_pacote` gravada. Aplicar de novo a mesma versão não cria nada.
+- Escolher pacotes no roteiro de primeiros passos (RF-ADM-001) usa as mesmas rotas, a partir da Fase 2; no MVP, o roteiro segue sem pacotes.
+- Aplicar pacote é ação administrativa: não está disponível para tokens de API (4.4).
+
+---
+
+## 24. PRJ: projetos de implantação
+
+Módulo da Fase 2, plano Profissional (RF-PRJ-001 a RF-PRJ-007; sumário 3.1 a 3.3). O projeto organiza OS `implantacao` em etapas com dependências; quem executa é a OS (seção 8), atribuída a técnico interno ou a fornecedor (19.3), inclusive com conta conectada (22.8). O projeto e as etapas **não** trafegam na conexão entre contas no lançamento: só a OS (RF-PRJ-004).
+
+### 24.1 Estados e ações
+
+**Projeto** (sumário 3.3): `rascunho` → `em_andamento` → `concluido`; `em_andamento` ⇄ `suspenso`, com motivo; `cancelado` a partir de `rascunho`, `em_andamento` ou `suspenso`, com motivo. `concluido` e `cancelado` não aceitam edição (`409 registro_imutavel`).
+
+| Ação | Rota | De | Para | Campos obrigatórios | Efeitos |
+|---|---|---|---|---|---|
+| Iniciar | `POST /v1/projetos/{id}/iniciar` | `rascunho` | `em_andamento` | Pelo menos um ativo ou uma localização; `responsavel_id` (`422 campos_obrigatorios_transicao`) | Torna `disponivel` as etapas sem predecessoras; gera as OS das etapas marcadas para geração automática (proposta); `projeto.iniciado` |
+| Suspender | `.../suspender` | `em_andamento` | `suspenso` | `motivo` | Pausa os prazos das etapas, não as OS |
+| Retomar | `.../retomar` | `suspenso` | `em_andamento` | — | Os prazos voltam a correr |
+| Concluir | `.../concluir` | `em_andamento` | `concluido` | Todas as etapas `concluida` ou `dispensada` (`422 projeto_etapas_pendentes`) | Coloca os ativos em operação (24.6); `projeto.concluido` |
+| Cancelar | `.../cancelar` | `rascunho`, `em_andamento`, `suspenso` | `cancelado` | `motivo`; `destino_ativos` para cada ativo `em_implantacao`; nenhuma OS em `em_execucao` (`422 projeto_com_os_em_execucao`) | `projeto.cancelado` |
+
+**Etapa de projeto** (sumário 3.3): `pendente` → `disponivel` (todas as predecessoras `concluida` ou `dispensada`) → `em_andamento` → `concluida`; `dispensada` a partir de `pendente` ou `disponivel`. A passagem a `disponivel` é automática, nunca por rota; o nome evita confusão com a liberação da OS (sumário 3.6). Ações de etapa exigem o projeto `em_andamento` (senão `409 transicao_invalida`, com o estado do projeto).
+
+| Ação | Rota | De | Para | Regras |
+|---|---|---|---|---|
+| Gerar OS | `POST /v1/projetos/{id}/etapas/{etapa_id}/gerar-os` | `disponivel`, `em_andamento` | Mesmo estado | Etapa `pendente`: `409 etapa_predecessora_pendente` (24.5) |
+| Iniciar | `.../iniciar` | `disponivel` | `em_andamento` | Só em etapa sem OS; com OS, a etapa inicia sozinha quando a primeira OS dela inicia |
+| Concluir | `.../concluir` | `em_andamento`; `disponivel` em etapa sem OS (proposta) | `concluida` | OS da etapa `encerrada` ou `cancelada`, ao menos uma `encerrada` se a etapa gera OS (`422 etapa_os_pendente`); documentos exigidos (`422 documentos_exigidos_pendentes`); campos exigidos (`422 campo_extra_obrigatorio`). Torna `disponivel` as sucessoras cujas predecessoras terminaram e notifica seus responsáveis |
+| Dispensar | `.../dispensar` | `pendente`, `disponivel` | `dispensada` | `motivo`; permissão `prj.dispensar_etapa`; a etapa de entrega não é dispensável (`422 etapa_entrega_nao_dispensavel`, proposta). Torna `disponivel` as sucessoras |
+
+Etapa com data prevista vencida e não concluída vem com `atrasada = true` e `dias_atraso` (condição calculada, não estado) e pode disparar regra com a condição `etapa_projeto_atrasada` (23.1).
+
+### 24.2 Modelo de projeto
+
+`POST /v1/modelos-projeto` (grupo Projetos, permissão `prj.gerenciar`). As etapas do modelo (`modelo_etapa_projeto`) vêm no corpo; as predecessoras se referem a outras etapas pela `chave` local:
+
+```json
+{
+  "nome": "Implantação de ponto de fiscalização",
+  "descricao": "Autorização, energia, fundação e poste, laços, montagem, aferição e entrega.",
+  "classe_ativo_ids": ["0194a000-0000-7aaa-8bbb-000000000c01"],
+  "etapas": [
+    { "chave": "autorizacao", "nome": "Autorização do órgão de trânsito", "ordem": 1, "predecessoras": [], "duracao_prevista_dias": 20, "peso": 5, "executor_padrao": "interno", "gera_os": false, "tipos_documento_exigidos_ids": ["0194a100-0000-7aaa-8bbb-000000000a07"], "campos_exigidos": ["numero_autorizacao"], "valor_referencia": "0.00", "etapa_entrega": false },
+    { "chave": "energia", "nome": "Ligação de energia", "ordem": 2, "predecessoras": ["autorizacao"], "duracao_prevista_dias": 30, "peso": 15, "executor_padrao": "fornecedor", "gera_os": true, "procedimento_id": "0194a600-0000-7aaa-8bbb-000000000p01", "campos_exigidos": ["protocolo_concessionaria"], "valor_referencia": "1800.00", "etapa_entrega": false },
+    { "chave": "entrega", "nome": "Entrega e termo", "ordem": 7, "predecessoras": ["afericao"], "duracao_prevista_dias": 2, "peso": 5, "executor_padrao": "interno", "gera_os": false, "valor_referencia": "0.00", "etapa_entrega": true }
+  ]
+}
+```
+
+- Validações (RF-PRJ-001): pelo menos uma etapa; predecessoras do mesmo modelo e sem ciclo (`422 dependencia_ciclica`); `peso` maior ou igual a zero, com soma maior que zero; no máximo 40 etapas (proposta; `422 validacao_falhou` com `tamanho_maximo`); no máximo uma `etapa_entrega`.
+- `campos_exigidos` são chaves de `campo_extra_os` que precisam estar preenchidas nas OS da etapa; em etapa sem OS, ficam na própria etapa (24.4).
+- O modelo tem `numero_versao` (proposta), que sobe quando as etapas mudam. O projeto guarda `modelo_projeto_versao` e não muda quando o modelo muda.
+
+### 24.3 Criar projeto
+
+`POST /v1/projetos` (grupo Projetos), com `Idempotency-Key`:
+
+```json
+{
+  "modelo_projeto_id": "0194a700-0000-7aaa-8bbb-000000000m01",
+  "nome": "Ponto Av. Brasil x Rua 7 — sentido centro",
+  "unidade_id": "0194a800-0000-7aaa-8bbb-000000000u01",
+  "localizacao_id": "0194a810-0000-7aaa-8bbb-000000000l01",
+  "ativo_ids": ["0194a300-0000-7aaa-8bbb-000000000001"],
+  "cliente_servico_id": "0194a900-0000-7aaa-8bbb-000000000s01",
+  "contrato_cliente_id": "0194aa00-0000-7aaa-8bbb-000000000t01",
+  "responsavel_id": "0192f800-aaaa-7bbb-8ccc-000000000017",
+  "data_inicio_prevista": "2026-12-01",
+  "orcamento_etapas": [ { "chave": "energia", "valor": "2100.00" } ]
+}
+```
+
+Resposta `201` com `numero` (`PJ-2026-000031`), `status = rascunho`, `modelo_projeto_versao`, as etapas copiadas com datas previstas calculadas pela duração e pelas dependências, `avanco_fisico_percentual = 0`, `custo_previsto` e `custo_realizado`. Ativo já em outro projeto não concluído nem cancelado: `409 ativo_em_outro_projeto` (proposta). Em `rascunho`, ativos e localização mudam por `PATCH` (`ativo_ids`). Vários projetos de uma vez: importação `projetos` (14.3).
+
+### 24.4 Etapas
+
+`GET /v1/projetos/{id}/etapas` devolve, por etapa: `id`, `chave`, `nome`, `status`, `predecessoras`, `executor_tipo` e `fornecedor_id`, `responsavel_id`, datas previstas e reais, `valor`, `atrasada`, `dias_atraso`, `ordens_servico` (id, número e status), `motivo_dispensa` e `exigencias`:
+
+```json
+{
+  "exigencias": {
+    "documentos": [ { "tipo_documento_id": "0194a100-0000-7aaa-8bbb-000000000a07", "nome": "Autorização do órgão", "situacao": "atendido", "documento_vencimento_id": "0194ab00-0000-7aaa-8bbb-000000000d01" } ],
+    "campos": [ { "chave": "numero_autorizacao", "situacao": "pendente" } ]
+  }
+}
+```
+
+- Documento exigido é registrado no ativo por `/v1/documentos-vencimento` e vale para a etapa quando emitido depois do início dela (proposta).
+- Em etapa sem OS, os campos exigidos são gravados por `PATCH /v1/projetos/{id}/etapas/{etapa_id}` no objeto `campos_extras` da etapa (proposta).
+- `PATCH` da etapa altera executor, responsável, datas previstas e `valor`; não altera `status` (`422 campo_somente_leitura`).
+
+### 24.5 OS de implantação da etapa
+
+`POST /v1/projetos/{id}/etapas/{etapa_id}/gerar-os` (grupo Projetos), com `Idempotency-Key`:
+
+```json
+{ "por_ativo": true, "data_limite": "2026-12-20T21:00:00Z", "responsavel_id": null }
+```
+
+- Cria uma OS, ou uma por ativo do projeto com `por_ativo = true` (proposta), com `tipo = implantacao`, `origem = projeto`, `etapa_projeto_id`, o ativo ou a localização do projeto e as tarefas do procedimento da etapa. Resposta `201` com `ordens_servico` (id e número de cada uma).
+- Com executor `fornecedor`, a OS nasce atribuída ao fornecedor da etapa, como em `atribuir-fornecedor` (19.3); com fornecedor de conexão `ativa`, a OS vai para a conta dele (22.8), sem o projeto.
+- Geração automática quando a etapa fica `disponivel`, quando o modelo marca `gera_os`, é proposta do documento 1 (RF-PRJ-004) e fica ligada por parâmetro do projeto.
+- As validações são as da OS (8.1), inclusive os campos extras obrigatórios na abertura. A primeira OS da etapa a entrar em `em_execucao` leva a etapa a `em_andamento`. O custo da OS entra no custo realizado do projeto, como custo de implantação.
+
+### 24.6 Concluir o projeto e colocar os ativos em operação
+
+`POST /v1/projetos/{id}/concluir` (permissões `prj.gerenciar` e `atv.colocar_em_operacao`), com `If-Match`. Corpo opcional: `{ "data_entrada_operacao": "2026-12-22T10:00:00Z", "termo_entrega_anexo_id": "..." }`.
+
+- Exige todas as etapas `concluida` ou `dispensada` (`422 projeto_etapas_pendentes`, com `etapas_pendentes`).
+- Executa `colocar_em_operacao` (23.3) em todos os ativos do projeto ainda `em_implantacao`, numa transação: se algum não puder, nada é concluído e a resposta é `422 ativos_nao_aptos_operacao`, com o impedimento de cada um (proposta):
+
+```json
+{
+  "type": "https://api.tenaz.com.br/erros/ativos_nao_aptos_operacao",
+  "title": "Há ativos que não podem entrar em operação",
+  "status": 422,
+  "detail": "1 ativo do PJ-2026-000031 não pode entrar em operação.",
+  "codigo": "ativos_nao_aptos_operacao",
+  "ativos": [ { "ativo_id": "0194a300-0000-7aaa-8bbb-000000000001", "tag": "RDR-0012", "codigo": "documentos_exigidos_pendentes", "tipos_documento_faltantes": ["Verificação metrológica"] } ],
+  "id_rastreio": "01JD2M7Q9S1U3W5Y7A9C1E3G5J"
+}
+```
+
+- Com sucesso: um `ativo.colocado_em_operacao` por ativo e `projeto.concluido`. Com `contrato_cliente_id`, os ativos entram como itens cobertos a partir da `data_entrada_operacao` (RF-PRJ-007, proposta; 25.3).
+- O termo de entrega sai em `GET /v1/projetos/{id}/termo-entrega` (PDF) e recebe as assinaturas em `POST /v1/projetos/{id}/assinaturas` (`papel`: `responsavel` ou `representante_cliente`; `assinatura_anexo_id`), com a mesma assinatura eletrônica avançada da OS (P1).
+
+**Cancelar** — `POST /v1/projetos/{id}/cancelar` com `motivo` e `destino_ativos: [ { "ativo_id": "...", "destino": "manter_em_implantacao" } ]` ou `"inativar"` com `motivo_inativacao`. O cancelamento não apaga ativos e não cancela as OS ainda não iniciadas: a resposta lista `ordens_servico_abertas` para decisão do planejador (proposta).
+
+### 24.7 Medição de etapas para pagamento do prestador
+
+Relatório persistido por fornecedor e período (RF-PRJ-006), base do pagamento da empreitada. O nome da entidade, `medicao_etapa`, é **proposta** (o sumário não a nomeia; ver 26.1, A-34). Situações: `em_apuracao` → `fechada` (proposta, como a medição do contrato).
+
+- `POST /v1/medicoes-etapa` com `{ "fornecedor_id": "...", "periodo_inicio": "2026-12-01", "periodo_fim": "2026-12-31" }` cria a medição com as etapas `concluida` no período, executadas pelo fornecedor e ainda não medidas. Cada linha traz projeto, etapa, ativo, data de conclusão, `valor` (padrão: o valor da etapa, que vem do modelo ou do contrato de prestação, RF-TER-006), `valor_ajustado` e `motivo_ajuste`.
+- Etapa `dispensada` não entra; uma etapa entra numa única medição (`409 etapa_ja_medida` quando a requisição lista explicitamente uma etapa já medida, proposta).
+- `POST /v1/medicoes-etapa/{id}/ajustar` com `{ "etapa_projeto_id": "...", "valor": "1500.00", "motivo": "Poste reaproveitado; fundação não executada." }`, exige `prj.ajustar_medicao`.
+- `fechar` congela a medição (`409 registro_imutavel` depois); `DELETE` só em `em_apuracao`. Relatório em PDF ou XLSX em `/relatorio`.
+- A Tenaz não paga nem fatura: o pagamento sai do ERP.
+
+---
+
+## 25. CTR: contratos com clientes
+
+Módulo da Fase 2, plano Profissional (RF-CTR-001 a RF-CTR-005). Controla o contrato de serviço com um `cliente_servico` que exige disponibilidade dos equipamentos (por exemplo, o contrato de fiscalização eletrônica com uma prefeitura) e apura a **disponibilidade contratual** mês a mês, com memória de cálculo. **Não muda** MTTR, MTBF nem a disponibilidade técnica dos indicadores (seção 11). O cliente final não tem acesso à API nem ao painel no lançamento (P10): a medição sai em PDF e XLSX.
+
+### 25.1 Estados e ações
+
+**Contrato com cliente** (sumário 3.3): `rascunho` → `vigente` → `encerrado`, ou `cancelado` só a partir de `rascunho`, como o contrato de locação. `encerrado` e `cancelado` não aceitam edição (`409 registro_imutavel`).
+
+| Ação | Rota | De | Para | Campos obrigatórios e validações | Efeitos |
+|---|---|---|---|---|---|
+| Ativar | `POST /v1/contratos-cliente/{id}/ativar` | `rascunho` | `vigente` | Pelo menos um item (`422 contrato_cliente_sem_itens`), meta, calendário e faixas válidas (`422 faixas_desconto_invalidas`) | `contrato_cliente.ativado`; os prazos passam a valer nas OS dos itens |
+| Encerrar | `.../encerrar` | `vigente` | `encerrado` | `motivo_encerramento` quando antes de `data_fim` | `contrato_cliente.encerrado`; a medição do último período continua em apuração |
+| Cancelar | `.../cancelar` | `rascunho` | `cancelado` | `motivo` | — |
+
+**Medição do contrato** (sumário 3.3): `em_apuracao` → `fechada`; `reabrir` volta a `em_apuracao`, com motivo e a permissão `ctr.reabrir_medicao`.
+
+### 25.2 Criar contrato
+
+`POST /v1/contratos-cliente` (grupo Contratos, permissão `ctr.gerenciar`), com `Idempotency-Key`:
+
+```json
+{
+  "cliente_servico_id": "0194a900-0000-7aaa-8bbb-000000000s01",
+  "numero_contrato_cliente": "Pregão eletrônico 041/2026",
+  "data_inicio": "2027-01-01",
+  "data_fim": "2028-12-31",
+  "renovacao_automatica": false,
+  "unidade_ids": ["0194a800-0000-7aaa-8bbb-000000000u01"],
+  "meta_disponibilidade": 98.00,
+  "calendario_apuracao": { "tipo": "continuo_24x7" },
+  "prazos_prioridade": [
+    { "prioridade": "urgente", "atendimento_horas": 4, "solucao_horas": 24 },
+    { "prioridade": "alta", "atendimento_horas": 8, "solucao_horas": 48 }
+  ],
+  "faixas_desconto": [
+    { "de_percentual": 95.00, "ate_percentual": 98.00, "desconto_percentual": 5.00 },
+    { "de_percentual": 90.00, "ate_percentual": 95.00, "desconto_percentual": 10.00 },
+    { "de_percentual": 0.00, "ate_percentual": 90.00, "desconto_percentual": 20.00 }
+  ],
+  "causas_externas_aceitas": ["vandalismo", "acidente_terceiro", "falta_energia"],
+  "evidencia_causa_externa_obrigatoria": true,
+  "valor_mensal_referencia": "48000.00"
+}
+```
+
+- `calendario_apuracao.tipo`: `continuo_24x7` ou `calendario_contrato` (proposta de nome para o "calendário do contrato" do RF-CTR-001), este com `dias_semana`, `hora_inicio` e `hora_fim`.
+- Percentuais são número decimal de 0 a 100 com até duas casas (2.5). As faixas são intervalos `[de, ate)`, contíguas da meta para baixo; disponibilidade igual ou acima da meta não tem desconto.
+- `causas_externas_aceitas` é subconjunto da lista canônica de `causa_externa` (sumário 3.6).
+- Resposta `201` com `numero` (`CT-2026-000004`) e `status = rascunho`.
+- Em `vigente`, `PATCH` só altera `data_fim`, `renovacao_automatica`, contatos e anexos; mudança de meta, faixas ou prazos é aditivo com histórico, proposta do documento 1 ainda sem rota (ver 26.1, A-35).
+
+### 25.3 Itens cobertos
+
+`POST /v1/contratos-cliente/{id}/itens` com `{ "ativo_id": "...", "data_inclusao": "2027-01-01", "meta_disponibilidade": null, "valor_mensal": "1600.00" }`.
+
+- O ativo pode ser `proprio`, `de_terceiro` ou `de_cliente`, e não pode estar `inativo` na inclusão, salvo `em_implantacao`, que só passa a contar a partir da `data_entrada_operacao` (RF-CTR-002).
+- Um ativo fica em no máximo um contrato com cliente vigente no mesmo período (`409 ativo_em_outro_contrato_cliente`).
+- Em `vigente`, a inclusão é aditivo; a exclusão grava `data_exclusao` por `PATCH`. O item conta na medição entre a inclusão (ou a entrada em operação, o que vier depois) e a exclusão.
+
+### 25.4 Causa externa da parada
+
+`ordem_servico.causa_externa` (8.1) é marcada na abertura ou na execução, pela web, pelo app, pelo `prestador` e pelo link de uso único (19.4), com as evidências em `anexos_ids` da OS. Campos só leitura acrescentados (proposta): `causa_externa_marcada_por_id` e `causa_externa_marcada_em`. A causa **não muda** MTTR, MTBF nem a disponibilidade técnica; só a medição do contrato desconta a parada, e só com `decisao_exclusao = aprovada` (25.5). A OS mostra `decisao_exclusao` só leitura, com `pendente` enquanto não houver decisão (onde o valor é gravado fica para o documento 2). Na conexão entre contas, a causa externa nunca é compartilhada no lançamento (sumário 3.6): a subcontratada conectada não a marca na OS do cliente (ver 26.1, A-32).
+
+### 25.5 Medição do contrato
+
+`POST /v1/medicoes-contrato` com `{ "contrato_cliente_id": "...", "periodo_inicio": "2027-01-01", "periodo_fim": "2027-01-31" }` abre a medição (`409 medicao_periodo_duplicado` se já houver). A rotina mensal abre sozinha a do mês anterior (proposta). Enquanto `em_apuracao`, os números são recalculados a cada consulta.
+
+`GET /v1/medicoes-contrato/{id}`, trecho:
+
+```json
+{
+  "id": "0194ac00-0000-7aaa-8bbb-000000000x01",
+  "contrato_cliente_id": "0194aa00-0000-7aaa-8bbb-000000000t01",
+  "numero_contrato": "CT-2026-000004",
+  "periodo_inicio": "2027-01-01",
+  "periodo_fim": "2027-01-31",
+  "situacao": "em_apuracao",
+  "itens": [
+    {
+      "ativo_id": "0194a300-0000-7aaa-8bbb-000000000001",
+      "tag": "RDR-0012",
+      "horas_requeridas": "744.00",
+      "horas_paradas": "30.50",
+      "horas_excluidas": "18.00",
+      "disponibilidade_contratual": 98.32,
+      "meta": 98.00,
+      "faixa": null,
+      "desconto_percentual": 0.00,
+      "desconto_valor": "0.00",
+      "paradas": [
+        { "ordem_servico_id": "0194ad00-0000-7aaa-8bbb-000000000o01", "numero_os": "OS-2027-000112", "horas": "18.00", "causa_externa": "vandalismo", "decisao_exclusao": "aprovada", "decidido_por_id": "0192f800-aaaa-7bbb-8ccc-000000000001" },
+        { "ordem_servico_id": "0194ad00-0000-7aaa-8bbb-000000000o02", "numero_os": "OS-2027-000140", "horas": "12.50", "causa_externa": "falta_energia", "decisao_exclusao": "pendente", "decidido_por_id": null }
+      ]
+    }
+  ],
+  "total": { "valor_referencia": "48000.00", "desconto_valor": "0.00", "valor_com_desconto": "48000.00" },
+  "memoria_calculo": "Disponibilidade contratual = (horas requeridas − horas paradas não excluídas) ÷ horas requeridas, no calendário de apuração."
+}
+```
+
+- Disponibilidade contratual do item = (horas requeridas − horas paradas não excluídas) ÷ horas requeridas, dentro do calendário de apuração; o tratamento de paradas que cruzam o período fica no documento 4 (RF-CTR-004).
+- Cada parada com causa externa tem `decisao_exclusao` (sumário 3.6): `pendente` (inicial), `aprovada` ou `recusada`; só a `aprovada` é descontada. Parada sem causa externa vem com `decisao_exclusao = null`. `POST /v1/medicoes-contrato/{id}/decidir-exclusao` com `{ "ordem_servico_id": "...", "decisao_exclusao": "aprovada", "motivo": "Boletim de ocorrência anexado." }` (`aprovada` ou `recusada`), com a permissão `ctr.fechar_medicao`. Causa fora das aceitas pelo contrato: `422 causa_externa_nao_aceita`; sem evidência, quando o contrato exige: `422 validacao_falhou` (proposta).
+- `fechar` exige a permissão `ctr.fechar_medicao` e nenhuma parada com `decisao_exclusao = pendente` (`422 medicao_exclusoes_pendentes`) e gera `medicao_contrato.fechada`. Medição `fechada` não é editada (`409 registro_imutavel`); mudança em OS depois do fechamento não altera a medição.
+- `reabrir` exige `motivo` e `ctr.reabrir_medicao`; a resposta traz `divergencias` (o que mudou nas OS desde o fechamento, proposta).
+- `GET /v1/medicoes-contrato/{id}/relatorio` gera o PDF ou o XLSX com a memória de cálculo. A Tenaz não fatura: o valor com desconto vai para o ERP.
+
+**Prazos de atendimento e de solução.** Nas OS dos itens cobertos, o contrato vigente mede o prazo de atendimento (`data_reconhecimento` − `data_abertura`) e de solução (`data_conclusao` − `data_abertura`) pela prioridade, no calendário de apuração (proposta). O estouro gera `contrato_cliente.sla_violado` e notifica o `gestor` (RF-CTR-001).
+
+### 25.6 Painel do contrato
+
+`GET /v1/contratos-cliente/{id}/painel` (Gestão) usa o mesmo cálculo da medição, com o período até o momento (RF-CTR-005): disponibilidade parcial por item e do contrato, itens abaixo da meta ordenados pelo impacto no desconto, desconto projetado, OS abertas dos itens com os prazos e as paradas com causa externa aguardando decisão. O painel é interno até a decisão de **P10**.
+
+---
+
+## 26. Pendências e decisões em aberto
+
+### 26.1 Inconsistências e lacunas encontradas no sumário executivo
+
+Os 15 pontos da versão 0.1 (I-1 a I-15) foram resolvidos pelo sumário 0.3 e já estavam aplicados na versão 0.2 deste documento; a única parte que seguia aberta, a lista de entidades sem nome canônico de I-14, continua em A-2. A tabela abaixo mostra a situação de cada ponto registrado na versão 0.2, dos que surgiram no alinhamento com o sumário 0.4 e dos que surgiram no alinhamento com o sumário 0.5 (A-29 a A-36).
+
+**Resolvidos pelo sumário 0.5 (seção 3.6) e aplicados na versão 0.4 deste documento:**
+
+| # | Ponto | Como o sumário 0.5 resolveu, e o que mudou aqui |
+|---|---|---|
+| A-21 | `origem` da cópia da OS na conta da subcontratada | Valor `cliente_conectado` (sumário 3.6). A cópia passa a nascer com `origem = cliente_conectado` (8.1, 22.8, 13.2); a proposta anterior, de repetir a origem do cliente, foi abandonada |
+| A-29 | Origem `regra` da OS sem efeito que a produza | Não existe origem `regra` na OS: nenhum efeito de regra abre OS; a regra abre solicitação com origem `regra` (7.2). A OS ganha só a origem `projeto` (8.1) |
+| A-32 | `causa_externa` e conexão entre contas | Nunca compartilhada no lançamento, junto com campos extras, etapa de projeto e fase de ciclo de vida (22.5). Consequência: a subcontratada com conta própria não marca a causa externa na OS do cliente; quem marca é o cliente, o `prestador` ou o link (25.4). Se o produto quiser a marcação pela subcontratada conectada, é preciso um grupo novo no sumário |
+| — | Estado da etapa de projeto | `disponivel`, e não "liberada" (24.1) |
+| — | Decisão sobre a parada com causa externa | Campo `decisao_exclusao`: `pendente`, `aprovada`, `recusada` (25.5) |
+| — | Permissões de configuração, PRJ e CTR | Nove permissões, com os perfis padrão do sumário (4.8): `adm.gerenciar_regras`, `adm.gerenciar_configuracao`, `atv.colocar_em_operacao`, `prj.gerenciar`, `prj.dispensar_etapa`, `prj.ajustar_medicao`, `ctr.gerenciar`, `ctr.fechar_medicao`, `ctr.reabrir_medicao` |
+| — | Aplicação de pacote | Atômica: tudo o que falta ou nada (23.4) |
+| — | Campo extra visível ao prestador | Marcação "preenchido pelo prestador" (proposta), que define o que os escopos `prestador` e `link` veem e preenchem; aqui, o campo `preenchido_pelo_prestador` (proposta de nome, 23.2) |
 
 **Resolvidos pelo sumário 0.4 (seção 3.6) e já aplicados aqui:**
 
@@ -4845,7 +5585,7 @@ Os 15 pontos da versão 0.1 (I-1 a I-15) foram resolvidos pelo sumário 0.3 e j�
 | A-1 | `bloqueio_despacho` × `bloqueio_ativo` | `bloqueio_ativo` é a entidade que deixa o ativo `parado`; "apto para despacho" é verificação calculada; `bloqueio_energia` é o registro LOTO. O cadastro manual passou de `/v1/bloqueios-despacho` para `/v1/bloqueios-ativo` (6.13); o motivo `bloqueio_manual` virou `bloqueio_ativo` (16.1); os eventos `bloqueio_despacho.criado` e `.liberado` viraram `ativo.despacho_bloqueado` e `ativo.despacho_liberado` (13.2). Resta só o nome da rota de consulta (A-3) |
 | A-4 | Nome da permissão de liberação | `os.encerrar`, no formato `<módulo>.<ação>`; substitui `ordem_servico.liberar` em todo o documento (4.8, 8.2). Nova permissão `est.decidir_destino` para o destino de peça com defeito (20.3) |
 | A-5 | Ação "assumir" | `POST /v1/ordens-servico/{id}/assumir`: técnico se atribui OS `aberta` ou `planejada` da sua equipe; grava `data_reconhecimento` (8.2) |
-| A-6 | Campos de LOC e OS não fixados | Fixados: `local_uso`, `franquia_horas`, `franquia_km`, categorias da matriz (`preventiva`, `corretiva_desgaste`, `avaria_mau_uso`, `pneus`, `deslocamento`), `justificativa_responsavel_custo`, `motivo_recusa_liberacao`, `origem` da OS com 8 valores (8.1). O objeto `franquia` dos exemplos virou os campos planos (21.2). Continuam propostas: ver A-10 |
+| A-6 | Campos de LOC e OS não fixados | Fixados: `local_uso`, `franquia_horas`, `franquia_km`, categorias da matriz (`preventiva`, `corretiva_desgaste`, `avaria_mau_uso`, `pneus`, `deslocamento`), `justificativa_responsavel_custo`, `motivo_recusa_liberacao`, `origem` da OS com 8 valores (8.1; 10 valores desde a versão 0.4, com `cliente_conectado` e `projeto`). O objeto `franquia` dos exemplos virou os campos planos (21.2). Continuam propostas: ver A-10 |
 | A-9 | Locatário no app de campo | Só portal web no lançamento do LOC (4.9, 12.2) |
 | A-11 | Link de uso único com `{token}` no caminho | Token no fragmento (`/l/#<token>`), ativação por `POST /v1/publico/links-execucao/ativar` com o token no corpo e sessão curta; demais rotas em `/atual/*` (19.4). Nenhuma rota recebe token no caminho (2.1) |
 | A-12 | Escopo `fornecedor` como valor de escopo | Valores `interno`, `prestador`, `locatario`, `link`, expostos em `escopo_acesso` (4.9) |
@@ -4867,16 +5607,21 @@ Os 15 pontos da versão 0.1 (I-1 a I-15) foram resolvidos pelo sumário 0.3 e j�
 | A-18 | Convite de conexão modelado como criação (`POST /v1/conexoes-empresa`, ação `convidar`), não como sub-rota de ação | Segue a regra de criação da seção 2.1. Confirmar com o documento 4 |
 | A-19 | Só o cliente convida (sumário 3.5) | A subcontratada não convida o cliente. Se o produto quiser o caminho inverso, acrescentar uma ação na Fase 2 |
 | A-20 | Catálogo próprio da subcontratada | Proposto como `servico_fornecedor` com `fornecedor_id = null` (22.2). Confirmar no documento 2 |
-| A-21 | `origem` da cópia da OS na conta da subcontratada | A lista de `origem` do sumário 3.6 não tem valor para "veio do cliente pela conexão". Proposta: repetir a origem da OS do cliente e identificar a conexão por `vinculo.lado_origem = cliente` (22.8). Alternativa: valor novo `conexao`, que exige mudar o sumário |
 | A-22 | API e webhooks no plano Serviços | O sumário 2.2 não os inclui. Proposta: token só de leitura no plano Serviços (22.10). Depende de P4 |
 | A-23 | TAG de equipamento `de_cliente` na conta da subcontratada | Proposta: única por cliente (`cliente_servico_id` + `tag`), não por conta (22.4). Confirmar no documento 2 |
-| A-24 | Subcontratada que não aceita executar uma OS vinculada | Não há ação de devolução; hoje ela comenta e o cliente retira o fornecedor (`retirar-fornecedor`). Avaliar ação `devolver-ao-cliente` |
+| A-24 | Subcontratada que não aceita executar uma OS vinculada | O sumário 3.6 já decidiu a ação `devolver` (OS recebida e não iniciada volta ao cliente como `aberta`, sem executor, com motivo). A rota ainda não está neste documento, que nesta versão tratou só da configuração por segmento. Proposta para a próxima versão: `POST /v1/ordens-servico/{id}/devolver`, na conta da subcontratada, sincronizada pelo grupo `liberacao` ou por um grupo próprio. Divergência registrada |
 | A-25 | Conflito de transição entre contas (cliente cancela enquanto a subcontratada já iniciou) | Proposta da 22.6: a entrega falha, a OS do cliente volta ao estado sincronizado e a gestão é avisada. Validar no documento 4 |
 | A-26 | Envio do relatório PDF ao cliente atendido | O sumário 3.5 diz que a subcontratada "envia ao cliente o relatório"; a API só gera o PDF (22.7). Avaliar `enviar_para` com e-mail do contato marcado `recebe_relatorio` |
 | A-27 | Equipamento `de_cliente` do tipo `veiculo` na conta da subcontratada | Proposta: não conta como veículo cobrado nem entra nos KPIs de frota da subcontratada (22.4). Confirmar no sumário 2.2 |
 | A-28 | `reabrir-como-nova` | Rota proposta para a regra "reabrir como nova" do sumário 3.6 (7.1). Confirmar no documento 4 |
+| A-30 | Campo extra obrigatório que o executor não preenche | Prestador e link só veem os campos com `preenchido_pelo_prestador`, e os campos extras não trafegam na conexão. Proposta (8.2, 23.2): esses executores concluem sem o campo, a OS fica com o aviso `campos_extras_pendentes` e `encerrar` passa a exigir o campo. Confirmar no documento 4 |
+| A-31 | Fase de ciclo de vida fora da conexão | A cópia `de_cliente` na subcontratada fica `em_operacao`, e uma OS `implantacao` do cliente chega lá num ativo que, para a conta dela, já opera. Proposta (22.8): a cópia aceita o `tipo` sem a validação de fase. Confirmar no documento 4 |
+| A-33 | Status do ativo na conexão | O RF-ADM-016 diz que o efeito da regra (ativo `parado`) chega à outra conta "pelo campo de status já compartilhado", mas o grupo `ativo_identificacao` (22.5) não lista `status_operacional`. Decidir no sumário se o status entra no grupo (mudança compatível) ou corrigir o RF-ADM-016 |
+| A-34 | Nomes desta versão sem nome canônico no sumário | Propostas: entidades `medicao_etapa` (24.7) e `lancamento_custo_projeto` (6.18); campos `preenchido_pelo_prestador`, `obrigatorio_em`, `opcoes`, `numero_versao`, `modelo_projeto_versao`, `origem_pacote`, `disparo_regra_id`, `levanta_com_tipo_documento_id`, `levantado_automaticamente`, `colocado_em_operacao_por_id`, `termo_entrega_anexo_id`, `causa_externa_marcada_por_id`, `causa_externa_marcada_em`, `numero_contrato_cliente`, `renovacao_automatica`, `evidencia_causa_externa_obrigatoria`; valores `calendario_contrato` (calendário de apuração) e `em_apuracao`/`fechada` na medição de etapas; aviso `campos_extras_pendentes`; escopos `configuracao:*`, `projetos:*`, `contratos_cliente:*`; evento `regra_automacao.disparada`. Fixar no documento 2 e, os de vocabulário, no sumário |
+| A-35 | Operações do documento 1 ainda sem rota | Aditivo de contrato com cliente com histórico (RF-CTR-001, proposta) e marcação de medição como enviada ao cliente ou ao ERP (RF-PRJ-006, RF-CTR-004, propostas). Hoje o `PATCH` de contrato `vigente` só altera data de fim, renovação, contatos e anexos (25.2) |
+| A-36 | Alcance de `prj.gerenciar` e `ctr.gerenciar` | O sumário 3.6 lista modelos e projetos (criar, iniciar, suspender, retomar, concluir, cancelar) e contratos e itens. Proposta (4.8): `prj.gerenciar` cobre também etapas, `gerar-os`, lançamentos de custo e a geração e o fechamento da medição de etapas; `ctr.gerenciar` cobre também abrir a medição do contrato. Confirmar no sumário |
 
-### 23.2 Pendências do sumário que afetam a API
+### 26.2 Pendências do sumário que afetam a API
 
 | Pendência | Efeito na API |
 |---|---|
@@ -4890,11 +5635,14 @@ Os 15 pontos da versão 0.1 (I-1 a I-15) foram resolvidos pelo sumário 0.3 e j�
 | P4 — Validação de preço e de prioridades | Plano Serviços (preço por técnico, desconto de canal) e inclusão de API de leitura nesse plano (22.10, A-22) |
 | R4 — Prestador vendo dados de outra empresa ou de outro prestador | Filtro por fornecedor além do RLS e suíte de testes de vazamento em todo build (4.9 e 19.6) |
 | R5 — Sincronização entre contas copia dado além do permitido ou para a conta errada | Lista fechada de grupos em `campos_compartilhados` (22.5), filtro na saída e na entrada, transações separadas por conta com papel próprio, nenhum id de outra conta na API (22.1), auditoria nos dois lados (22.6). A suíte de vazamento ganha um cenário com três contas (cliente, subcontratada conectada e terceira conta) sobre todos os endpoints e eventos de webhook |
-| R6 — SRV no MVP aumenta o escopo | A API reaproveita OS, apontamento, ativos, pessoas e sincronização do app; o SRV soma 23 rotas próprias e 6 rotas novas em OS (6.18) |
+| R6 — SRV no MVP aumenta o escopo | A API reaproveita OS, apontamento, ativos, pessoas e sincronização do app; o SRV soma 23 rotas próprias e 6 rotas novas em OS (6.20) |
+| P9 — Regras metrológicas de medidores de velocidade | Conteúdo do pacote `fiscalizacao_eletronica` (23.4): tipo de documento "verificação metrológica" com validade digitada e as duas regras de bloqueio entregues `inativa` até a decisão. Sem efeito no contrato da API |
+| P10 — Acesso do cliente final de um contrato | Hoje nenhum escopo externo acessa `contratos-cliente`, `medicoes-contrato` nem o painel (4.9); a medição sai em PDF e XLSX (25.5). Se o acesso for aprovado, entra um escopo de acesso novo (decidido no sumário 3.6), com filtro por `cliente_servico` e cenário próprio na suíte de vazamento |
+| R7 — Configuração que vira sistema "faça você mesmo" | Catálogos fechados de condição, efeito, tipo de campo e tipo de item de pacote, sem enum extensível por configuração; estados, fórmulas e grupos da conexão sem rota de configuração (seção 23) |
 
-### 23.3 Decisões a validar
+### 26.3 Decisões a validar
 
-Todas as marcações "proposta" deste documento, em especial: limites de rate limit por plano e das rotas públicas (seção 5); retenção do cursor de sincronização (30 dias) e do `id_comando` (90 dias); regras de conflito do offline (12.5); calendário de novas tentativas, DLQ de 30 dias e suspensão de webhooks (13.5 e 13.6); prazo de suporte da `/v1` após a `/v2` (18 meses); dinheiro e quantidades como string decimal (2.5); MFA recente para exportação (17.1); validade padrão e entropia do link de uso único e duração da sessão curta (30 minutos, até 4 horas) (19.4); confirmação de recebimento de remessa (20.2); alcance exato de `prestador` e `locatario` (4.9). No SRV: validade do convite de conexão (14 dias) e formato do código (22.5); grupos padrão de `campos_compartilhados` (22.5); meta de 60 segundos de atraso da sincronização entre contas e regra de conflito de transição (22.6); limite de 24 fotos no relatório PDF (22.7); aviso `tecnico_sem_especialidade` em vez de erro (22.3).
+Todas as marcações "proposta" deste documento, em especial: limites de rate limit por plano e das rotas públicas (seção 5); retenção do cursor de sincronização (30 dias) e do `id_comando` (90 dias); regras de conflito do offline (12.5); calendário de novas tentativas, DLQ de 30 dias e suspensão de webhooks (13.5 e 13.6); prazo de suporte da `/v1` após a `/v2` (18 meses); dinheiro e quantidades como string decimal (2.5); MFA recente para exportação (17.1); validade padrão e entropia do link de uso único e duração da sessão curta (30 minutos, até 4 horas) (19.4); confirmação de recebimento de remessa (20.2); alcance exato de `prestador` e `locatario` (4.9). No SRV: validade do convite de conexão (14 dias) e formato do código (22.5); grupos padrão de `campos_compartilhados` (22.5); meta de 60 segundos de atraso da sincronização entre contas e regra de conflito de transição (22.6); limite de 24 fotos no relatório PDF (22.7); aviso `tecnico_sem_especialidade` em vez de erro (22.3). Na configuração por segmento (versão 0.4): regra nascendo `inativa`, combinações permitidas de condição e efeito, janela de 30 dias da simulação e limite de 50 regras ativas (23.1); limite de 30 campos extras por combinação, nomes `obrigatorio_em` e `preenchido_pelo_prestador`, obrigatoriedade avaliada na data do comando offline e conclusão com `campos_extras_pendentes` (23.2, 12.4, 8.2); exigências de `colocar-em-operacao` sobre OS de implantação, campos e documentos da classe, e o lote de até 100 ativos (23.3); geração de uma OS por ativo, conclusão de projeto tudo ou nada, entidade `medicao_etapa` com `em_apuracao` e `fechada`, lançamentos de custo do projeto (24); prazos medidos no calendário de apuração, abertura automática da medição e `divergencias` na reabertura (25.5).
 
 ---
 
@@ -4905,3 +5653,4 @@ Todas as marcações "proposta" deste documento, em especial: limites de rate li
 | 0.1 | 12/11/2026 | — | Primeira versão: convenções, autenticação, rate limit, catálogo por módulo, sincronização offline, webhooks, integrações, bloqueio de despacho, exportação e política de versões |
 | 0.2 | 12/11/2026 | — | Alinhamento ao sumário executivo 0.3: prioridade `urgente`; transições da OS (`desprogramar`, `recusar-liberacao`, cancelamento só de `aberta`, `planejada`, `programada`, `pausada`); regras do status do ativo; `pessoa` e `/v1/pessoas`; perfis `comprador`, `plh`, `prestador`, `locatario` e alcance dos externos (4.9); campos novos do ativo e da OS; origem de leitura `iot`; eventos com nome completo da entidade; planos conforme a tabela do sumário 2.1 (catálogo padrão de falhas e registro de bloqueio no Essencial, MCP no Enterprise, Essencial com 1 unidade). Módulos novos TER e LOC e EST estendido (seções 19 a 21), com eventos e códigos de erro novos. Versão do produto em SemVer, `GET /v1/versao` e cabeçalho `Tenaz-Versao` (18.8). Pendências renumeradas para a seção 22, com as inconsistências da versão 0.1 marcadas como resolvidas |
 | 0.3 | 12/11/2026 | — | Alinhamento ao sumário executivo 0.4. Permissões `<módulo>.<ação>`: `os.encerrar` (substitui `ordem_servico.liberar`) e `est.decidir_destino`. Escopo de acesso `interno`, `prestador`, `locatario`, `link`. Link de uso único com token no fragmento, `POST /v1/publico/links-execucao/ativar` e sessão curta (`/atual/*`); nenhum token no caminho. Ação `assumir`; `origem` da OS com 8 valores; solicitação `nova` → `recusada`, `duplicada` final e `reabrir-como-nova`, origem `portal_locatario`. Locação: `local_uso`, `franquia_horas`, `franquia_km`, cancelamento só de `rascunho`, sublocação proibida. Papéis `posto_combustivel` e `seguradora`; peça `em_transito` não consumível; `/v1/bloqueios-ativo` e eventos `ativo.despacho_*`. Módulo novo **SRV** (seções 6.10 e 22): especialidades, clientes atendidos, equipamentos `de_cliente`, serviços a realizar, componentes por `tipo_material`, relatório PDF, conexão entre contas, vínculo de OS com dono por campo, API para integradores da subcontratada. Eventos `conexao_empresa.*` e `vinculo_os.*`; 9 códigos de erro novos. Catálogo de 451 para 482 endpoints. Pendências na seção 23 |
+| 0.4 | 12/11/2026 | — | Alinhamento ao sumário executivo 0.5: configuração por segmento (sumário 3.6 e 3.7). Regras configuráveis (`/v1/regras-automacao`, `/v1/disparos-regra`, simulação, ativar e inativar) e campos extras da OS (`/v1/campos-extras-os`, `/v1/ordens-servico/{id}/campos-extras`, `campos_extras` com marcação "preenchido pelo prestador") no MVP; fase de ciclo de vida do ativo (`fase_ciclo_vida`, `data_entrada_operacao`, `colocar-em-operacao` unitário e em lote) e tipo de OS `implantacao`; pacotes de segmento com aplicação atômica (`/v1/pacotes-segmento`, `/v1/aplicacoes-pacote`, Fase 2). Módulos novos **PRJ** (6.18 e 24: modelos, projetos com ações, etapas `pendente`, `disponivel`, `em_andamento`, `concluida`, `dispensada`, OS de implantação, termo de entrega, medição de etapas) e **CTR** (6.19 e 25: contratos com clientes, itens, painel, medições com `decisao_exclusao`). OS com origem `projeto` (e `cliente_conectado`, resolvendo A-21), `causa_externa`, `etapa_projeto_id`; sem origem `regra` na OS; solicitação com origem `regra`; `bloqueio_ativo.origem`; `/v1/clientes-servico` também no Profissional com CTR. Nove permissões novas (`adm.gerenciar_regras`, `adm.gerenciar_configuracao`, `atv.colocar_em_operacao`, `prj.gerenciar`, `prj.dispensar_etapa`, `prj.ajustar_medicao`, `ctr.gerenciar`, `ctr.fechar_medicao`, `ctr.reabrir_medicao`), escopos de token `configuracao:*`, `projetos:*`, `contratos_cliente:*` (proposta), 9 eventos de webhook novos (`regra_automacao.disparada` como proposta) e 24 códigos de erro novos. Catálogo de 482 para 564 endpoints. Seções novas 23 a 25; pendências renumeradas para a seção 26, com A-29 a A-36 |

@@ -9,7 +9,7 @@ Indicador errado é pior que indicador ausente: a pessoa decide com base nele. E
 
 ## 1. A fórmula vem do documento, não da memória
 
-A seção 30 de [docs/4_FLUXOS_PROCESSO.md](../../../docs/4_FLUXOS_PROCESSO.md) tem o cálculo de cada indicador. Leia a fórmula exata antes de implementar. Indicador que não está lá **não existe ainda**: proponha, registre com `tenaz-dominio-manutencao`, e só então implemente.
+A seção 33 de [docs/4_FLUXOS_PROCESSO.md](../../../docs/4_FLUXOS_PROCESSO.md) tem o cálculo de cada indicador. Leia a fórmula exata antes de implementar. Indicador que não está lá **não existe ainda**: proponha, registre com `tenaz-dominio-manutencao`, e só então implemente.
 
 Base normativa: NBR 5462 para confiabilidade, EN 13306 e EN 15341 e SMRP para indicadores, ISO 14224 para a estrutura de falhas. Os valores de referência de mercado estão no [estudo de mercado](../../../docs/pesquisa/).
 
@@ -56,6 +56,6 @@ Texto no pacote de internacionalização, no tom de voz da seção 10 do documen
 
 ## 6. Fechar
 
-1. Atualize [docs/4_FLUXOS_PROCESSO.md](../../../docs/4_FLUXOS_PROCESSO.md), seção 30, se a fórmula ou a exclusão mudou, com versão do documento e linha no histórico.
+1. Atualize [docs/4_FLUXOS_PROCESSO.md](../../../docs/4_FLUXOS_PROCESSO.md), seção 33, se a fórmula ou a exclusão mudou, com versão do documento e linha no histórico.
 2. Capture a tela com o "como calculamos" aberto, por [`tenaz-evidencia-visual`](../tenaz-evidencia-visual/SKILL.md).
 3. [`tenaz-fechar-etapa`](../tenaz-fechar-etapa/SKILL.md).

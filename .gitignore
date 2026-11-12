@@ -19,3 +19,14 @@ node_modules/
 .env
 .env.*
 !.env.example
+
+# Artefatos de build
+bin/
+dist/
+*.exe
+
+# pnpm
+.pnpm-store/
+
+# Expo
+.expo/

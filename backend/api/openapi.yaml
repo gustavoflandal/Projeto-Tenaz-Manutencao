@@ -1,0 +1,114 @@
+components:
+  schemas:
+    Campo:
+      additionalProperties: false
+      properties:
+        local:
+          description: Onde o erro ocorreu
+          examples:
+            - body.prioridade
+          type: string
+        mensagem:
+          description: O que está errado com o campo
+          type: string
+      required:
+        - local
+        - mensagem
+      type: object
+    Dados:
+      additionalProperties: false
+      properties:
+        commit:
+          description: Commit curto que gerou o build
+          examples:
+            - a1b2c3d
+          type: string
+        data_build:
+          description: Instante do build em UTC (RFC 3339)
+          examples:
+            - "2026-11-12T14:05:00Z"
+          type: string
+        versao:
+          description: Versão do release em execução (SemVer)
+          examples:
+            - 1.4.2
+          type: string
+      required:
+        - versao
+        - commit
+        - data_build
+      type: object
+    Problema:
+      additionalProperties: false
+      properties:
+        campos:
+          description: Erros por campo, quando a entrada é inválida
+          items:
+            $ref: "#/components/schemas/Campo"
+          type:
+            - array
+            - "null"
+        codigo:
+          description: Código estável do erro, para tratamento em código
+          examples:
+            - OS_TRANSICAO_INVALIDA
+          type: string
+        detail:
+          description: O que aconteceu e o que fazer
+          examples:
+            - A OS OS-2026-004812 está cancelada e não pode ser concluída.
+          type: string
+        instance:
+          description: Caminho da requisição que falhou
+          examples:
+            - /v1/ordens-servico/0193f2a1-7c3e-7b10-9a2e-5d1c3f0a8b77/concluir
+          type: string
+        status:
+          description: Código de status HTTP
+          examples:
+            - 409
+          format: int64
+          type: integer
+        title:
+          description: Resumo curto do tipo de erro
+          examples:
+            - Transição de estado inválida
+          type: string
+        type:
+          description: URI que documenta o código do erro
+          examples:
+            - https://docs.tenaz.com.br/erros/os-transicao-invalida
+          type: string
+      required:
+        - type
+        - title
+        - status
+        - codigo
+      type: object
+info:
+  description: API da Tenaz — Gestão de Manutenção e Frota. Contrato único usado pela web, pelo aplicativo de campo e pelos integradores.
+  title: Tenaz
+  version: "1"
+openapi: 3.1.0
+paths:
+  /v1/versao:
+    get:
+      description: Devolve a versão, o commit curto e a data do build do release em produção (RNF-039).
+      operationId: obterVersao
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dados"
+          description: OK
+        default:
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Error
+      security: []
+      summary: Versão publicada
+      tags:
+        - Plataforma

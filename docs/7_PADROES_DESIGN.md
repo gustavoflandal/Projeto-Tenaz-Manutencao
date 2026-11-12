@@ -1,12 +1,14 @@
 # Padrões de Design — Tenaz
 
-**Versão:** 0.3 · **Data:** 12/11/2026 · **Status:** Em elaboração
+**Versão:** 0.4 · **Data:** 12/11/2026 · **Status:** Em elaboração
 **Produto:** Tenaz · Gestão de Manutenção e Frota
-Alinhado ao sumário executivo 0.4
+Alinhado ao sumário executivo 0.5
 **Base:** identidade visual aprovada em [marca/README.md](../marca/README.md) e [marca/brandbook.html](../marca/brandbook.html); vocabulário e estados em [0_SUMARIO_EXECUTIVO.md](0_SUMARIO_EXECUTIVO.md)
 **Plataformas:** web (React + TypeScript) e app de campo (React Native + Expo, offline)
 
-Este documento traduz a marca em regras de interface. Define os tokens de design, os componentes, as telas principais (inclusive as da conta da subcontratada, módulo SRV, e da conexão entre contas), o app de campo, o tom das mensagens e os requisitos de acessibilidade. Quando a marca e este documento divergirem, vale a marca para cores, fontes e símbolo; vale o sumário executivo para nomes de entidades e estados. As divergências encontradas estão na seção 13.
+**Mudanças da versão 0.4:** configuração por segmento (sumário 0.5, seção 3.7). Fase de ciclo de vida do ativo com o chip neutro tracejado "Em implantação" e a ação "Colocar em operação" (RF-ATV-013); tipo de OS Implantação; origens de OS `cliente_conectado`, `projeto` e `regra`; causa externa da parada; estados de projeto, etapa, contrato com cliente, medição e regra (7.5); quatro componentes novos: frase de regra, cronograma, régua de faixas de desconto e marcador de mapa (6.20 a 6.23); telas de regras configuráveis (RF-ADM-016), campos extras da OS no web e no app com validação offline (RF-OS-021), pacote de segmento nos primeiros passos (RF-ADM-017), projeto de implantação (RF-PRJ-001 a RF-PRJ-007), painel e medição do contrato com cliente (RF-CTR-001 a RF-CTR-005) (8.29 a 8.34, 9.10); visão Mapa de ativos (8.2); contrastes novos (4.4); microcopy das ações novas (10); ícones (12.2); regra 4.3.8 sobre `borda-controle` em Névoa; pendências 13.24 a 13.34.
+
+Este documento traduz a marca em regras de interface. Define os tokens de design, os componentes, as telas principais (inclusive as da conta da subcontratada, módulo SRV, da conexão entre contas e da configuração por segmento: regras, campos extras, pacotes, projetos e contratos com clientes), o app de campo, o tom das mensagens e os requisitos de acessibilidade. Quando a marca e este documento divergirem, vale a marca para cores, fontes e símbolo; vale o sumário executivo para nomes de entidades e estados. As divergências encontradas estão na seção 13.
 
 ---
 
@@ -666,7 +668,8 @@ Grade do web: 12 colunas fluidas, gutter de 16 px abaixo de 1280 px e de 24 px a
 | Duração | h e min | 3 h 20 min |
 | Prazo futuro | Unidade do gatilho e, se possível, estimativa em dias | em 2.300 km (cerca de 9 dias) |
 | Placa | Caixa alta, sem hífen no Mercosul | RTZ4F82 · ABC-1234 |
-| OS / SS / OR / CL | Formato canônico completo `<PREFIXO>-<AAAA>-<NNNNNN>`, sequencial por empresa, reinicia a cada ano | OS-2026-004812 · SS-2026-000731 · OR-2026-000045 · CL-2026-000012 |
+| OS / SS / OR / CL / PJ / CT | Formato canônico completo `<PREFIXO>-<AAAA>-<NNNNNN>`, sequencial por empresa, reinicia a cada ano | OS-2026-004812 · SS-2026-000731 · OR-2026-000045 · CL-2026-000012 · PJ-2026-000031 · CT-2026-000004 |
+| Disponibilidade contratual | Mesmo formato do percentual, sempre com o adjetivo, para não ser lida como a disponibilidade técnica dos indicadores | Disponibilidade contratual 97,1 % |
 
 - Unidades em minúsculas conforme o SI (km, h, min, kg, L, °C, bar). "un." para unidades de estoque.
 - Em tabela, coluna homogênea traz a unidade no cabeçalho ("Hodômetro (km)") e a célula só o número. Coluna mista (medidores de tipos diferentes) traz a unidade em cada célula.
@@ -765,6 +768,36 @@ Razões calculadas com a fórmula de luminância relativa da WCAG 2.1. Critério
 5. **Concreto não é texto legível.** Texto secundário usa Aço 500; terciário usa Aço 400.
 6. **Contorno de campo usa `borda-controle`**, nunca a borda decorativa.
 7. **Texto desabilitado** é isento de contraste (WCAG 1.4.3), mas o controle desabilitado tem de explicar por que está desabilitado (tooltip ou texto de apoio).
+8. **`borda-controle` não fica direto sobre Névoa no tema claro.** `#8592A0` sobre `#F2F4F6` dá 2,88:1 e reprova os 3:1 de componente (4.4). Campos e contornos que identificam um componente ficam sobre `superficie` (cartão, painel, tabela); sobre `fundo` ou `superficie-hover`, o contorno usa `texto-secundario`.
+
+### 4.4 Pares da configuração por segmento
+
+Calculados na versão 0.4 para o chip Em implantação (7.2), o cronograma (6.21), a régua de faixas (6.22) e o marcador de mapa (6.23). Nenhum token novo: todos os pares usam tokens das seções 3.1 e 3.2.
+
+| Primeiro plano | Fundo | Razão | Resultado | Uso |
+|---|---|---|---|---|
+| `borda-controle` `#8592A0` | Névoa `#F2F4F6` | 2,88 | **Reprova** (UI 3:1) | Não usar como contorno do chip Em implantação nem de barra sobre `fundo` (regra 4.3.8) |
+| `borda-controle` `#8592A0` | Branco | 3,17 | UI 3:1 | Barra prevista do cronograma, que fica sempre sobre `superficie` |
+| `borda-controle` escuro `#6B7887` | `#16202C` | 3,65 | UI 3:1 | Barra prevista do cronograma, tema escuro |
+| `borda-controle` escuro `#6B7887` | `#1F2B3A` | 3,18 | UI 3:1 no limite | Só em `superficie-elevada` quando inevitável; prefira `texto-secundario` |
+| `texto-secundario` Aço 500 `#4A5868` | Névoa | 6,60 | UI 3:1 | Borda tracejada do chip Em implantação, claro |
+| `texto-secundario` Aço 500 `#4A5868` | Branco | 7,27 | UI 3:1 | Mesma borda vista contra a superfície da tabela; linha de dependência do cronograma |
+| `texto-secundario` escuro `#A9B5C2` | `#1F2B3A` | 6,88 | UI 3:1 | Borda tracejada do chip Em implantação, escuro |
+| `texto-secundario` escuro `#A9B5C2` | `#16202C` | 7,89 | UI 3:1 | Linha de dependência, escuro |
+| `texto-secundario` Sol Aço 700 `#2B3A4C` | Névoa | 10,51 | UI 3:1 | Borda tracejada de 2 px do chip Em implantação, tema Sol |
+| Aço `#14202E` (texto e ícone) | Névoa (`superficie-hover`) | 14,93 | AAA | Texto e ícone `construction` do chip Em implantação, claro e Sol |
+| `#E8EDF2` (texto e ícone) | `#1F2B3A` | 12,17 | AAA | Texto e ícone do chip Em implantação, escuro |
+| Aço | Branco | 16,46 | AAA | Linha "Hoje" do cronograma; ícone do marcador Em implantação; anel externo do marcador de mapa |
+| Aço | `status-operando-fundo` `#E3F4EC` | 14,44 | AAA | Rótulo e marcador da régua na faixa da meta |
+| Aço | `status-atencao-fundo` `#FBF1D9` | 14,65 | AAA | Rótulo e marcador na faixa abaixo da meta sem desconto |
+| Aço | `status-parado-fundo` `#FBE5E2` | 13,64 | AAA | Rótulo e marcador nas faixas com desconto |
+| `status-operando-fundo` | `status-atencao-fundo` | 1,01 | Decorativo | As faixas **não** se distinguem pela cor; o rótulo de texto de cada faixa é a informação |
+| `status-atencao-fundo` | `status-parado-fundo` | 1,07 | Decorativo | Idem |
+| Aço (barra de avanço) | Aço 100 `#D9DFE6` (trilha) | 12,27 | UI 3:1 | Barra de avanço físico do projeto |
+| Status claro como barra real do cronograma | Branco | 3,41 · 4,75 · 4,76 | UI 3:1 | Concluída (Operando), Em andamento (Preventiva), atraso (Parado) |
+| Status escuro como barra real | `#16202C` | 7,27 · 5,96 · 5,42 | UI 3:1 | Idem, tema escuro |
+| Névoa (número) | Aço (grupo de marcadores) | 14,93 | AAA | Contagem no marcador de agrupamento do mapa |
+| Ícone no marcador sólido | Cor do status | 4,82 · 4,75 · 5,67 · 4,76 · 4,68 | AA | Operando, Atenção e Inativo com ícone Aço; Em manutenção (Preventiva) e Parado com ícone branco (mesma regra do chip sólido, 7.1) |
 
 ---
 
@@ -811,6 +844,8 @@ O selo de versão ("v1.4.2", componente 6.19) fica fixo no canto inferior direit
 | Terceiros | Fornecedores (TER), Contratos de prestação (TER), Links de execução (TER), Conexões com prestadores (lado do cliente, 8.27) |
 | Locação | Contratos de locação (LOC), Locatários (LOC), Vistorias (LOC) |
 | Serviços | Painel de serviços (SRV), Distribuição (SRV), Clientes atendidos (SRV), Equipamentos de clientes (SRV), Técnicos e especialidades (SRV), Conexões com clientes (SRV). Só em contas com o plano Serviços (8.20 a 8.28) |
+| Projetos | Projetos (PRJ), Modelos de projeto (PRJ), Medição de etapas (PRJ). Fase 2, plano Profissional (8.32) |
+| Contratos | Contratos com clientes (CTR), Medições (CTR) e, quando a conta não tem SRV, Clientes atendidos. Fase 2, plano Profissional (8.33 e 8.34) |
 | Conformidade | Vencimentos (CON), NR-12, NR-13, Capacitações |
 | Análise | Indicadores e relatórios (IND), Assistente (IA) |
 | Rodapé | Integrações (INT), Administração (ADM), recolher menu |
@@ -819,6 +854,7 @@ O selo de versão ("v1.4.2", componente 6.19) fica fixo no canto inferior direit
 - Item recolhido mostra só o ícone, com tooltip e `aria-label` com o nome.
 - Os perfis `prestador` e `locatario` não usam este menu: entram nos portais restritos (8.17 e 8.19).
 - **Conta só com o plano Serviços** (subcontratada sem plano Planta ou Frota): o menu mostra Painel de serviços no lugar do Painel de manutenção, o grupo Operação (OS e Distribuição), o grupo Serviços logo abaixo, Estoque (estoque básico) e Indicadores. Os rótulos usam o vocabulário de quem presta serviço ("Clientes atendidos", "Equipamentos de clientes"), mas as telas de OS, apontamento e ativo são as mesmas do restante do produto.
+- **Configuração por segmento** fica em Administração, não no menu do dia a dia: Regras (8.29), Campos extras da OS (8.30) e Pacotes de segmento (8.31).
 - Grupos e itens aparecem conforme perfil e plano. Item sem permissão não aparece. Recurso de plano superior aparece só em Administração > Plano, nunca como item bloqueado no menu do dia a dia.
 - Contadores de pendência ao lado do item (ex.: "Solicitações 7") em pílula `superficie` com texto Aço, nunca vermelha.
 
@@ -827,7 +863,7 @@ O selo de versão ("v1.4.2", componente 6.19) fica fixo no canto inferior direit
 - Altura 56 px, fundo `superficie`, borda inferior `borda`.
 - **Seletor de unidade:** à esquerda, mostra a unidade atual em `rotulo`. Opções: "Todas as unidades" (gestor e administrador) e a lista com busca quando houver mais de 8. Trocar de unidade mantém a página e os filtros e recarrega os dados. Só aparece quando a empresa tem mais de uma unidade.
 - **Busca global:** campo central, até 560 px, atalhos `/` e `Ctrl+K`. Reconhece o tipo pelo padrão e mostra resultados agrupados:
-  - número de OS, SS, OR ou CL completo ou parcial (`4812`, `OS-2026-004812`, `OR-2026-000045`), com Enter abrindo direto quando houver um único resultado;
+  - número de OS, SS, OR, CL, PJ ou CT completo ou parcial (`4812`, `OS-2026-004812`, `OR-2026-000045`, `PJ-2026-000031`), com Enter abrindo direto quando houver um único resultado;
   - número de série de peça serializada; fornecedor e locatário por nome ou CNPJ/CPF (CPF só com os dígitos mascarados no resultado);
   - placa antiga e Mercosul, com ou sem hífen, em qualquer caixa;
   - TAG de ativo (`cmp0347` encontra `CMP-0347`);
@@ -1302,6 +1338,103 @@ O metadado de build (`+a1b2c3d`) não aparece no selo; fica no diálogo Sobre. A
 - Se a versão do web for diferente da versão da API (navegador com versão antiga após um deploy), o diálogo mostra a faixa informativa "Há uma versão mais nova. Recarregue a página para atualizar." com o botão [Recarregar].
 - "Copiar informações" copia as linhas em texto simples, para colar no chamado de suporte; o toast confirma "Informações da versão copiadas."
 
+### 6.20 Frase de regra (condição e efeito)
+
+**Por que é componente novo:** a regra configurável (RF-ADM-016) precisa ser montada e lida como uma frase, não como formulário de campos soltos, para quem configura sem treinamento entender o que vai acontecer. A frase de resumo do plano preventivo (8.7) é só leitura; esta é editável. Reaproveita seletores (6.3) e campos (6.2).
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│ QUANDO  [o documento vencer ▾]   tipo [Verificação metrológica ▾]        │
+│ EM      [Classe: Radar fixo ×] [Criticidade: A, B ×] [Unidade: todas ▾]  │
+│ ENTÃO   [bloquear o ativo até novo documento ▾]                          │
+│         documento que libera [Verificação metrológica ▾]                 │
+│         motivo do bloqueio   [Verificação metrológica vencida_____]      │
+├──────────────────────────────────────────────────────────────────────────┤
+│ Quando o documento Verificação metrológica vencer em ativos da classe    │
+│ Radar fixo, de criticidade A ou B, em todas as unidades, então bloquear  │
+│ o ativo até que uma nova Verificação metrológica seja registrada.        │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+- Três linhas fixas, com rótulo em `sobrelinha` `texto-terciario` à esquerda: QUANDO (condição), EM (filtro), ENTÃO (efeito). A ordem nunca muda.
+- **Condição e efeito** são seleção simples com os catálogos fechados do sumário 3.7. Os parâmetros da opção escolhida aparecem logo depois, na mesma linha ou na de baixo (tipo de documento, dias de antecedência, campo sim/não da OS, item de checklist, medidor; destinatários e canal, prioridade da solicitação, documento que libera, motivo). Condições e efeitos da Fase 2 só aparecem quando o módulo existe na conta.
+- **Filtro** é seleção múltipla com chips (classes de ativo, unidades, criticidades). Sem chip, o texto do campo diz "todos os ativos".
+- **Combinação não permitida** aparece desabilitada com o motivo na própria opção (6.3): "Abrir solicitação · não disponível com documento a vencer, para não abrir uma solicitação por dia".
+- **Frase de resumo** gerada em `corpo` `texto`, abaixo de uma divisória `borda`, atualizada a cada mudança e anunciada em `aria-live="polite"`. Rótulos dos catálogos em 10.2.
+- Efeito que bloqueia o ativo mostra o alerta em linha de Atenção (6.12): "Bloquear deixa o ativo Parado até a liberação. Ele sai de operação e de despacho."
+- Leitor de tela: cada linha é um `group` com nome ("Condição", "Filtro", "Efeito").
+- Sem Sinal dentro do componente; a ação primária fica no rodapé da tela (8.29).
+
+### 6.21 Cronograma de barras
+
+**Por que é componente novo:** o projeto de implantação (RF-PRJ-005) pede barras por etapa, previsto e real, com dependências. O quadro de programação (8.6) mostra carga por técnico e dia, não duração e precedência.
+
+```
+ETAPA              SITUAÇÃO              out              nov
+                                         05  12  19  26  02  09  16  23
+Autorização        [Concluída]           ▓▓▓▓
+Energia            [Concluída]              └─▓▓▓▓▓▓
+Fundação e poste   [Dispensada]               └─┄┄┄┄ ⊘
+Laços              [Em andamento]                   └─▓▓▓▓▓▓▓█ 4 d
+Montagem           [Liberada]                            ┊┄┄┄┄┄┊
+Aferição           [Pendente]                                  ┊┄┄┄┊
+Entrega            [Pendente]                                      ┊┄┊
+                                                      Hoje ┃
+```
+
+| Elemento | Visual | Contraste (4.4) |
+|---|---|---|
+| Coluna da etapa | Fixa à esquerda: nome em `corpo-p` e chip da etapa (7.5). É aqui que está a informação; a barra reforça | Texto Aço |
+| Barra prevista | 12 px de altura, contorno 1 px tracejado em `borda-controle`, sem preenchimento | 3,17 em branco; 3,65 no escuro |
+| Barra real | 8 px, dentro da prevista, preenchida com a cor do estado da etapa: Em andamento `status-preventiva`, Concluída `status-operando` | 4,75 e 3,41 em branco |
+| Atraso | Trecho da barra real além do fim previsto em `status-parado`, seguido de `clock-alert` e do texto "4 d" em `texto` | 4,76 |
+| Etapa dispensada | Só a barra prevista, com o ícone `circle-slash` na ponta; sem barra real | — |
+| Dependência | Linha de 1 px em `texto-secundario` com seta, do fim da predecessora ao início da sucessora. Com uma etapa em foco, as linhas dela ficam 2 px em `texto` e as outras passam a `borda` | 7,27 |
+| Hoje | Linha vertical de 2 px em `texto` com o rótulo "Hoje" em `legenda` | 16,46 |
+| Escala | Segmentado [Dia · Semana · Mês]; cabeçalho em `dado` 12 px `texto-secundario` | 7,27 |
+
+- O cronograma fica sempre sobre `superficie`, nunca sobre `fundo` (regra 4.3.8). Sinal nunca aparece.
+- Teclado: padrão ARIA `grid`; setas sobem e descem entre etapas, Enter abre o painel lateral da etapa. Arrastar a barra para mudar a data prevista é atalho; os campos de data estão no painel. Se a nova data violar uma dependência, o aviso diz: "Montagem começaria antes do fim de Laços."
+- Leitor de tela lê a linha inteira: "Laços, Em andamento, previsto de 14/11 a 20/11, atrasada 4 dias, depende de Energia e Fundação e poste".
+- A visão Lista (8.32) é a alternativa acessível e a versão para impressão; o PDF exportado leva as duas.
+
+### 6.22 Régua de faixas de desconto
+
+**Por que é componente novo:** a barra de disponibilidade do cartão de ativo (6.7) tem três cores fixas em relação à meta; a medição do contrato (RF-CTR-004) tem faixas configuradas pelo contrato, cada uma com o seu desconto.
+
+```
+                                        97,1 %
+                                          ▼
+┌──────────────┬──────────────────┬───────────────────────┬──────────────┐
+│ abaixo de 90 │     90 a 96 %    │       96 a 98 %       │  98 a 100 %  │
+└──────────────┴──────────────────┴───────────────────────┴──────────────┘
+  desconto 10 %   desconto 5 %       desconto 2 %       ┆ Meta 98 %
+```
+
+- Barra de 24 px, raio `raio-xs`. Faixa da meta em `status-operando-fundo`; faixa abaixo da meta com desconto zero em `status-atencao-fundo`; faixas com desconto em `status-parado-fundo`. Separadores de 2 px em `superficie`.
+- **A cor não carrega informação** (1,01:1 e 1,07:1 entre faixas vizinhas, 4.4): cada faixa tem o rótulo de intervalo dentro e o desconto abaixo, em `legenda` `texto`. Largura proporcional, com mínimo de 48 px para caber o rótulo.
+- Marcador: triângulo e linha de 2 px em `texto`, com o valor em `dado-forte` acima. Meta: linha tracejada em `texto-secundario` com "Meta 98 %", como em 6.17.
+- Nome acessível com a frase completa: "Disponibilidade contratual 97,1 %, na faixa de 96 a 98 %, desconto de 2 %. Meta 98 %."
+- Nunca usa Sinal. No tema escuro, os fundos escuros de status, com rótulos em `#E8EDF2` (11,42 a 13,39:1).
+
+### 6.23 Marcador de mapa
+
+**Por que é componente novo:** a visão Mapa da lista de ativos (8.2) precisa mostrar o status sobre um mapa base de cor imprevisível. A regra 4.3.4 já previa o marcador de Atenção; aqui ele vira componente para todos os status.
+
+| Caso | Visual |
+|---|---|
+| Ativo ou localização com status | Círculo de 28 px preenchido com a cor clara do status, ícone de 16 px do status (7.2): Aço sobre Operando, Atenção e Inativo; branco sobre Em manutenção e Parado (4.4) |
+| Atenção | Triângulo âmbar preenchido com ponto de exclamação em Aço (regra 4.3.4) |
+| Em implantação | Círculo `superficie` com borda tracejada de 2 px em `texto-secundario` e ícone `construction` em Aço |
+| Agrupamento | Círculo de 36 px em Aço com a contagem em Névoa (`dado-forte`). Se o grupo tem ativo Parado, anel de 3 px em `status-parado` |
+| Selecionado | Anel de 2 px em `foco` afastado 2 px, como o foco padrão |
+
+- **Halo duplo:** todo marcador tem 2 px de `superficie` e 1 px externo de Aço. Um dos dois anéis sempre contrasta com o fundo do mapa (Aço sobre branco 16,46:1), seja ele claro, escuro ou foto de satélite.
+- Área de toque e clique de 44 px, mesmo com o marcador de 28 px.
+- Localização com vários ativos mostra o status mais grave (Parado, Em manutenção, Atenção, Operando) e a contagem ao lado. Em implantação e Inativo só aparecem quando todos os ativos do ponto estão nessa situação.
+- Clique, toque ou Enter abre o cartão de ativo compacto (6.7) ancorado no marcador.
+- Teclado: Tab entra no mapa; setas percorrem os marcadores na ordem da lista lateral; Esc devolve o foco à lista.
+
 ---
 
 ## 7. Status, prioridade e criticidade
@@ -1331,9 +1464,26 @@ O sumário (seção 3.3) define quatro estados (`operando`, `em_manutencao`, `pa
 |---|---|---|---|---|
 | `operando` | Operando | Operando | `check` | Nenhuma das causas abaixo |
 | `operando` + Atenção (calculada) | Atenção | Atenção | `triangle-alert` | Operando, mas com plano vencendo, documento vencendo ou leitura fora da faixa. Não é estado gravado. O complemento diz o motivo: "Atenção · Preventiva em 300 km". |
-| `em_manutencao` | Em manutenção | Preventiva | `calendar` (ícone do brandbook) | Há OS `em_execucao` ou `pausada` e o ativo foi retirado de operação de forma programada (preventiva, preditiva, inspeção, corretiva planejada) |
+| `em_manutencao` | Em manutenção | Preventiva | `calendar` (ícone do brandbook) | Há OS `em_execucao` ou `pausada` e o ativo foi retirado de operação de forma programada (preventiva, preditiva, inspeção, corretiva planejada, melhoria, implantação em ativo já em operação) |
 | `parado` | Parado | Parado | `circle-x` | Falha que parou o ativo ("O ativo parou?" = Sim), corretiva emergencial em curso, parecer NR-12 `inapto` ou bloqueio de conformidade. O complemento diz a causa: "Parado · Bloqueio NR-12" |
-| `inativo` | Inativo | Inativo | `circle-minus` | Baixado, vendido ou em reserva |
+| `inativo` (fase `em_operacao`) | Inativo | Inativo | `circle-minus` | Baixado, vendido ou em reserva |
+| `inativo` com `fase_ciclo_vida = em_implantacao` | Em implantação | Neutro tracejado (abaixo) | `construction` | Ativo sendo instalado, ainda sem operar (sumário 3.3, RF-ATV-013). Fica fora dos indicadores e da cobrança de veículo, com planos suspensos. O complemento diz onde está a implantação: "Em implantação · PJ-2026-000031, etapa Laços" |
+
+**Chip Em implantação.** O status gravado é `inativo`, mas a interface **nunca** mostra "Inativo" para um ativo em implantação: nem no chip, nem no filtro, nem no leitor de tela.
+
+| Propriedade | Claro | Escuro | Sol |
+|---|---|---|---|
+| Fundo | `superficie-hover` `#F2F4F6` | `superficie-hover` `#1F2B3A` | `superficie-hover` `#F2F4F6` (não vira chip sólido) |
+| Borda | 1 px tracejada (traço 3 px, intervalo 2 px) em `texto-secundario` `#4A5868`: 6,60:1 sobre o fundo do chip, 7,27:1 sobre branco | 1 px tracejada em `#A9B5C2`: 6,88:1 | 2 px tracejada em `#2B3A4C`: 10,51:1 |
+| Ícone | `construction` em `texto` (14,93:1) | `#E8EDF2` (12,17:1) | Aço (14,93:1) |
+| Texto | `texto` Aço (14,93:1) | `#E8EDF2` (12,17:1) | Aço (14,93:1) |
+
+Por que esse visual, e não outra cor de status:
+
+- **Não é Inativo:** Inativo tem fundo cinza `#ECEFF2`, ícone `circle-minus` em cinza e significa fim de vida. O ativo em implantação está no começo da vida.
+- **Não é Parado:** Parado é vermelho e significa indisponível por falha ou bloqueio. O ativo em implantação nunca esteve disponível; mostrá-lo em vermelho inflaria o "Parados agora" do painel.
+- **Não é Em manutenção:** Em manutenção usa a cor de Preventiva (azul) e entra no cálculo de disponibilidade. A implantação fica fora dos indicadores.
+- **Por que neutro:** a cor Neutro já significa "etapa de preparação, sem urgência" (7.1). O traço tracejado separa o chip dos estados de preparação da OS (Aberta, Planejada, Programada), que usam borda contínua, e sobrevive à impressão em preto e branco. Nenhum token novo.
 
 Regras de exibição:
 
@@ -1341,6 +1491,10 @@ Regras de exibição:
 - O status volta a Operando no **encerramento** da OS, se não restar outra causa. Enquanto a OS está `concluida` aguardando liberação, o chip continua no estado anterior e o detalhe mostra "Trabalho concluído · aguardando liberação".
 - "Em manutenção" usa a cor e o ícone de Preventiva com o rótulo canônico, porque "Preventiva" também é tipo de OS e o ativo pode estar em manutenção por uma corretiva planejada.
 - **Apto para despacho** (veículo) não é status: é uma verificação separada, mostrada como linha própria no detalhe e no checklist ("Apto para despacho" com `check` ou "Impedido · CRLV-e vencido" com `octagon-x`). Um veículo Operando pode estar impedido.
+- **Em implantação prevalece sobre o status gravado na exibição:** enquanto a fase for `em_implantacao`, o chip é Em implantação, mesmo com OS de implantação em execução. Uma OS `implantacao` não deixa o ativo Em manutenção nem Parado.
+- **Filtros:** o filtro Status da lista de ativos oferece Em implantação como opção própria, e a opção Inativo traz só os ativos `inativo` com fase `em_operacao`. Há também o filtro Fase (Em implantação, Em operação).
+- **Colocar em operação** é a única saída da fase e não volta (sumário 3.3). Depois dela o chip passa a Operando e a linha do tempo mostra "Colocado em operação por Carlos Lima em 12/11/2026 14:32". Microcopy em 10.4.
+- **Parado por regra:** o bloqueio de origem `regra` (sumário 3.6) leva o complemento com a causa e link para o disparo: "Parado · Bloqueio por regra: verificação metrológica vencida". Com o efeito `bloquear_ativo_ate_documento`, o complemento diz o que libera: "Parado · Aguardando nova Verificação metrológica".
 - **Locação** não muda o status. Ativo cedido e locado continua Operando; o complemento e a localização mostram o local de uso: "Operando · Locado a Construtora Alfa". Ativo tomado em locação (`propriedade = de_terceiro`) leva o selo neutro "De terceiro" ao lado do nome, com tooltip "Tomado em locação de Locadora Beta · CL-2026-000012".
 
 ### 7.3 Estados da ordem de serviço
@@ -1401,6 +1555,21 @@ Quando o responsável pelo custo foi alterado em relação ao padrão da matriz 
 | `rascunho_ia` | Rascunho do assistente, confirmado por Carlos Lima |
 | `vistoria_locacao` | Vistoria de devolução do CL-2026-000012 (link) |
 | `prestador` | Aberta por Refrigeração Polar (subcontratada conectada), com o número da OS na conta dela |
+| `cliente_conectado` | Recebida da Distribuidora Norte (cliente conectado), com o número da OS na conta dele (conta da subcontratada, 8.28) |
+| `projeto` | Etapa Laços do PJ-2026-000031 (link para a etapa) |
+
+**Causa externa da parada** (`causa_externa`, opcional, CTR, Fase 2) é atributo, não status: aparece no painel lateral da OS como CAUSA EXTERNA, em `texto-secundario` com o ícone `badge-alert`, seguida da evidência e da situação da decisão na medição (7.5).
+
+| Valor | Rótulo |
+|---|---|
+| `vandalismo` | Vandalismo |
+| `acidente_terceiro` | Acidente causado por terceiro |
+| `falta_energia` | Falta de energia |
+| `obra_terceiro` | Obra de terceiro |
+| `solicitacao_cliente` | Solicitação do cliente |
+| `caso_fortuito` | Caso fortuito |
+
+O campo leva o texto de ajuda fixo "Não muda os indicadores técnicos. Só a medição do contrato pode descontar esta parada, depois de aprovada." (RF-CTR-003). Só aparece em contas com o módulo CTR.
 
 **Indicador de prazo** (derivado, aparece ao lado do chip de estado, nunca no lugar dele):
 
@@ -1422,6 +1591,9 @@ Tipo é atributo, não status: aparece como texto com ícone em `texto-secundari
 | `corretiva_emergencial` | Corretiva emergencial | `siren` |
 | `inspecao_legal` | Inspeção legal | `shield-check` |
 | `melhoria` | Melhoria | `trending-up` |
+| `implantacao` | Implantação | `drill` |
+
+A OS de Implantação fica fora dos indicadores de manutenção e seu custo é de implantação (sumário 3.1). Na lista de OS, a visão padrão "Manutenção" esconde o tipo Implantação; a visão "Implantação" mostra só ele. O detalhe da OS mostra o selo neutro "Fora dos indicadores de manutenção" ao lado do tipo. O ícone `drill` é diferente do `construction` do chip Em implantação, para que tipo de OS e situação do ativo não se confundam.
 
 ### 7.5 Solicitação
 
@@ -1433,7 +1605,7 @@ Tipo é atributo, não status: aparece como texto com ícone em `texto-secundari
 | `recusada` | Recusada | Inativo | `circle-x` |
 | `duplicada` | Duplicada | Inativo | `copy` (com link para a original) |
 
-`duplicada` pode ser marcada a partir de Nova ou Em triagem e é final: se a marcação estiver errada, a ação "Reabrir como nova" cria outra solicitação ligada à primeira, sem desfazer a marca. Desistência do solicitante pode ir de Nova direto para Recusada e aparece como "Recusada · Desistência". Solicitação aberta no portal do locatário mostra a origem "Portal do locatário" (`portal_locatario`).
+`duplicada` pode ser marcada a partir de Nova ou Em triagem e é final: se a marcação estiver errada, a ação "Reabrir como nova" cria outra solicitação ligada à primeira, sem desfazer a marca. Desistência do solicitante pode ir de Nova direto para Recusada e aparece como "Recusada · Desistência". Solicitação aberta no portal do locatário mostra a origem "Portal do locatário" (`portal_locatario`). Solicitação aberta por regra configurável (origem `regra`) mostra "Regra: <nome da regra>", com link para o disparo, e segue a triagem normal.
 
 **Ordem de reparo** (EST, Fase 2):
 
@@ -1477,6 +1649,67 @@ Contrato vigente com fim em até 15 dias recebe o indicador "Termina em 9 dias" 
 | `pendente` | `refresh-cw` em `texto-secundario` | "Enviando para Distribuidora Norte" |
 | `erro` | `triangle-alert` em `status-atencao` | "Não sincronizada. Ver motivo" (link para a sincronização da conexão, 8.27) |
 
+**Regra configurável** (`regra_automacao.situacao`, RF-ADM-016):
+
+| Situação | Rótulo | Cor | Ícone |
+|---|---|---|---|
+| `ativa` | Ativa | Operando | `check` |
+| `inativa` | Inativa | Inativo | `circle-minus` |
+
+Regra vinda de pacote nasce Inativa e leva o selo neutro "Do pacote Fiscalização eletrônica" até a primeira edição.
+
+**Projeto** (PRJ, Fase 2, sumário 3.3):
+
+| Estado | Rótulo | Cor | Ícone |
+|---|---|---|---|
+| `rascunho` | Rascunho | Neutro | `file-pen` |
+| `em_andamento` | Em andamento | Preventiva | `circle-play` |
+| `suspenso` | Suspenso | Atenção | `circle-pause` |
+| `concluido` | Concluído | Operando | `circle-check` |
+| `cancelado` | Cancelado | Inativo | `ban` |
+
+Suspenso usa Atenção, como a OS pausada: está interrompido e pede decisão. O motivo aparece no complemento ("Suspenso · aguardando autorização da prefeitura"). Projeto com etapa atrasada recebe o indicador de prazo (7.3) ao lado do chip: "Atrasado 4 dias".
+
+**Etapa de projeto** (sumário 3.3):
+
+| Estado | Rótulo | Cor | Ícone | Complemento |
+|---|---|---|---|---|
+| `pendente` | Pendente | Neutro | `hourglass` | "Pendente · depende de Energia" |
+| `disponivel` | Disponível | Neutro | `lock-open` | "Disponível · pode começar" |
+| `em_andamento` | Em andamento | Preventiva | `circle-play` | Executor: "Em andamento · Sinaliza Sul" |
+| `concluida` | Concluída | Operando | `circle-check` | — |
+| `dispensada` | Dispensada | Inativo | `circle-slash` | Motivo no detalhe e no tooltip |
+
+"Atrasada" não é estado: é a condição calculada de RF-PRJ-003, mostrada com o indicador de prazo de 7.3 ("Atrasada 4 dias"), nunca no lugar do chip.
+
+**Contrato com cliente** (CTR, Fase 2): mesmos rótulos, cores e ícones do contrato de locação (acima): Rascunho, Vigente, Encerrado, Cancelado. Só o Rascunho pode ser cancelado.
+
+**Medição do contrato** (sumário 3.3):
+
+| Estado | Rótulo | Cor | Ícone |
+|---|---|---|---|
+| `em_apuracao` | Em apuração | Preventiva | `calculator` |
+| `fechada` | Fechada | Inativo | `lock` |
+
+Medição reaberta volta a Em apuração e leva o complemento "Em apuração · reaberta por Carlos Lima".
+
+**Situação do item na medição** (derivada, não é estado; texto com ícone, como os vencimentos de 7.6):
+
+| Situação | Cor | Ícone | Texto |
+|---|---|---|---|
+| Disponibilidade igual ou acima da meta | Operando | `check` | "Na meta" |
+| Abaixo da meta, em faixa com desconto zero | Atenção | `triangle-alert` | "Abaixo da meta · sem desconto" |
+| Em faixa com desconto | Parado | `circle-x` | "Faixa 96 a 98 % · desconto 2 %" |
+| Fora do período de apuração | Neutro | `construction` ou `calendar` | "Conta a partir de 20/11 (entrada em operação)" |
+
+**Decisão da parada por causa externa** (RF-CTR-003; rótulos provisórios, ver 13.25):
+
+| Situação | Cor | Ícone | Texto |
+|---|---|---|---|
+| Aguardando decisão | Atenção | `badge-alert` | "Aguardando decisão" |
+| Exclusão aprovada | Operando | `circle-check` | "Excluída da medição · aprovada por Carlos Lima" |
+| Exclusão recusada | Inativo | `circle-x` | "Mantida na medição · recusada por Carlos Lima" |
+
 ### 7.6 Vencimentos (documentos, capacitações, NR)
 
 | Situação | Cor | Ícone | Texto |
@@ -1491,7 +1724,7 @@ Contrato vigente com fim em até 15 dias recebe o indicador "Termina em 9 dias" 
 
 ## 8. Telas principais
 
-Wireframes textuais: blocos em ordem de leitura e hierarquia. Os módulos de fase 2 (pneus, combustível) seguem a mesma estrutura.
+Wireframes textuais: blocos em ordem de leitura e hierarquia. Os módulos de fase 2 (pneus, combustível) seguem a mesma estrutura. As telas novas a partir da versão 0.4 (8.29 a 8.34) trazem a tabela dos quatro estados: carregando, vazio, erro e sucesso.
 
 ### 8.1 Painel do gestor
 
@@ -1518,6 +1751,8 @@ Wireframes textuais: blocos em ordem de leitura e hierarquia. Os módulos de fas
 
 Hierarquia: indicadores → o que está parado → o que depende do gestor → tendências. Cada número é um link para a lista filtrada. O painel não tem ação primária em Sinal; as ações ficam nos itens de "Precisa de você".
 
+Ativos em implantação **não entram** na barra empilhada de "Ativos agora", porque estão fora da base dos indicadores. Aparecem numa linha própria abaixo da legenda, com o ícone `construction`: "Em implantação 36 · fora dos indicadores", com link para a lista filtrada. Em contas com PRJ, "Precisa de você" inclui "4 etapas de projeto atrasadas" e, em contas com CTR, "2 paradas por causa externa aguardando decisão".
+
 ### 8.2 Lista de ativos
 
 ```
@@ -1531,6 +1766,31 @@ Ativos (h2)                                   [Importar] [Novo ativo]
 ```
 
 A visão Árvore mostra localizações e ativos pai e filho com expansão; a contagem de filhos parados sobe para o pai ("2 componentes parados").
+
+Filtros acrescentados na versão 0.4: Fase (Em implantação, Em operação) e a opção Em implantação no filtro Status (7.2).
+
+**Visão Mapa.** Mostra no mapa as localizações que têm coordenadas (campo opcional de RF-ATV-001), cada uma com o marcador de status do componente 6.23. Serve, por exemplo, para ver os radares de uma cidade: cada ponto de fiscalização é uma localização com coordenadas, e o marcador mostra o status do radar (Operando, Atenção, Em manutenção, Parado, Em implantação). Esta visão não cria requisito: usa só as coordenadas da localização e o status do ativo, que já existem.
+
+```
+[Lista | Árvore | Mapa]                       [Status ▾] [Classe ▾] [Fase ▾]
+┌──────────────────────────┬───────────────────────────────────────────────┐
+│ 42 PONTOS NESTA ÁREA     │                 (mapa base)                   │
+│ RAD-0031 Av. Brasil 1200 │        (✕)                (✓)                 │
+│ [Parado · Aguardando..]  │                 (12)                          │
+│ RAD-0044 Rua Goiás 88    │     (✓)                        (▲)            │
+│ [Atenção · Verificação ] │                  (┄)                          │
+│ RAD-0102 Av. Amazonas 9  │                                               │
+│ [Em implantação]         │                                    [+] [−]    │
+│ ...                      │                                               │
+│ 38 sem coordenadas ›     │                                               │
+└──────────────────────────┴───────────────────────────────────────────────┘
+```
+
+- A lista lateral é a mesma lista filtrada, restrita à área visível do mapa, e é a alternativa acessível: tudo o que o mapa mostra está nela, com o chip de status.
+- Os filtros da lista valem para o mapa. Mover o mapa atualiza a lista; selecionar na lista centraliza o marcador.
+- Ativos sem coordenadas não aparecem no mapa; a lista termina com "38 ativos sem coordenadas não aparecem no mapa. Ver na lista." Localização sem coordenadas recebe a ação "Informar coordenadas" no detalhe.
+- O mapa base é de terceiros e não segue os tokens; ele usa estilo claro e dessaturado, para que as cores de status se destaquem. O provedor e o envio das coordenadas a ele estão na pendência 13.29.
+- Estados: carregando (esqueleto da lista e mapa base sem marcadores), vazio ("Nenhuma localização com coordenadas. Informe as coordenadas dos pontos para vê-los no mapa." [Ver lista]), erro do mapa base ("Não foi possível carregar o mapa. A lista ao lado continua atualizada." [Tentar de novo]).
 
 ### 8.3 Detalhe do ativo
 
@@ -1552,7 +1812,33 @@ Ativos › FRT-0112
 └───────────────────────────────────────────────┴──────────────────────────┘
 ```
 
-Abas mudam com o tipo: equipamento mostra NR-12 e horímetro; veículo mostra pneus, abastecimentos e multas. Abas sem conteúdo ficam ocultas, não vazias.
+Abas mudam com o tipo: equipamento mostra NR-12 e horímetro; veículo mostra pneus, abastecimentos e multas. Abas sem conteúdo ficam ocultas, não vazias. Em contas com regras configuráveis, o Histórico inclui os disparos de regra no ativo (8.29).
+
+**Ativo em implantação** (RF-ATV-013):
+
+```
+Ativos › RAD-0102
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Radar fixo Av. Amazonas, 900 (h2)  [Em implantação · PJ-2026-000031] [A] │
+│ RAD-0102 · Ponto Av. Amazonas · Contagem · Classe Radar fixo             │
+│                                        [Mais ▾] [Colocar em operação]    │
+├──────────────────────────────────────────────────────────────────────────┤
+│ ⓘ Em implantação desde 02/10/2026. Fora dos indicadores e da cobrança;  │
+│   os 4 planos começam a contar quando o ativo entrar em operação.        │
+├──────────────────────────────────────────────────────────────────────────┤
+│ PARA COLOCAR EM OPERAÇÃO                                                 │
+│ [✓] Campos obrigatórios da classe preenchidos                            │
+│ [ ] OS-2026-004871 de implantação ainda Em execução                      │
+│ [ ] Verificação metrológica válida · não cadastrada  [Registrar documento]│
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+- Faixa informativa (6.12, Informação) fixa no topo enquanto durar a fase.
+- "Colocar em operação" é a ação primária, só para quem tem `atv.colocar_em_operacao`. Fica sempre habilitada; ao clicar com pendências, a confirmação não abre e o bloco PARA COLOCAR EM OPERAÇÃO recebe o foco, com o erro de 10.3. Sem pendências, abre a confirmação de 10.4.
+- A lista de verificação mostra as exigências de RF-ATV-013 com o ícone de cada situação (`check` ou `circle-x`) e o texto; cada item pendente tem o atalho para resolver.
+- Em ativo de projeto, a primeira pendência é o projeto: "Este ativo entra em operação ao concluir o PJ-2026-000031." e a ação primária vira "Ver projeto". "Colocar em operação" continua em "Mais" para quem tem a permissão.
+- **Em lote:** na lista de ativos filtrada por Em implantação, a barra de lote oferece "Colocar em operação"; o diálogo informa antes quantos não podem e por quê (10.4).
+- No app, o ativo em implantação mostra o chip e a faixa, mas não a ação: colocar em operação é feita pela web ou pela API (RF-ATV-013).
 
 ### 8.4 Lista de OS
 
@@ -1587,6 +1873,8 @@ Ordens de serviço › OS-2026-004812
 A ação primária muda com o estado: Planejar → Programar → (técnico) Iniciar → Concluir → (quem tem a permissão `os.encerrar`) Encerrar. Em Concluída, "Recusar liberação" fica como botão secundário ao lado de "Encerrar". OS aberta ainda não reconhecida mostra "Reconhecer" como secundário; para o técnico da equipe, OS aberta ou planejada mostra "Assumir". OS encerrada vira somente leitura, com faixa informativa "OS encerrada em 12/11/2026 por Carlos Lima. Não pode mais ser editada."
 
 **OS com executor fornecedor.** O painel lateral troca RESPONSÁVEL por EXECUTOR "Refrigeração Polar · serviço Manutenção de câmara fria (SLA 4 h)" e mostra o bloco LINK DE EXECUÇÃO quando houver: "Enviado a joao@polar.com.br em 12/11 10:15 · válido até 15/11 10:15 · aberto em 12/11 11:02" com as ações [Copiar link] (só na criação) [Gerar novo] [Revogar]. Na aba Horas, apontamentos feitos pelo prestador ou pelo link levam o selo "Prestador" ou "Via link". Em ativo locado, CUSTO DE mostra o padrão da matriz ("Locatário · avaria por mau uso, matriz do CL-2026-000012") e o seletor para alterar com justificativa.
+
+**Campos extras e causa externa no detalhe.** Os campos extras da OS (8.30) ficam no bloco CAMPOS EXTRAS da aba de execução, na ordem definida pela empresa; OS de projeto mostra no painel lateral PROJETO "PJ-2026-000031 · etapa Laços"; OS de conta com CTR mostra CAUSA EXTERNA (7.3) no painel lateral, com [Informar causa externa] enquanto a OS não estiver encerrada.
 
 ### 8.6 Quadro de programação
 
@@ -2308,6 +2596,300 @@ Ordens de serviço › OS-2026-004812
 - Não existe o botão Encerrar. Em Concluída, a faixa informativa diz "Aguardando a liberação da Distribuidora Norte. Ela foi avisada às 10:42." Quando o cliente recusa: faixa em Atenção "Liberação recusada pela Distribuidora Norte: falta foto do condensador." e a OS volta a Em execução.
 - Quando o cliente encerra, a OS da subcontratada fica Encerrada com "Encerrada pela Distribuidora Norte em 13/11/2026" e libera o envio do relatório.
 
+### 8.29 Regras configuráveis
+
+Administração › Regras (RF-ADM-016, MVP). Criar, alterar e ativar exigem `adm.gerenciar_regras` (padrão em administrador e gestor); quem não tem vê a lista e o histórico, sem as ações.
+
+**Lista:**
+
+```
+Regras (h2)                                    12 de 50 regras ativas  [Nova regra]
+[Situação ▾] [Condição ▾] [Efeito ▾] [Origem ▾: Criada pela empresa, Pacote]
+┌────────────────────────────────────┬──────────────────────────────┬──────────┬─────────┬──────────────┐
+│ Regra                              │ Resumo                       │ Situação │ Disp. 30d│ Último disparo│
+│ Verificação vencida bloqueia radar │ Documento vence → bloquear   │ [Ativa]  │    3    │ 10/11 06:00  │
+│                                    │ até novo documento           │          │         │              │
+│ Rompeu lacre exige nova verificação│ OS concluída com campo →     │ [Inativa]│    —    │ —            │
+│ [Do pacote Fiscalização eletrônica]│ bloquear até novo documento  │          │         │              │
+└────────────────────────────────────┴──────────────────────────────┴──────────┴─────────┴──────────────┘
+```
+
+**Editor** (página, até 720 px de largura útil):
+
+```
+Regras › Nova regra
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Nome       [Verificação vencida bloqueia o radar_________________]       │
+│ Descrição  [Sem verificação válida o radar não pode multar (opcional)]   │
+├──────────────────────────────────────────────────────────────────────────┤
+│ (frase de regra, componente 6.20)                                        │
+├──────────────────────────────────────────────────────────────────────────┤
+│ SIMULAÇÃO · hoje, sem gravar nada                                        │
+│ Se fosse ativada agora, esta regra bloquearia 3 ativos:                  │
+│ RAD-0031  Verificação vencida há 12 dias   [Operando]  OS aberta: nenhuma│
+│ RAD-0044  Verificação vencida há 2 dias    [Atenção]   OS-2026-004855    │
+│ RAD-0102  Em implantação · não é afetado agora                           │
+├──────────────────────────────────────────────────────────────────────────┤
+│                       [Voltar] [Salvar inativa] [Ativar regra]           │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+- **Simular antes de ativar.** Enquanto a regra não foi simulada, a ação primária é "Simular" e "Ativar regra" não aparece. Depois da simulação, a primária passa a ser "Ativar regra" e "Simular de novo" vira terciária. Qualquer mudança na frase invalida o resultado: "A regra mudou. Simule de novo antes de ativar."
+- A simulação mostra o que aconteceria **hoje**: quantos ativos e quais, com o fato que dispararia e o status atual; efeitos de notificação mostram quem receberia. Acima de 50 ativos, mostra os 50 primeiros e a contagem total, com [Exportar].
+- "Salvar inativa" (secundária) grava sem ativar. Regra de pacote abre direto no editor com a simulação pronta para revisar.
+- **Detalhe da regra:** abas [Regra] [Disparos] [Histórico de alterações]. Interruptor Ativa/Inativa no cabeçalho, com o chip de 7.5.
+- **Disparos** (`disparo_regra`): tabela Data e hora, Ativo, Fato que disparou (link para o documento, a OS, o checklist ou a leitura), Efeito aplicado, Situação do efeito ("Bloqueio levantado em 14/11 pela nova verificação", "Solicitação SS-2026-000812 aberta"). Filtro por período e ativo; exportação. Os mesmos disparos aparecem no Histórico do ativo (8.3).
+- **Inativar** pede confirmação quando a regra criou bloqueios ainda ativos (10.4) e, depois, abre a lista desses bloqueios para decidir um a um.
+
+| Estado | O que a tela mostra |
+|---|---|
+| Carregando | Esqueleto da tabela; no editor, esqueleto da frase. Simulação em andamento: barra de progresso fina e "Simulando nos 1.284 ativos da empresa" |
+| Vazio | Primeiro uso (6.14): "Nenhuma regra criada. Crie uma regra ou aplique um pacote de segmento com regras prontas." [Nova regra] [Ver pacotes]. Disparos vazios: "Esta regra ainda não disparou." Simulação sem efeito: tudo em dia, "Nenhum ativo seria afetado hoje." |
+| Erro | Lista: "Não foi possível carregar as regras. Tente de novo." Simulação: "Não foi possível simular agora. A regra não foi alterada. Tente de novo." Validações em 10.3 |
+| Sucesso | Toasts de 10.4: regra ativada, salva inativa, inativada |
+
+### 8.30 Campos extras da OS
+
+Administração › Campos extras da OS (RF-OS-021, MVP). Definição na web; preenchimento na web, no app (inclusive offline, 9.10), pelo link de uso único (só campos marcados para o prestador, proposta) e pela API.
+
+**Lista de definições:**
+
+```
+Campos extras da OS (h2)                                        [Novo campo]
+[Tipo de OS ▾] [Classe ▾] [Situação ▾]
+┌──────┬──────────────────────────┬──────────┬──────────────────────────┬────────────────┬─────────┐
+│ Ordem│ Rótulo                   │ Tipo     │ Aparece em               │ Obrigatório    │ Situação│
+│ ≡ 1  │ Rompeu lacre?            │ Sim/Não  │ Corretivas · Radar fixo  │ Na conclusão   │ Ativo   │
+│ ≡ 2  │ Lacres retirados         │ Texto    │ Todas · Radar fixo       │ —              │ Ativo   │
+│ ≡ 3  │ Protocolo da concession. │ Texto    │ Implantação · todas      │ Na abertura    │ Ativo   │
+└──────┴──────────────────────────┴──────────┴──────────────────────────┴────────────────┴─────────┘
+```
+
+**Formulário de definição** (painel lateral de 640 px), com pré-visualização ao lado, como o modelo de checklist (8.8), alternando [Web | App]:
+
+| Campo | Controle | Regra de interface |
+|---|---|---|
+| Rótulo | Texto | Frase curta; termina em "?" quando o tipo é Sim/Não |
+| Chave | Texto em `dado`, gerada a partir do rótulo (`lacres_instalados`) | Minúsculas e sem acento; a ajuda diz "É o nome do campo na API e na exportação." |
+| Tipo | Grupo de opções: Texto, Número, Data, Lista, Sim/Não | Depois de haver valor gravado, o grupo fica somente leitura com `lock` e a ajuda de 10.3 |
+| Opções | Lista de itens arrastáveis com [+ Opção] | Só no tipo Lista |
+| Unidade | Texto curto | Só no tipo Número; aparece dentro do campo, como no medidor (6.2) |
+| Tipos de OS e classes | Seleção múltipla | Classe vazia significa "todas as classes" |
+| Obrigatório | Grupo de opções: Não, Na abertura, Na conclusão | A frase abaixo explica o efeito: "A OS não pode ser concluída sem este campo, nem no app sem conexão." |
+| Preenchido pelo prestador no link | Caixa de seleção (proposta) | — |
+| Texto de ajuda | Texto | Aparece abaixo do campo na OS |
+| Situação | Interruptor Ativo / Inativo | Inativar não apaga valores |
+
+- O contador fica sempre visível no formulário: "12 de 30 campos ativos para Corretiva planejada em Radar fixo."
+- A ajuda fixa do formulário diz o que o campo **não** faz: "Campos extras não vão para a conta de subcontratadas conectadas e não entram nos indicadores. Aparecem no relatório e na impressão da OS."
+
+**Na OS (web):**
+
+- O bloco CAMPOS EXTRAS aparece no formulário de abertura e na aba de execução assim que tipo de OS e ativo estão definidos, na ordem da definição. Cada tipo usa o componente da seção 6.2 ou 6.3: Texto (campo), Número (campo numérico com unidade), Data (campo com máscara), Lista (seleção simples até 15 opções; combobox acima disso), Sim/Não (grupo de duas opções, sem valor padrão: "não respondido" é diferente de "Não").
+- Obrigatório na abertura segue a regra geral: os opcionais levam "(opcional)". Obrigatório na conclusão leva o texto de apoio "Obrigatório para concluir", porque na abertura ele ainda pode ficar vazio.
+- Trocar o tipo de OS ou o ativo de forma que um campo preenchido deixe de valer pede confirmação antes de descartar: "Com o tipo Preventiva, o campo Protocolo da concessionária não vale para esta OS. Descartar o valor digitado?" [Voltar] [Descartar e trocar].
+- Concluir com obrigatório vazio: o foco vai para o campo e o resumo de erros do topo (6.2) lista "Preencha Lacres instalados para concluir a OS."
+- OS encerrada mostra os campos somente leitura, com o rótulo vigente na data do registro. Campo inativado depois aparece com o valor e "(campo inativo)" em `texto-terciario`.
+- Na lista de OS, cada campo extra é coluna opcional e filtro; a exportação traz uma coluna por chave.
+- Na OS vinculada a subcontratada conectada, o bloco leva o texto "Estes campos não são compartilhados com a Refrigeração Polar." (sumário 3.6).
+
+| Estado | O que a tela mostra |
+|---|---|
+| Carregando | Esqueleto da tabela; na OS, o bloco aparece com esqueleto dos campos até as definições chegarem |
+| Vazio | "Nenhum campo extra. Crie campos para registrar na OS o que é próprio da sua operação, como números de lacre ou protocolos." [Novo campo]. Na OS sem campos para a combinação, o bloco não aparece |
+| Erro | "Não foi possível carregar os campos extras. A OS pode ser aberta; os campos aparecem quando a conexão voltar." Validações em 10.3 |
+| Sucesso | "Campo Lacres instalados criado. Ele aparece nas novas OS corretivas de Radar fixo." |
+
+### 8.31 Pacote de segmento nos primeiros passos
+
+Escolha e pré-visualização de pacote (RF-ADM-017, Fase 2) dentro do roteiro de primeiros passos (RF-ADM-001) e, depois, em Administração › Pacotes de segmento. Enquanto os pacotes não existirem (MVP), o roteiro não tem esta etapa (13.30).
+
+```
+Primeiros passos · etapa 2 de 5 · Segmento
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Com que tipo de operação sua empresa trabalha? (h1)                      │
+│ Escolha um ou mais pacotes. Eles criam classes, campos, planos e regras  │
+│ prontos para o seu segmento. Tudo continua editável.                     │
+│ ┌──────────────────────┐ ┌──────────────────────┐ ┌──────────────────────┐│
+│ │ [x] Fiscalização     │ │ [ ] Transportadora   │ │ [ ] Indústria        ││
+│ │     eletrônica       │ │ Cavalos, carretas,   │ │ Máquinas, utilidades,││
+│ │ Radares e câmeras em │ │ pneus e documentos   │ │ NR-12 e NR-13        ││
+│ │ pontos de cidades    │ │ de frota             │ │                      ││
+│ └──────────────────────┘ └──────────────────────┘ └──────────────────────┘│
+│ [ ] Comércio   [ ] Locadora   [ ] Prestador de serviços                   │
+├──────────────────────────────────────────────────────────────────────────┤
+│ O QUE SERÁ CRIADO · Fiscalização eletrônica v1                           │
+│ 7 classes de ativo        Radar fixo, Câmera de fiscalização, Gabinete,..│
+│ 3 campos extras da OS     Rompeu lacre?, Lacres retirados, Lacres instal.│
+│ 1 tipo de documento       Verificação metrológica (crítico)              │
+│ 2 regras                  Chegam inativas, para você revisar e ativar    │
+│ 1 modelo de projeto       Implantação de ponto de fiscalização           │
+│ 4 planos                  Limpeza de lentes, Poda de vegetação, ...      │
+│ NÃO SERÁ CRIADO (2)                                                      │
+│ Modelo de projeto · seu plano não inclui Projetos                        │
+│ Classe Poste · já existe na conta                                        │
+│                                    [Pular por enquanto] [Aplicar pacote] │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+- **Cartões de pacote:** seleção múltipla em cartões; o cartão inteiro é o alvo (mínimo 48 px de altura), com caixa de seleção, nome em `h4` e uma frase do segmento. Selecionado: borda de 2 px em Aço, fundo `superficie-selecionada` e `check`, nunca Sinal. Os rótulos dos pacotes estão em 10.2.
+- **Pré-visualização:** uma linha por tipo de item, com a contagem em `dado-forte` e os primeiros nomes; cada linha expande para a lista completa. Com mais de um pacote, a pré-visualização tem uma aba por pacote e a soma no topo.
+- **Não será criado:** sempre visível quando houver item ignorado, com o motivo (já existe na conta, pelo nome ou sigla; ou módulo fora do plano). É a garantia, mostrada antes, de que nada existente será alterado.
+- "Aplicar pacote" é a primária e abre a confirmação de 10.4; "Pular por enquanto" é terciária e leva à etapa seguinte. Na Administração, a mesma tela abre como página, sem o indicador de etapa.
+- **Versão nova do pacote:** em Administração › Pacotes de segmento, a linha do pacote aplicado mostra "Versão 2 disponível · 3 itens novos" com [Ver e aplicar], que abre a mesma pré-visualização só com o que falta.
+- O histórico de aplicações (`aplicacao_pacote`) fica na mesma página: pacote, versão, data, quem aplicou, itens criados e ignorados.
+
+| Estado | O que a tela mostra |
+|---|---|
+| Carregando | Esqueleto dos cartões; pré-visualização com esqueleto de 6 linhas. Aplicação em andamento: barra de progresso com "Criando 23 itens", sem permitir sair da etapa |
+| Vazio | Nenhum pacote marcado: a pré-visualização mostra "Escolha um pacote para ver o que será criado." e a primária fica "Continuar sem pacote" |
+| Erro | "Não foi possível aplicar o pacote. Nada foi criado. Tente de novo." (a aplicação é tudo ou nada; se o documento 5 decidir diferente, a mensagem muda, 13.30) |
+| Sucesso | "Pacote Fiscalização eletrônica aplicado: 23 itens criados, 2 não criados." [Ver o que foi criado]. As regras criadas aparecem em 8.29 com o selo do pacote |
+
+### 8.32 Projeto de implantação
+
+PRJ, Fase 2, plano Profissional (RF-PRJ-001 a RF-PRJ-007). O projeto organiza OS; não executa trabalho. A carteira de projetos é uma tabela (6.4) com colunas PJ, Nome, Cliente, Unidade, Situação, Avanço, Desvio, Custo (R$) e Orçamento (R$), e visões padrão "Em andamento", "Atrasados" e "Por fornecedor".
+
+```
+Projetos › PJ-2026-000031
+┌──────────────────────────────────────────────────────────────────────────┐
+│ PJ-2026-000031 · Ponto Av. Amazonas, 900 (h2)                            │
+│ [Em andamento] [Atrasado 4 dias]                                         │
+│ Modelo Implantação de ponto de fiscalização v3 · Contagem                │
+│ RAD-0102 [Em implantação] · Cliente Prefeitura de Contagem · CT-2026-000004│
+│                                                 [Mais ▾] [Ver relatório] │
+├──────────────────────────────────────────────────────────────────────────┤
+│ AVANÇO FÍSICO        PRAZO                       CUSTO                   │
+│ 62 %                 Fim previsto 30/11/2026     R$ 18.420,00            │
+│ [████████████░░░░░░] Desvio 4 dias               de R$ 24.000,00 previstos│
+├──────────────────────────────────────────────────────────────────────────┤
+│ [Cronograma | Lista | Quadro]                                            │
+│ (cronograma, componente 6.21)                                            │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+- **Avanço físico:** valor em `kpi`, barra de progresso (6.18) em Aço sobre trilha `borda` (12,27:1, 4.4) e "Como calculamos" com a fórmula de RF-PRJ-005: "Soma dos pesos das etapas concluídas e dispensadas ÷ soma dos pesos de todas as etapas." A etapa dispensada conta no avanço e não conta no custo; o popover diz isso.
+- **Ação primária segue o estado:** Rascunho → "Iniciar projeto"; Em andamento → nenhuma no cabeçalho até todas as etapas estarem concluídas ou dispensadas, quando vira "Concluir projeto"; Suspenso → "Retomar projeto". Suspender e Cancelar ficam em "Mais", com motivo.
+- **Lista de etapas:** tabela com Ordem, Etapa, Situação, Executor, Previsto, Real, Desvio, OS, Exigências (documentos e campos "2 de 3"), Peso e Valor (R$). É a alternativa acessível do cronograma e a versão impressa.
+- **Quadro de etapas:** kanban com as colunas Pendente, Liberada, Em andamento, Concluída e Dispensada. Pendente e Liberada não aceitam cartões arrastados: a passagem é automática pelas dependências, e a coluna fica esmaecida durante o arraste com a dica "Esta etapa é liberada quando as anteriores terminarem". Arrastar para Em andamento só vale em etapa sem OS; para Concluída abre a conferência das exigências; para Dispensada abre o pedido de motivo. Cada movimento tem a alternativa pelo menu "Mover para".
+- **Cartão de etapa:** nome, chip, executor, datas previstas, indicador de atraso, "OS 1 de 2 encerradas" e "Exigências 2 de 3".
+
+**Painel lateral da etapa:**
+
+```
+Etapa Laços · PJ-2026-000031                                   [×]
+[Em andamento · Sinaliza Sul] [Atrasada 4 dias]
+EXECUTOR      Sinaliza Sul (subcontratada) · valor R$ 3.200,00
+RESPONSÁVEL   Carlos Lima
+PREVISTO      14/11 a 20/11 · iniciada em 15/11
+DEPENDE DE    Energia (Concluída) · Fundação e poste (Dispensada)
+LIBERA        Montagem
+PARA CONCLUIR
+ [✓] OS-2026-004870 · Encerrada
+ [ ] OS-2026-004871 · Em execução
+ [✓] Documento Laudo dos laços · válido
+ [ ] Campo Laços instalados · vazio            [Preencher]
+                         [Mais ▾] [Gerar OS] [Concluir etapa]
+```
+
+- "Concluir etapa" fica habilitado; com pendência, a lista PARA CONCLUIR recebe o foco e mostra o erro de 10.3. "Dispensar etapa" fica em "Mais", só para quem tem `prj.dispensar_etapa`; na etapa de entrega aparece desabilitado com "A etapa de entrega não pode ser dispensada."
+- "Gerar OS" cria a OS de implantação da etapa (RF-PRJ-004) com o executor da etapa já preenchido.
+- **Concluir projeto** (RF-PRJ-007) gera o termo de entrega e coloca os ativos em operação; a confirmação está em 10.4.
+
+**Medição de etapas para pagamento do prestador** (RF-PRJ-006): tabela por fornecedor e período com Projeto, Etapa, Ativo, Concluída em, Valor (R$) e Ajuste; total em `dado-forte` no rodapé. Ajustar uma linha pede motivo e `prj.ajustar_medicao`. Texto fixo: "A Tenaz não paga nem fatura. O pagamento sai do ERP." Etapas dispensadas não aparecem.
+
+| Estado | O que a tela mostra |
+|---|---|
+| Carregando | Esqueleto do cabeçalho, dos três números e de 7 linhas do cronograma |
+| Vazio | Carteira: "Nenhum projeto. Crie um projeto a partir de um modelo para acompanhar a implantação de ativos." [Novo projeto] [Ver modelos]. Sem modelo: "Crie um modelo de projeto com as etapas da sua implantação ou aplique um pacote de segmento." |
+| Erro | "Não foi possível carregar o PJ-2026-000031. Tente de novo." Ações em 10.3 |
+| Sucesso | Toasts de 10.4: etapa concluída, etapa dispensada, projeto concluído |
+
+### 8.33 Painel do contrato com cliente
+
+CTR, Fase 2, plano Profissional (RF-CTR-001, RF-CTR-002 e RF-CTR-005). Interno no lançamento: o acesso do cliente final depende de P10.
+
+```
+Contratos com clientes › CT-2026-000004
+┌──────────────────────────────────────────────────────────────────────────┐
+│ CT-2026-000004 · Prefeitura de Contagem (h2)   [Vigente]                 │
+│ 01/03/2026 a 28/02/2027 · 42 itens · Meta 98 % · Apuração 24x7           │
+│                                     [Mais ▾] [Ver medições]              │
+├──────────────────────────────────────────────────────────────────────────┤
+│ [DISPONIBILIDADE CONTRATUAL] [DESCONTO PROJETADO] [ABAIXO DA META] [A DECIDIR]│
+│  97,6 % · Meta 98 %           R$ 1.240,00          3 de 42 itens    2 paradas │
+│  novembro até 12/11 14:00                                                │
+├──────────────────────────────────────────────────────────────────────────┤
+│ ITENS                                   [Ordenar: impacto no desconto ▾] │
+│ TAG       Local             Disponib.  Meta  Situação          Desc. proj.│
+│ RAD-0031  Av. Brasil, 1200    93,2 %   98 %  [x] Faixa 90 a 96 % · 5 %  R$ 410,00│
+│           OS-2026-004871 Em execução · solução vence em 3 h              │
+│ RAD-0044  Rua Goiás, 88       97,5 %   98 %  [!] Abaixo da meta · sem desc. R$ 0,00│
+│ RAD-0102  Av. Amazonas, 900      —     98 %  Conta a partir da entrada em operação│
+├──────────────────────────────────────────────────────────────────────────┤
+│ PARADAS POR CAUSA EXTERNA AGUARDANDO DECISÃO (2)                         │
+│ RAD-0044 · OS-2026-004855 · Vandalismo · 18 h · BO 4471/2026 [anexo]     │
+│ RAD-0057 · OS-2026-004860 · Falta de energia · 6 h · protocolo 88123     │
+│ São decididas na medição do mês.                     [Ver na medição]    │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+- **Cartões de KPI** (6.17), sem gráfico de tendência no lançamento. O primeiro sempre se chama "Disponibilidade contratual" e o "Como calculamos" explica a diferença: "Usa o calendário de apuração do contrato e desconta as paradas por causa externa aprovadas. A disponibilidade dos Indicadores é técnica e não desconta." (RF-IND-003, RF-CTR-004).
+- **Itens:** ordenados pelo impacto no desconto, maior primeiro. A coluna Situação usa a situação do item de 7.5 (ícone, cor e texto); o valor numérico fica sempre ao lado. Cada linha mostra abaixo as OS abertas do item com o prazo de atendimento ou de solução do contrato e o indicador de prazo (7.3). A linha inteira abre o detalhe do item, com a régua de faixas (6.22).
+- Item em implantação aparece com a situação Neutro "Conta a partir da entrada em operação" e fica fora da projeção (RF-CTR-002).
+- **Paradas aguardando decisão:** lista só de leitura neste painel; a decisão é feita na medição (8.34). Ver 13.32.
+- Ações do contrato seguem 8.15: Ativar (rascunho), Encerrar contrato (vigente, em "Mais"), Cancelar só no rascunho. A aba Itens permite incluir e excluir itens em rascunho ou por aditivo.
+
+| Estado | O que a tela mostra |
+|---|---|
+| Carregando | Esqueleto dos 4 cartões e de 10 linhas |
+| Vazio | Lista de contratos: "Nenhum contrato com cliente. Cadastre o contrato para acompanhar a disponibilidade exigida e o desconto do mês." [Novo contrato]. Sem item abaixo da meta: tudo em dia, "Todos os itens estão na meta neste mês." Sem parada a decidir: o bloco não aparece |
+| Erro | "Não foi possível calcular a disponibilidade agora. Os dados das OS estão preservados. Tente de novo em alguns minutos." |
+| Sucesso | "Contrato CT-2026-000004 ativado. 42 itens cobertos a partir de 01/03/2026." |
+
+### 8.34 Medição do contrato com cliente
+
+RF-CTR-003 e RF-CTR-004.
+
+```
+Contratos com clientes › CT-2026-000004 › Medição de outubro de 2026
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Medição de outubro de 2026 (h2)   [Em apuração]                          │
+│ Prefeitura de Contagem · 01/10 a 31/10 · 744 h requeridas por item       │
+│                               [Exportar ▾] [Mais ▾] [Fechar medição]     │
+├──────────────────────────────────────────────────────────────────────────┤
+│ DISPONIBILIDADE CONTRATUAL 97,1 %                    ⓘ Como calculamos  │
+│ (régua de faixas, componente 6.22)                                       │
+│ DESCONTO R$ 4.380,00 sobre R$ 186.000,00 de referência                   │
+├──────────────────────────────────────────────────────────────────────────┤
+│ [Itens (42)] [Paradas por causa externa (5 · 2 a decidir)]               │
+│ [Memória de cálculo] [Histórico]                                         │
+├──────────────────────────────────────────────────────────────────────────┤
+│ PARADAS POR CAUSA EXTERNA                                                │
+│ OS              Item      Causa            Horas  Evidência   Situação   │
+│ OS-2026-004855  RAD-0044  Vandalismo       18 h   BO 4471     [! Aguardando decisão]│
+│                               [Recusar exclusão] [Aprovar exclusão]      │
+│ OS-2026-004860  RAD-0057  Falta de energia  6 h   protocolo   [! Aguardando decisão]│
+│                 Falta de energia não é causa aceita neste contrato.      │
+│                      [Recusar exclusão] [Aprovar exclusão] (desabilitado)│
+│ OS-2026-004801  RAD-0012  Obra de terceiro 12 h   fotos (3)   [✓ Excluída da medição]│
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+- **Fechar medição** é a primária e fica habilitada; com parada aguardando decisão, a aba Paradas recebe o foco e mostra o erro de 10.3. Sem pendência, abre a confirmação de 10.4.
+- **Aprovar exclusão** e **Recusar exclusão** são secundários por linha (há várias linhas) e pedem motivo num modal P. Causa não aceita no contrato deixa "Aprovar exclusão" desabilitado com o motivo visível na linha, não só no tooltip. Decisão em lote pela seleção da tabela, com confirmação do número de paradas.
+- **Itens:** Item, Horas requeridas, Horas paradas, Excluídas, Disponibilidade contratual, Meta, Situação (7.5), Desconto (%) e Desconto (R$); total no rodapé.
+- **Memória de cálculo:** por item, a conta escrita pela fórmula de RF-CTR-004: "(744 h requeridas − 3 h paradas não excluídas) ÷ 744 h = 99,6 %. Paradas no período: 21 h, das quais 18 h excluídas por causa externa aprovada.", com links para os registros de parada de cada OS. "Ver como tabela" e exportação em PDF e XLSX trazem a mesma memória.
+- **Fechada:** tudo somente leitura, faixa informativa "Medição fechada em 03/11/2026 por Carlos Lima. Não pode mais ser editada." "Reabrir medição" fica em "Mais", só para quem tem `ctr.reabrir_medicao`. Reaberta, a aba Histórico mostra o valor fechado anterior e o motivo, e a tela mostra "Divergências desde o fechamento (2)" quando houver (proposta).
+- Texto fixo junto do desconto: "A Tenaz não fatura. O valor com desconto vai para o ERP."
+
+| Estado | O que a tela mostra |
+|---|---|
+| Carregando | Esqueleto da régua, do total e de 10 linhas. Recálculo depois de uma decisão: barra fina no topo, números atuais visíveis |
+| Vazio | Sem medições: "Nenhuma medição ainda. A medição de um mês abre no primeiro dia do mês seguinte." Sem parada externa: "Nenhuma parada por causa externa neste período." |
+| Erro | "Não foi possível fechar a medição. Ela continua Em apuração e nada foi perdido. Tente de novo." |
+| Sucesso | Toasts de 10.4: medição fechada, medição reaberta, exclusão aprovada |
+
 ---
 
 ## 9. App de campo
@@ -2404,7 +2986,7 @@ Hoje                         OS-2026-004812              Executar
 2. **Iniciar OS** (primário, 56 dp): muda para Em execução e inicia o apontamento de horas.
 3. **Execução**: tarefas como linhas tocáveis de 64 dp; peças por leitura de código ou busca com recentes; foto e voz em botões fixos.
 4. **Pausar**: folha inferior com os motivos como botões grandes (um toque); "Outro" abre campo de texto.
-5. **Concluir**: tela de resumo com o que falta destacado no topo (tarefas obrigatórias, fotos mínimas, código de falha em corretiva, leitura do medidor). Código de falha com os 5 mais usados para a classe do ativo primeiro. Assinatura quando o plano exigir. Botão "Concluir OS".
+5. **Concluir**: tela de resumo com o que falta destacado no topo (tarefas obrigatórias, fotos mínimas, código de falha em corretiva, leitura do medidor, campos extras obrigatórios na conclusão, 9.10). Código de falha com os 5 mais usados para a classe do ativo primeiro. Assinatura quando o plano exigir. Botão "Concluir OS".
 
 Abrir corretiva a partir do QR: Ler QR → ativo → "Registrar falha" → descrição por voz ou texto + foto → "Ativo parou?" (Sim/Não em botões grandes) → "Enviar solicitação".
 
@@ -2566,6 +3148,58 @@ Trocar de conta
 - Tocar na notificação abre a conta certa (trocando, se preciso) e a OS. Se a OS ainda não estiver no aparelho, a tela mostra "Buscando a OS-2026-000314" enquanto sincroniza; sem conexão, "A tarefa aparece aqui quando o aparelho se conectar."
 - Em Mais > Notificações, o técnico escolhe por conta: receber sempre ou silenciar fora do horário de trabalho.
 
+### 9.10 Campos extras, causa externa e implantação no app
+
+**Campos extras da OS** (RF-OS-021). As definições viajam ao aparelho com o cache de configuração, e o app desenha cada campo com o controle de campo do app:
+
+| Tipo | Controle no app |
+|---|---|
+| Texto | Campo de largura total, com ditado do teclado |
+| Número | Teclado numérico grande, unidade fixa dentro do campo, como o medidor |
+| Data | Seletor nativo do sistema e digitação dd/mm/aaaa |
+| Lista | Até 5 opções: botões de rádio de 56 dp. Acima disso: lista em tela cheia com busca |
+| Sim/Não | Dois botões de 56 dp lado a lado ("Sim", "Não"), sem resposta pré-marcada. A escolhida fica com borda de 2 dp em Aço, como no checklist (9.6) |
+
+```
+Concluir · OS-2026-004871
+┌───────────────────────────────┐
+│ FALTA PARA CONCLUIR (2)       │  sobrelinha
+│ [!] Lacres instalados      ›  │  64 dp, toque leva ao campo
+│ [!] Foto Depois            ›  │
+├───────────────────────────────┤
+│ CAMPOS EXTRAS                 │
+│ Rompeu lacre?                 │  corpo-forte
+│ ┌───────────┐ ┌───────────┐   │
+│ │    Sim    │ │    Não    │   │  56 dp
+│ └───────────┘ └───────────┘   │
+│ Lacres retirados              │
+│ [004512, 004513__________]    │
+│ Lacres instalados             │
+│ Obrigatório para concluir     │  legenda
+│ [________________________]    │
+│ Números gravados no lacre.    │  texto de ajuda
+├───────────────────────────────┤
+│ [       Concluir OS        ]  │  56 dp, Sinal
+└───────────────────────────────┘
+```
+
+- **Validação offline:** o app confere os campos obrigatórios com as definições que estão no aparelho **antes** de enfileirar o comando de concluir, com ou sem conexão. Faltando campo, o comando não entra na fila, o foco vai para o campo e a mensagem diz: "Preencha Lacres instalados para concluir. A OS continua salva no aparelho." Obrigatório na abertura vale do mesmo jeito em "Registrar falha" e na abertura de OS pelo app.
+- "Concluir OS" fica habilitado; o bloco FALTA PARA CONCLUIR lista tudo o que falta, inclusive os campos extras, como em 9.5 e 9.8.
+- A tela Sincronização mostra a idade das definições: "Configuração da empresa atualizada às 06:10."
+- **Definição mudou enquanto o aparelho estava sem sinal:** se o servidor recusar a conclusão porque um campo passou a ser obrigatório, a OS mostra o estado de falha de envio (9.4) e a mensagem "A empresa passou a exigir o campo Lacres instalados. Preencha e envie de novo." O que o servidor faz nesse caso ainda não está definido (13.28).
+- O rótulo mostrado é o que estava vigente quando o técnico registrou o valor; o valor não muda se a definição for editada depois.
+
+**Causa externa** (contas com CTR). Ao responder "O ativo parou?" = Sim, ou na aba Falha durante a execução, o app oferece "A parada teve causa externa?" com [Não] e [Sim, escolher a causa]. As seis causas de 7.3 aparecem como botões de 56 dp; em seguida, a foto da evidência (câmera, 9.7) e o campo de texto para número de boletim ou protocolo. O texto de ajuda é o de 7.3. Tudo funciona offline.
+
+**Ativo em implantação e OS de implantação.** O chip Em implantação e a faixa informativa aparecem no detalhe do ativo (8.3), sem a ação "Colocar em operação", que é da web e da API. A OS de Implantação é executada como qualquer OS (9.5); o cabeçalho mostra "Projeto PJ-2026-000031 · etapa Laços" quando vier de projeto, e as exigências da etapa que dependem do campo (fotos, campos extras) aparecem na lista FALTA PARA CONCLUIR.
+
+| Estado | O que o app mostra |
+|---|---|
+| Carregando | Definições ainda não baixadas no primeiro acesso: o bloco CAMPOS EXTRAS mostra esqueleto e "Baixando a configuração da empresa" |
+| Vazio | OS sem campos extras para a combinação: o bloco não aparece |
+| Erro | Sem definições no aparelho e sem conexão: "Os campos extras desta OS aparecem quando o aparelho se conectar. Você pode continuar a execução." A conclusão fica bloqueada só se houver campo obrigatório conhecido e vazio |
+| Sucesso | Conclusão enfileirada: "OS-2026-004871 concluída no aparelho. Será enviada quando houver sinal." |
+
 ---
 
 ## 10. Microcopy e tom de voz
@@ -2592,7 +3226,7 @@ Do brandbook: direto, técnico sem jargão, calmo nos alertas. Diz o que fazer e
 | Cancelar OS | Excluir OS | OS não é excluída; é cancelada com motivo |
 | Inativar ativo | Excluir ativo | Ativo com histórico não é excluído |
 | Solicitação | Chamado, ticket | Entidade `solicitacao` |
-| Leitura | Medição, apontamento de km | Entidade `leitura_medidor`; "apontamento" é de horas |
+| Leitura | Medição (para medidor), apontamento de km | Entidade `leitura_medidor`; "apontamento" é de horas. "Medição" fica reservada à medição do contrato com cliente e à medição de etapas (abaixo) |
 | Voltar | Cancelar (em diálogos) | Evita ambiguidade com "Cancelar OS" |
 | Sem conexão | Offline, erro de rede | Linguagem do usuário de campo |
 | Urgente (prioridade) | Crítica, Emergência | `urgente` é o valor canônico; "crítica" confunde com criticidade e "emergencial" é tipo de OS |
@@ -2616,6 +3250,44 @@ Do brandbook: direto, técnico sem jargão, calmo nos alertas. Diz o que fazer e
 | Conexão, conectada | Integração, vínculo, parceria | Entidade `conexao_empresa`; "Integrações" é o módulo INT |
 | Executada por (subcontratada) | Terceirizada para | Selo da OS vinculada (8.28) |
 | Conta | Empresa, tenant, ambiente | Palavra do app para cada empresa em que o usuário trabalha (9.9) |
+| Em implantação / Em operação | Inativo (para ativo sendo instalado), em obra, pré-operação | Fase `fase_ciclo_vida`; o status gravado é `inativo`, mas o rótulo é sempre "Em implantação" (7.2) |
+| Colocar em operação | Ativar ativo, liberar ativo, comissionar | Ação canônica `colocar_em_operacao`; "liberar" é o encerramento da OS |
+| Implantação (tipo de OS) | Instalação, montagem | Valor `implantacao` do tipo de OS |
+| Regra | Automação, gatilho, workflow | Entidade `regra_automacao`; "gatilho" é do plano de manutenção (`gatilho_plano`) |
+| Condição / Efeito | Gatilho / Ação | Catálogos fechados do sumário 3.7 |
+| Disparo | Execução, log | Entidade `disparo_regra` |
+| Campo extra | Campo personalizado, campo customizado | Entidade `campo_extra_os` |
+| Pacote de segmento | Template, modelo pronto, kit | Entidade `pacote_segmento`; "modelo" já é modelo de projeto e de checklist |
+| Projeto | Obra, empreendimento | Entidade `projeto`, número PJ- |
+| Etapa | Fase, tarefa | `etapa_projeto`; "fase" é do ciclo de vida do ativo e "tarefa" é da OS |
+| Dispensar etapa | Pular, cancelar etapa | Estado `dispensada`; a etapa conta no avanço e não no custo |
+| Disponível (etapa) | Liberada, aberta | Estado `disponivel` (sumário 3.6), escolhido para não ser lido como a liberação da OS |
+| Avanço físico | Progresso, percentual concluído | RF-PRJ-005 |
+| Contrato com cliente | Contrato de serviço, SLA | `contrato_cliente`; "contrato de prestação" é com fornecedor |
+| Disponibilidade contratual | Disponibilidade (sozinha), na medição e no painel do contrato | Diferente da disponibilidade técnica dos indicadores (RF-IND-003) |
+| Medição (do contrato, de etapas) | Faturamento, boletim | `medicao_contrato` e RF-PRJ-006; a Tenaz não fatura |
+| Fechar medição / Reabrir medição | Encerrar, finalizar, estornar | Estados `em_apuracao` e `fechada` |
+| Causa externa | Força maior, culpa de terceiro | `causa_externa`, com os seis rótulos de 7.3 |
+| Aprovar exclusão / Recusar exclusão | Abonar, desconsiderar | Decisão sobre a parada na medição (RF-CTR-003) |
+
+**Rótulos dos catálogos da regra** (6.20):
+
+| Valor | Rótulo na frase |
+|---|---|
+| `documento_vencido` | o documento vencer |
+| `documento_a_vencer` | o documento estiver a [N] dias de vencer |
+| `os_concluida_com_campo` | a OS for concluída com [campo] marcado |
+| `item_checklist_reprovado` | o item de checklist [item] for reprovado |
+| `leitura_fora_faixa` | a leitura de [medidor] ficar fora da faixa |
+| `capacitacao_vencida` (Fase 2) | a capacitação vencer |
+| `etapa_projeto_atrasada` (Fase 2) | a etapa de projeto atrasar |
+| `notificar` | notificar [destinatários] por [canal] |
+| `abrir_solicitacao` | abrir solicitação com prioridade [prioridade] |
+| `bloquear_ativo` | bloquear o ativo |
+| `bloquear_ativo_ate_documento` | bloquear o ativo até novo documento [tipo] |
+| `impedir_atribuicao` (Fase 2) | impedir a atribuição de OS |
+
+**Rótulos dos pacotes** (proposta do sumário 3.7): `fiscalizacao_eletronica` Fiscalização eletrônica · `transportadora` Transportadora · `industria` Indústria · `comercio` Comércio · `locadora` Locadora · `prestador_servicos` Prestador de serviços.
 
 ### 10.3 Mensagens de erro
 
@@ -2640,6 +3312,27 @@ Formato: **o que aconteceu** + **o que fazer**. Dados do contexto sempre que pos
 | Número de série | "Valor inválido." | "O número de série instalado é igual ao retirado (VT-88213). Confira a etiqueta da peça nova." |
 | OS já assumida | "Conflito." | "Esta OS já foi assumida por João Lima às 09:02." |
 | Peça em trânsito | "Saldo indisponível." | "O filtro PSL-118 está em trânsito. Confirme o recebimento antes de usar na OS." |
+| Colocar em operação com OS aberta | "Operação não permitida." | "RAD-0102 tem a OS-2026-004871 de implantação em aberto. Encerre ou cancele a OS antes de colocar o ativo em operação." |
+| Colocar em operação sem documento crítico | "Documento pendente." | "Falta a Verificação metrológica válida do RAD-0102. Registre o documento antes de colocar o ativo em operação." |
+| Colocar em operação sem campo da classe | "Cadastro incompleto." | "Preencha Número de série e Velocidade da via no cadastro do RAD-0102 antes de colocar em operação." |
+| Colocar em operação sem permissão | "Acesso negado." | "Seu perfil não pode colocar ativos em operação. Peça ao gestor ou ao planejador da unidade." |
+| Limite de regras ativas | "Limite excedido." | "A empresa já tem 50 regras ativas, o limite. Inative uma regra antes de ativar esta." |
+| Combinação de regra | "Configuração inválida." | "Bloquear até novo documento precisa do tipo de documento que libera o ativo. Escolha o documento." |
+| Regra sem permissão | "Acesso negado." | "Seu perfil pode ver as regras, mas não alterá-las. Fale com o administrador da empresa." |
+| Campo extra obrigatório (web e app) | "Campo obrigatório!" | "Preencha Lacres instalados para concluir a OS." No app, acrescenta: "A OS continua salva no aparelho." |
+| Tipo de campo com valores | "Não é possível alterar." | "O tipo deste campo não muda porque já há valores em 214 OS. Crie um campo novo e inative este." |
+| Chave de campo repetida | "Chave duplicada." | "Já existe o campo lacres_instalados. Use outro rótulo ou edite o campo existente." |
+| Limite de campos | "Limite excedido." | "Corretiva planejada em Radar fixo já tem 30 campos ativos, o limite. Inative um campo antes de criar outro." |
+| Iniciar projeto incompleto | "Dados insuficientes." | "Informe o responsável e pelo menos um ativo ou localização para iniciar o projeto." |
+| Concluir etapa com pendência | "Etapa incompleta." | "Faltam 2 itens para concluir Laços: encerrar a OS-2026-004871 e preencher Laços instalados." |
+| Dispensar etapa de entrega | "Ação não permitida." | "A etapa de entrega não pode ser dispensada. Conclua a etapa para entregar o projeto." |
+| Dispensar sem permissão | "Acesso negado." | "Seu perfil não pode dispensar etapas. Peça ao gestor do projeto." |
+| Cancelar projeto com OS em execução | "Operação não permitida." | "A OS-2026-004871 está em execução. Pause a OS antes de cancelar o projeto." |
+| Ativo em outro contrato | "Item duplicado." | "RAD-0031 já está no CT-2026-000002, vigente até 31/12/2026. Exclua o item daquele contrato antes de incluí-lo neste." |
+| Fechar medição com parada a decidir | "Pendências encontradas." | "Decida as 2 paradas por causa externa antes de fechar a medição de outubro." |
+| Causa não aceita no contrato | "Exclusão inválida." | "Falta de energia não é causa aceita no CT-2026-000004. A parada continua na medição." |
+| Reabrir medição sem permissão | "Acesso negado." | "Seu perfil não pode reabrir medições. Peça a quem tem a permissão de reabrir medição." |
+| Pacote não aplicado | "Erro ao aplicar." | "Não foi possível aplicar o pacote. Nada foi criado na conta. Tente de novo em alguns minutos." |
 
 ### 10.4 Confirmações e sucesso
 
@@ -2660,6 +3353,29 @@ Formato: **o que aconteceu** + **o que fazer**. Dados do contexto sempre que pos
 | Relatório enviado | "Relatório da OS-2026-000311 enviado a jose@norte.com.br." |
 | Componente registrado | "Motor do ventilador registrado: VT-88213 retirado, VT-90455 instalado." [Desfazer] |
 
+**Confirmações das ações da configuração por segmento.** Seguem 6.13: título com a pergunta e o objeto, texto com a consequência, botão que repete o verbo, "Voltar" para sair sem agir. Nenhuma delas é destrutiva no sentido de apagar dados, então o botão de confirmação é o primário (Sinal, texto Aço). As que não têm volta dizem isso no texto.
+
+| Ação | Confirmação | Toast de sucesso |
+|---|---|---|
+| **Colocar em operação** | Título: "Colocar RAD-0102 em operação?" · Texto: "O ativo passa a Operando agora, entra nos indicadores e os 4 planos começam a contar a partir de hoje. Não é possível voltar para Em implantação." · Botões: [Voltar] [Colocar em operação] | "RAD-0102 em operação desde 12/11/2026 14:32. 4 planos ativados." |
+| **Colocar em operação** (lote) | Título: "Colocar 12 ativos em operação?" · Texto: "3 dos 15 selecionados não podem: têm OS de implantação em aberto. Eles continuam Em implantação. Os outros 12 passam a Operando agora, sem volta." · Botões: [Voltar] [Colocar 12 em operação] | "12 ativos em operação. 3 continuam Em implantação: veja o motivo." [Ver] |
+| **Dispensar etapa** | Título: "Dispensar a etapa Fundação e poste?" · Texto: "A etapa conta como feita no avanço e libera Laços. Ela não entra no custo nem na medição do prestador. A dispensa não pode ser desfeita." · Campo: Motivo (obrigatório) · Botões: [Voltar] [Dispensar etapa] | "Etapa Fundação e poste dispensada. Laços foi liberada e a Sinaliza Sul foi avisada." |
+| **Fechar medição** | Título: "Fechar a medição de outubro de 2026?" · Texto: "Disponibilidade contratual 97,1 %, desconto de R$ 4.380,00. Depois de fechada, a medição não é editada; mudanças nas OS só aparecem se ela for reaberta." · Botões: [Voltar] [Fechar medição] | "Medição de outubro de 2026 fechada: 97,1 %, desconto de R$ 4.380,00." [Exportar PDF] |
+| **Reabrir medição** | Título: "Reabrir a medição de outubro de 2026?" · Texto: "A medição volta para Em apuração e pode ser alterada. O valor fechado e o motivo ficam no histórico. Se ela já foi enviada ao cliente ou ao ERP, avise quem recebeu." · Campo: Motivo (obrigatório) · Botões: [Voltar] [Reabrir medição] | "Medição de outubro de 2026 reaberta. O valor fechado continua no histórico." |
+| **Aplicar pacote** | Título: "Aplicar o pacote Fiscalização eletrônica?" · Texto: "Serão criados 23 itens. Nada do que já existe na conta será alterado. As 2 regras chegam inativas, para você revisar antes de ativar." · Botões: [Voltar] [Aplicar pacote] | "Pacote Fiscalização eletrônica aplicado: 23 itens criados, 2 não criados." [Ver o que foi criado] |
+
+Outras confirmações e toasts da versão 0.4:
+
+| Situação | Texto |
+|---|---|
+| Concluir projeto | Título: "Concluir o PJ-2026-000031?" · Texto: "O termo de entrega será gerado, RAD-0102 entra em operação agora, os planos começam a contar e o ativo passa a contar no CT-2026-000004. O projeto não poderá mais ser editado." · Botões: [Voltar] [Concluir projeto] |
+| Inativar regra com bloqueios | Título: "Inativar a regra Verificação vencida bloqueia o radar?" · Texto: "A regra para de disparar. Os 3 bloqueios que ela já criou continuam; você decide cada um na lista que abre a seguir." · Botões: [Voltar] [Inativar regra] |
+| Aprovar exclusão | Título: "Excluir 18 h de parada do RAD-0044 da medição?" · Texto: "Causa: Vandalismo, BO 4471/2026. A disponibilidade técnica do ativo não muda." · Campo: Motivo · Botões: [Voltar] [Aprovar exclusão] |
+| Regra ativada | "Regra Verificação vencida bloqueia o radar ativada. Os disparos aparecem na aba Disparos." (quando a primeira avaliação acontece está em 13.31) |
+| Regra salva inativa | "Regra salva como inativa. Ela não dispara até ser ativada." |
+| Etapa concluída | "Etapa Laços concluída. Montagem foi liberada e Carlos Lima foi avisado." |
+| Campo extra criado | "Campo Lacres instalados criado. Ele aparece nas novas OS corretivas de Radar fixo." |
+
 Evite: "Sucesso!", "Tudo certo por aqui", "Operação realizada com sucesso".
 
 ### 10.5 Estados vazios
@@ -2677,6 +3393,17 @@ Evite: "Sucesso!", "Tudo certo por aqui", "Operação realizada com sucesso".
 | Distribuição sem OS | "Nenhuma OS sem técnico. As novas OS, inclusive as que chegam de clientes conectados, aparecem aqui." |
 | Conexões | "Nenhuma conexão. Quando um cliente que usa a Tenaz convidar sua empresa, o convite aparece aqui." |
 | App, disponíveis para assumir | (a seção não aparece quando vazia) |
+| Regras, primeiro uso | "Nenhuma regra criada. Crie uma regra ou aplique um pacote de segmento com regras prontas." |
+| Disparos de uma regra | "Esta regra ainda não disparou." |
+| Simulação sem efeito | "Nenhum ativo seria afetado hoje." |
+| Campos extras, primeiro uso | "Nenhum campo extra. Crie campos para registrar na OS o que é próprio da sua operação, como números de lacre ou protocolos." |
+| Projetos, primeiro uso | "Nenhum projeto. Crie um projeto a partir de um modelo para acompanhar a implantação de ativos." |
+| Etapas atrasadas | "Nenhuma etapa atrasada." |
+| Contratos com clientes, primeiro uso | "Nenhum contrato com cliente. Cadastre o contrato para acompanhar a disponibilidade exigida e o desconto do mês." |
+| Itens abaixo da meta | "Todos os itens estão na meta neste mês." |
+| Paradas por causa externa | "Nenhuma parada por causa externa neste período." |
+| Mapa sem coordenadas | "Nenhuma localização com coordenadas. Informe as coordenadas dos pontos para vê-los no mapa." |
+| Ativos em implantação | "Nenhum ativo em implantação." |
 
 ### 10.6 Alertas e notificações
 
@@ -2701,6 +3428,14 @@ Evite: "Sucesso!", "Tudo certo por aqui", "Operação realizada com sucesso".
 | Convite de conexão (subcontratada) | "A Distribuidora Norte convidou sua empresa para conectar. Responda até 26/11/2026." |
 | OS não sincronizada (as duas contas) | "A OS-2026-000298 não foi sincronizada com a Distribuidora Norte há 35 min. Veja o motivo." |
 | Conexão encerrada (as duas contas) | "A conexão com a Refrigeração Polar foi encerrada por Carlos Lima. O histórico continua disponível." |
+| Ativo bloqueado por regra | "RAD-0031 bloqueado pela regra Verificação vencida bloqueia o radar. Registre a nova verificação para liberar." |
+| Bloqueio levantado por documento | "RAD-0031 liberado: nova Verificação metrológica registrada em 14/11/2026." |
+| Etapa atrasada | "A etapa Laços do PJ-2026-000031 passou do fim previsto (20/11). Fale com a Sinaliza Sul." |
+| Etapa liberada | "A etapa Montagem do PJ-2026-000031 pode começar." |
+| Prazo do contrato com cliente estourado | "OS-2026-004871 do RAD-0031 passou do prazo de solução de 24 h do CT-2026-000004." |
+| Item abaixo da meta | "RAD-0031 está em 93,2 % em novembro, abaixo da meta de 98 % do CT-2026-000004." |
+| Medição aberta | "A medição de outubro do CT-2026-000004 está aberta. 2 paradas por causa externa aguardam decisão." |
+| Versão nova de pacote | "Há uma versão nova do pacote Fiscalização eletrônica, com 3 itens novos. Veja antes de aplicar." |
 
 ---
 
@@ -2751,6 +3486,10 @@ Meta: WCAG 2.1 nível AA no web e no app, verificada em cada componente antes de
 - Seleção em tabela: fundo + barra lateral + checkbox marcado.
 - Itens obrigatórios e opcionais: texto, não cor.
 - Links no meio de texto: sublinhados.
+- Em implantação: ícone `construction`, borda tracejada e a palavra, nunca só o cinza (7.2).
+- Cronograma: a etapa e o estado estão na coluna de texto; a barra reforça, e o atraso tem ícone e "4 d" (6.21).
+- Régua de faixas: cada faixa tem o intervalo e o desconto escritos; as cores das faixas vizinhas são quase iguais de propósito (6.22).
+- Mapa: a lista lateral traz tudo o que o mapa mostra, com o chip de status (8.2, 6.23).
 
 ### 11.5 Outros critérios
 
@@ -2849,6 +3588,20 @@ Cor do ícone: `texto` ou `texto-secundario`; cor de status só em ícone de sta
 | Assistente (IA) | `sparkles` |
 | Administração | `settings` |
 | Integrações | `plug` |
+| Em implantação (fase do ativo) | `construction` |
+| OS de implantação (tipo) | `drill` |
+| Projeto, cronograma | `chart-gantt` |
+| Etapa pendente / liberada / dispensada | `hourglass` / `lock-open` / `circle-slash` |
+| Em andamento (projeto e etapa) | `circle-play` |
+| Contrato com cliente | `scroll-text` |
+| Medição do contrato | `calculator` |
+| Causa externa da parada | `badge-alert` |
+| Regra configurável | `workflow` |
+| Disparo de regra | `zap` |
+| Simular regra | `flask-conical` |
+| Campo extra da OS | `text-cursor-input` |
+| Pacote de segmento | `boxes` |
+| Visão Mapa | `map` |
 
 Os ícones de status seguem a seção 7. Os nomes acima correspondem à versão atual do Lucide; ao atualizar a biblioteca, confira renomeações no changelog.
 
@@ -2884,7 +3637,19 @@ Regras: ícone próprio passa pela mesma revisão de contraste e legibilidade a 
 
 Encontradas ao cruzar a marca (`marca/README.md`, `brandbook.html`) com o sumário executivo. As decisões provisórias deste documento estão indicadas; todas precisam de validação. A numeração da versão 0.1 foi mantida para não quebrar referências.
 
-**Resolvidas pelo sumário executivo 0.4** (aplicadas nesta versão)
+**Aplicadas do sumário executivo 0.5** (versão 0.4 deste documento)
+
+| Tema | Como ficou |
+|---|---|
+| Fase de ciclo de vida | Chip Em implantação neutro tracejado com `construction`, nunca rotulado Inativo; filtro Fase; ação Colocar em operação, sem volta (7.2, 8.3, 10.4) |
+| Tipo de OS `implantacao` | Rótulo Implantação, ícone `drill`, fora dos indicadores de manutenção (7.4) |
+| Origens da OS | `projeto` e `regra` acrescentadas; `cliente_conectado`, que já existia no sumário 0.4 e faltava na tabela da versão 0.3, também (7.3) |
+| Causa externa | Rótulos dos seis valores, texto de ajuda e decisão na medição (7.3, 7.5, 8.34, 9.10) |
+| Estados novos | Regra, projeto, etapa, contrato com cliente, medição (7.5) |
+| Telas e componentes | Regras (8.29, 6.20), campos extras (8.30, 9.10), pacotes (8.31), projeto (8.32, 6.21), contrato e medição (8.33, 8.34, 6.22), mapa de ativos (8.2, 6.23) |
+| Termo "Medição" | Reservado ao contrato com cliente e às etapas; medidor continua com "Leitura" (10.2) |
+
+**Resolvidas pelo sumário executivo 0.4** (aplicadas na versão 0.3)
 
 | Tema | Como ficou |
 |---|---|
@@ -2932,6 +3697,17 @@ Encontradas ao cruzar a marca (`marca/README.md`, `brandbook.html`) com o sumár
 | 13.21 | A leitura do número de série por OCR de texto impresso (9.8) não foi validada; etiquetas de peças variam muito. | 9.8 | Código de barras e QR no lançamento; OCR como proposta, a testar em campo com 5 técnicos. |
 | 13.22 | Login único com várias contas no app (9.9) depende do modelo de identidade do ADM, ainda aberto no documento 5 (seção 10.8). | 9.9 × 5_ARQUITETURA_SOFTWARE.md | Por enquanto, uma entrada por conta ("Entrar em outra conta"). |
 | 13.23 | A página pública de verificação do relatório (código e QR, 8.26) não está prevista no documento 3. | 8.26 × 3_ESPECIFICACAO_APIS.md | Mantida como proposta; sem ela, o código de verificação sai do PDF. |
+| 13.24 | Ações sem permissão nomeada nos requisitos: fechar medição (RF-CTR-004), aplicar pacote (RF-ADM-017), criar e editar campos extras da OS (RF-OS-021), criar e iniciar projeto e contrato com cliente. Só `adm.gerenciar_regras`, `atv.colocar_em_operacao`, `prj.dispensar_etapa`, `prj.ajustar_medicao` e `ctr.reabrir_medicao` existem. | Documento 1 × 8.30 a 8.34 | **Resolvido na revisão da etapa 012 (sumário 0.5, seção 3.6):** permissões `adm.gerenciar_configuracao` (campos extras e pacotes), `prj.gerenciar` (modelos e projetos), `ctr.gerenciar` (contratos e itens) e `ctr.fechar_medicao` (fechar e decidir exclusões), além das já existentes. A interface esconde a ação de quem não tem a permissão. |
+| 13.25 | A decisão sobre a parada por causa externa (aguardando, aprovada, recusada) não tem nome canônico de estado no sumário 3.3; RF-CTR-003 só fala em "aprovar ou recusar a exclusão". | Sumário 3.3 × 7.5 | **Resolvido na revisão da etapa 012 (sumário 0.5, seção 3.6):** o nome canônico é `decisao_exclusao`, com `pendente`, `aprovada` e `recusada`. Rótulos: "Aguardando decisão", "Excluída da medição" e "Mantida na medição". |
+| 13.26 | O estado `liberada` da etapa de projeto usa a mesma palavra da liberação (encerramento) da OS. Numa mesma tela de projeto aparecem "etapa liberada" e "OS aguardando liberação". | Sumário 3.3 × 10.2 | **Resolvido na revisão da etapa 012 (sumário 0.5, seção 3.6):** o estado passou a `disponivel` ("Disponível"), e a palavra "liberada" fica só para a OS. |
+| 13.27 | O brandbook chama o ícone de medidor de "Medição", e a versão 0.5 do sumário passa a usar "medição" para o contrato com cliente (`medicao_contrato`) e para as etapas. | Brandbook × 10.2 e 12.2 | Interface: "Leitura" para medidor, "Medição" só para contrato e etapas. Decisão de marca: renomear o ícone do brandbook para "Medidor". |
+| 13.28 | Campo extra obrigatório criado ou alterado enquanto o técnico está sem sinal: o app valida com as definições antigas e enfileira a conclusão, e não está definido se o servidor aceita, recusa ou aceita com pendência. | RF-OS-021 × documentos 4 e 5 | **Resolvido na revisão da etapa 012 (sumário 0.5, seção 3.6):** o servidor aceita a conclusão feita offline antes de o aparelho receber a definição nova, sem o campo, e a sinaliza para revisão (RF-OS-021, proposta). A interface mostra o aviso na OS, sem falha de envio. |
+| 13.29 | A visão Mapa (8.2) já constava como opção da lista de ativos sem descrição. Ela depende de um provedor de mapa base, que é de terceiro, não segue os tokens e recebe as coordenadas e a área consultada (LGPD, dados no Brasil). | 8.2 × 5_ARQUITETURA_SOFTWARE.md e 9_SEGURANCA_CONFIABILIDADE.md | Sem requisito novo. Estilo claro e dessaturado; marcador com halo duplo (6.23). Provedor, cache e o que é enviado a ele a decidir nos documentos 5 e 9. |
+| 13.30 | Pacotes de segmento são Fase 2 (RF-ADM-017), e o roteiro de primeiros passos é MVP (RF-ADM-001). Também não está definido se a aplicação de um pacote é tudo ou nada. | RF-ADM-001 × RF-ADM-017 | **Resolvido na revisão da etapa 012 (sumário 0.5, seção 3.6):** a aplicação é atômica, tudo ou nada (RF-ADM-017); a etapa Segmento entra no roteiro de primeiros passos a partir da Fase 2. |
+| 13.31 | O sumário 3.6 prevê a origem de OS `regra` ("OS aberta por uma regra configurável"), mas nenhum efeito do catálogo (sumário 3.7) abre OS: `abrir_solicitacao` abre solicitação. Também não está definido se, ao ser ativada, a regra já dispara para os fatos existentes mostrados na simulação ou só a partir da próxima avaliação. | Sumário 3.6 × 3.7 × RF-ADM-016 | **Resolvido na revisão da etapa 012 (sumário 0.5, seção 3.6):** a OS não tem origem `regra`; só a solicitação tem. O rótulo de origem de OS "Regra" sai de 7.3. Fica em aberto se a regra ativada dispara para fatos já existentes (lacuna do documento 4). |
+| 13.32 | As paradas por causa externa só são decididas na medição (RF-CTR-003), que abre no mês seguinte (proposta de RF-CTR-004). Durante o mês, o painel do contrato (RF-CTR-005) mostra as paradas aguardando, sem poder decidir, e o desconto projetado as trata como não excluídas. | RF-CTR-003 × RF-CTR-005 | Painel só de leitura, com "São decididas na medição do mês". Validar com usuários se a decisão antecipada no painel é necessária. |
+| 13.33 | Quatro componentes novos (6.20 a 6.23): frase de regra, cronograma, régua de faixas e marcador de mapa. Cada um tem a justificativa na própria seção. | Seção 6 | Entram na biblioteca de componentes com testes de contraste e de teclado antes das telas 8.29 a 8.34. O cronograma e o mapa precisam de escolha de biblioteca no documento 5. |
+| 13.34 | Ao medir os pares da versão 0.4, `borda-controle` `#8592A0` sobre Névoa deu 2,88:1, abaixo de 3:1 para componente. As telas atuais põem campos sobre `superficie`, mas nada impedia um campo sobre `fundo`. | 4.1 × 4.4 | Regra 4.3.8: contorno de componente sobre `fundo` ou `superficie-hover` usa `texto-secundario`. Conferir as telas existentes na revisão de acessibilidade. |
 
 **Outras pendências do documento**
 
@@ -2947,5 +3723,6 @@ Encontradas ao cruzar a marca (`marca/README.md`, `brandbook.html`) com o sumár
 | Versão | Data | Alteração |
 |---|---|---|
 | 0.1 | 12/11/2026 | Primeira versão: princípios, tokens, contraste, componentes, telas, app de campo, microcopy, acessibilidade, iconografia |
-| 0.3 | 12/11/2026 | Alinhada ao sumário executivo 0.4: permissão `os.encerrar`, ação Assumir, link `/l/#<token>`, regras de solicitação e de contrato de locação, rótulos de origem da OS, papéis Posto de combustível e Seguradora, peça em trânsito e `est.decidir_destino`, locatário só no web, RNF-039 e RNF-040; módulo SRV: menu, estados de conexão e de sincronização, painel da subcontratada, técnicos e especialidades, clientes e equipamentos de clientes, abertura de OS de serviço, quadro de distribuição, app do técnico com componentes, número de série, fotos e assinatura do cliente, relatório PDF, conexão com cliente, OS vinculada nas duas contas, troca de conta e push; pendências 13.18 a 13.23 |
 | 0.2 | 12/11/2026 | Alinhada ao sumário executivo 0.3: prioridade `urgente`, status do ativo com as regras do sumário, transições e reconhecimento da OS, executor e responsável pelo custo, numeração OS/SS/OR/CL, estados de ordem de reparo e contrato de locação; telas de fornecedor, estoque geral e por subcontratada, ordem de reparo, contrato de locação, vistoria, portal do prestador, link de uso único e portal do locatário; selo de versão e tela de login; inconsistências 13.1, 13.2, 13.9, 13.11, 13.12 e 13.14 resolvidas |
+| 0.3 | 12/11/2026 | Alinhada ao sumário executivo 0.4: permissão `os.encerrar`, ação Assumir, link `/l/#<token>`, regras de solicitação e de contrato de locação, rótulos de origem da OS, papéis Posto de combustível e Seguradora, peça em trânsito e `est.decidir_destino`, locatário só no web, RNF-039 e RNF-040; módulo SRV: menu, estados de conexão e de sincronização, painel da subcontratada, técnicos e especialidades, clientes e equipamentos de clientes, abertura de OS de serviço, quadro de distribuição, app do técnico com componentes, número de série, fotos e assinatura do cliente, relatório PDF, conexão com cliente, OS vinculada nas duas contas, troca de conta e push; pendências 13.18 a 13.23 |
+| 0.4 | 12/11/2026 | Alinhada ao sumário executivo 0.5 (configuração por segmento): chip Em implantação e Colocar em operação (RF-ATV-013), tipo de OS Implantação, origens `cliente_conectado`, `projeto` e `regra`, causa externa, estados de regra, projeto, etapa, contrato com cliente e medição; componentes 6.20 a 6.23; telas de regras (RF-ADM-016), campos extras da OS no web e no app com validação offline (RF-OS-021), pacote de segmento nos primeiros passos (RF-ADM-017), projeto de implantação (RF-PRJ-001 a RF-PRJ-007), painel e medição do contrato com cliente (RF-CTR-001 a RF-CTR-005); visão Mapa de ativos sem requisito novo; contrastes 4.4 e regra 4.3.8; termos, erros, confirmações, estados vazios e alertas novos; ícones; pendências 13.24 a 13.34; histórico reordenado por versão |

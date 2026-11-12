@@ -1,12 +1,18 @@
 # Arquitetura de Software — Tenaz
 
-**Versão:** 0.3 · **Data:** 12/11/2026 · **Status:** Em elaboração
+**Versão:** 0.5 · **Data:** 12/11/2026 · **Status:** Em elaboração
 **Produto:** Tenaz · Gestão de Manutenção e Frota
-Alinhado ao sumário executivo 0.4
+Alinhado ao sumário executivo 0.5
 
 Este documento descreve como a Tenaz é construída: stack, contêineres, estrutura do monólito modular, isolamento entre empresas e de acessos externos (prestador, locatário e link de uso único), conexão entre contas (cliente e subcontratada, módulo SRV), repositório, convenções, testes, app offline, telemática, IA, infraestrutura e observabilidade. As decisões estruturais estão registradas como ADRs na seção 15. O alinhamento com o sumário e as pendências abertas estão na seção 16.
 
 **Mudanças da versão 0.3 deste documento:** escopo externo `prestador` no lugar de `fornecedor`; permissão de liberação `os.encerrar`; rotas definitivas do link de uso único (sumário 3.6); módulo SRV (pacote `servicos`) nos diagramas, nas dependências, nos testes e no app; processo de sincronização entre contas (seção 6.8) e [ADR-009](#adr-009--conexão-entre-contas); teste automatizado com três contas (seção 9.3).
+
+**Mudanças da versão 0.4 deste documento:** as funções de contexto e de escopo passam a ser citadas com os nomes do documento dono do assunto, [2_ARQUITETURA_BANCO_DADOS.md](2_ARQUITETURA_BANCO_DADOS.md): esquema `app` em vez de `tenaz`, `app.escopo_atual()` em vez de `tenaz.escopo_tipo()`, e a variável de transação `app.escopo` em vez de `app.escopo_tipo`. A divergência foi encontrada na implementação da fundação técnica (etapa [011](etapas/011_2026-11-12_fundacao-tecnica.md)) e resolvida em favor do documento 2, conforme a ordem de fontes da verdade de [CLAUDE.md](../CLAUDE.md), seção 2. Nenhuma decisão de arquitetura mudou: só a grafia dos nomes citados.
+
+**Complemento na versão 0.5:** os três resíduos daquela troca apontados na seção 16 foram corrigidos — as seções 6.4 e 6.8 passaram a citar `app.empresas_ativas()`, `app.conexao_atual()` e `app.escopo = 'interno'`.
+
+**Mudanças da versão 0.5 deste documento:** configuração por segmento (sumário 0.5, seção 3.7; etapa 012). Novo [ADR-010](#adr-010--configuração-por-segmento-com-catálogos-fechados): núcleo canônico fixo e configuração por blocos de catálogo fechado, regras de condição e efeito avaliadas por evento interno e por rotina diária idempotente na fila River, com registro em `disparo_regra`, campos extras da OS em jsonb validados pela definição (também no app, antes de enfileirar o comando) e pacotes de segmento aplicados por cópia idempotente. Mecânica na nova seção 5.6. Pacotes Go `projetos` (PRJ), `contratos` (CTR) e `configuracao` no mapa de módulos e nas regras de dependência (seções 5.1 e 5.3); eventos citados pelos requisitos novos (seção 5.5); jobs novos na fila (seção 4.3); `campo_extra_os` na lista de tabelas com acesso externo (seção 6.6); repositório (seção 7); fluxos E2E 14 a 17 e verificações novas de isolamento (seções 9.2 e 9.3); cache de configuração, comandos e conflito de campo obrigatório no app offline (seções 10.2, 10.3 e 10.5); entitlements de PRJ e CTR (seção 13.4); alinhamento e pendências novas (seção 16). Fora a linha de versão, a de alinhamento e a frase de abertura da seção 16, nenhum texto das versões anteriores foi reescrito; só acréscimos.
 
 Os nomes de módulos (ADM, ATV, OS...) e de entidades (`empresa`, `ativo`, `ordem_servico`...) seguem o [Sumário Executivo](0_SUMARIO_EXECUTIVO.md). As metas de disponibilidade, recuperação e segurança estão em [9_SEGURANCA_CONFIABILIDADE.md](9_SEGURANCA_CONFIABILIDADE.md).
 
@@ -274,6 +280,18 @@ No início, a fila é uma tabela no próprio PostgreSQL, consumida com `FOR UPDA
 
 Gatilhos para migrar parte da carga para uma fila dedicada (SQS ou NATS JetStream) estão no [ADR-005](#adr-005--fila-de-jobs-no-postgresql). A telemetria de alta frequência nunca passa pela fila de jobs evento a evento: ela é agrupada em lotes pelo `ingestor`.
 
+**Jobs da configuração por segmento (versão 0.5).** Rodam no `tenaz worker`, na mesma fila River, sem componente novo ([ADR-010](#adr-010--configuração-por-segmento-com-catálogos-fechados), seção 5.6) **(proposta)**:
+
+| Job | Quando | Fase |
+|---|---|---|
+| Avaliação de regras por evento | Assinante do outbox (seção 5.5) para os eventos que correspondem às condições do catálogo | MVP |
+| Rotina diária de regras | Agendada uma vez por dia, um job por empresa ativa (padrão da seção 6.4), depois da rotina de alertas de vencimento | MVP |
+| Aplicação de pacote de segmento | Sob demanda, um job único por empresa, pacote e versão | Fase 2 |
+| Medição mensal do contrato com cliente | Abertura no primeiro dia do mês seguinte, um job por empresa com CTR | Fase 2 |
+| Prazos de contrato com cliente e de etapa de projeto | Assinantes de `ordem_servico.*` e rotina diária por empresa | Fase 2 |
+
+Os jobs de regras usam uma fila River própria, `regras` **(proposta)**, para que uma avaliação lenta não atrase webhooks, push e o sincronizador.
+
 ---
 
 ## 5. Monólito modular
@@ -301,6 +319,9 @@ Cada módulo do sumário vira um pacote Go em `backend/internal/modulos/`. Três
 | INT | `integracoes` | `int` é tipo predeclarado do Go |
 | IA | `ia` | |
 | MOB | `mob` | Contém a sincronização do app (o nome `sync` colidiria com a biblioteca padrão) |
+| PRJ | `projetos` | Nome por extenso, como no sumário (seção 3.4). Fase 2. Dono de `modelo_projeto`, `modelo_etapa_projeto`, `projeto` e `etapa_projeto`. Não executa trabalho: organiza OS `implantacao` pelos contratos internos de `ordemservico` |
+| CTR | `contratos` | Nome por extenso, como no sumário (seção 3.4). Fase 2. Dono de `contrato_cliente`, `item_contrato_cliente`, `faixa_desconto_contrato` e `medicao_contrato`. Os contratos de prestação e de locação continuam em `terceiros` e `locacao` |
+| (ADM) | `configuracao` | Sem código de módulo próprio: é o pacote das regras configuráveis e dos pacotes de segmento, que o sumário põe no escopo de ADM (seções 2 e 3.4). Separado de `adm` para não criar ciclo, porque depende de ATV, CON, SOL e OS, que dependem de ADM. Dono de `regra_automacao`, `disparo_regra`, `pacote_segmento` e `aplicacao_pacote`. **Não** é dono de `campo_extra_os`: a definição do campo extra é de OS (RF-OS-021), que valida os valores na própria transação (seção 5.6) |
 
 Código transversal fica em `backend/internal/plataforma/`: banco e transação, contexto de empresa e de escopo externo (seção 6.6), autenticação, autorização, entitlements, outbox e eventos, auditoria, armazenamento de arquivos, erros, observabilidade e configuração. A plataforma não importa nenhum módulo.
 
@@ -380,6 +401,25 @@ flowchart BT
     MOB --> SOL
     MOB --> EST
     MOB --> LOC
+    PRJ --> OS
+    PRJ --> ATV
+    PRJ --> TER
+    PRJ --> CON
+    PRJ --> CTR
+    PRJ --> SRV
+    CTR --> ATV
+    CTR --> OS
+    CTR --> SRV
+    INT --> PRJ
+    CFG["configuracao"] --> ADM
+    CFG --> ATV
+    CFG --> MED
+    CFG --> SOL
+    CFG --> CHK
+    CFG --> PRE
+    CFG --> CON
+    CFG --> OS
+    CFG --> PRJ
 ```
 
 Dependências dos módulos novos e o motivo de cada uma:
@@ -401,6 +441,30 @@ Dependências dos módulos novos e o motivo de cada uma:
 | SRV → TER | **Conexão do lado do cliente:** o convite parte de um `fornecedor` com papel `subcontratada` ou `assistencia_tecnica`; do lado da subcontratada, os itens `servico_os` referenciam o catálogo `servico_fornecedor` da própria conta | `terceiros.Servico.ValidarPapel`, `terceiros.Servico.ServicoDoCatalogo` |
 | SRV → OS | **OS vinculada:** cria a OS correspondente na outra conta (na subcontratada, a partir da OS atribuída ao fornecedor conectado; no cliente, `aberta` com `origem = prestador`) e aplica andamento, apontamentos, componentes, fotos, conclusão, liberação e recusa recebidos pela conexão, sempre pelos casos de uso comuns da OS | `ordemservico.Servico.CriarVinculada`, `ordemservico.Servico.AplicarExecucaoRemota`, `ordemservico.Servico.AplicarLiberacaoRemota` |
 
+Dependências novas da versão 0.5 (configuração por segmento, PRJ e CTR), todas **(proposta)**; os nomes das funções são exemplos:
+
+| De → para | Motivo | Exemplo de chamada |
+|---|---|---|
+| PRJ → OS | **OS de implantação da etapa:** cria OS `implantacao` com `origem = projeto` e a etapa de origem, pelos contratos internos da OS (a OS guarda a etapa como referência, sem importar `projetos`); consulta a situação das OS da etapa para concluí-la (RF-PRJ-003, RF-PRJ-004) | `ordemservico.Servico.CriarImplantacao`, `ordemservico.Servico.SituacaoDasOS` |
+| PRJ → ATV | Ativos do projeto, normalmente `em_implantacao`; a conclusão do projeto executa `colocar_em_operacao` (RF-PRJ-007, RF-ATV-013) | `atv.Servico.ColocarEmOperacao` |
+| PRJ → TER | Executor `fornecedor` da etapa e valor da etapa vindo do contrato de prestação (RF-PRJ-006) | `terceiros.Servico.ValidarExecutor`, `terceiros.Servico.ValorDoContrato` |
+| PRJ → CON | Documentos exigidos por etapa (tipo de documento e documento registrado no ativo depois do início da etapa) e assinatura do termo de entrega | `con.Servico.DocumentoRegistradoDesde`, `con.Servico.Assinar` |
+| PRJ → CTR | Projeto ligado a um contrato com cliente; na conclusão, inclui os ativos como itens cobertos a partir da entrada em operação, na mesma transação (RF-PRJ-007, RF-CTR-002) | `contratos.Servico.ValidarContrato`, `contratos.Servico.IncluirItens` |
+| PRJ → SRV | Cliente atendido do projeto (opcional), só leitura do cadastro (regra 9) | `servicos.Servico.ClienteAtendido` |
+| CTR → ATV | Itens cobertos: propriedade, fase de ciclo de vida, `data_entrada_operacao` e status do ativo (RF-CTR-002) | `atv.Servico.ValidarItemCoberto` |
+| CTR → OS | **Lê as paradas da OS:** registros de parada e `causa_externa` das OS dos itens, por período, para a medição e o painel (RF-CTR-003, RF-CTR-004). CTR não grava na OS: a aprovação da exclusão fica na medição | `ordemservico.Servico.ParadasDoAtivo(ativo, periodo)` |
+| CTR → SRV | Cliente atendido do contrato, só leitura do cadastro (regra 9) | `servicos.Servico.ClienteAtendido` |
+| INT → PRJ | Criação de projetos em lote por planilha (RF-PRJ-002, RF-INT-003) | `projetos.Servico.CriarEmLote` |
+| `configuracao` → ATV | Filtro das regras por classe, unidade e criticidade; o pacote cria classes de ativo com campos extras e medidores | `atv.Servico.AtivosDoFiltro`, `atv.Servico.GarantirClasse` |
+| `configuracao` → MED | Condição `leitura_fora_faixa` | `med.Servico.Leitura` |
+| `configuracao` → CON | Condições `documento_vencido`, `documento_a_vencer` e, na Fase 2, `capacitacao_vencida`; efeitos `bloquear_ativo`, `bloquear_ativo_ate_documento` e, na Fase 2, `impedir_atribuicao` (CON é dono de `bloqueio_ativo` e das capacitações); o pacote cria tipos de documento | `con.Servico.DocumentosVencidos`, `con.Servico.BloquearAtivo`, `con.Servico.GarantirTipoDocumento` |
+| `configuracao` → SOL | Efeito `abrir_solicitacao`, com origem `regra` | `sol.Servico.Abrir` |
+| `configuracao` → CHK | Condição `item_checklist_reprovado`; o pacote cria modelos de checklist | `chk.Servico.ItemReprovado`, `chk.Servico.GarantirModelo` |
+| `configuracao` → PRE | O pacote cria procedimentos e planos padrão | `pre.Servico.GarantirProcedimento`, `pre.Servico.GarantirPlanoPadrao` |
+| `configuracao` → OS | Condição `os_concluida_com_campo` (valor do campo extra `sim_nao`); o pacote cria `campo_extra_os` e códigos de falha sugeridos | `ordemservico.Servico.ValorCampoExtra`, `ordemservico.Servico.GarantirCampoExtra` |
+| `configuracao` → PRJ | Condição `etapa_projeto_atrasada` (Fase 2); o pacote cria modelos de projeto | `projetos.Servico.EtapasAtrasadas`, `projetos.Servico.GarantirModelo` |
+| `configuracao` → ADM | Destinatários do efeito `notificar` (usuários por perfil e unidade) | `adm.Servico.UsuariosComPerfil` |
+
 Reações que **não** são chamada direta, para não criar ciclo:
 
 - Avaria na vistoria de devolução: LOC publica `vistoria_locacao.registrada` com as avarias; OS escuta e cria a OS corretiva com `responsavel_custo = locatario`.
@@ -408,6 +472,10 @@ Reações que **não** são chamada direta, para não criar ciclo:
 - Retorno de ordem de reparo: EST publica `ordem_reparo.retornada`; quem precisar (IND, webhooks) escuta.
 - OS vinculada: SRV escuta `ordem_servico.*`, `apontamento.*` e `anexo.*` (atribuição a fornecedor conectado, início, pausa, conclusão, liberação, recusa, cancelamento) e, se a OS tiver `vinculo_os` com conexão `ativa`, enfileira a mensagem para o sincronizador (seção 6.8). OS não importa `servicos`: quem chama é sempre SRV → OS.
 - Conexão: SRV publica `conexao_empresa.ativada` e `conexao_empresa.encerrada`; TER escuta para mostrar o estado da conexão no cadastro do fornecedor; IND e webhooks escutam `vinculo_os.sincronizado` e `vinculo_os.erro`.
+- Entrada em operação (versão 0.5): ATV publica `ativo.colocado_em_operacao`; PRE escuta e ativa os planos a partir de `data_entrada_operacao`. ATV não importa `pre` (PRE → OS → ATV fecharia ciclo).
+- Andamento da etapa de projeto (Fase 2): PRJ escuta `ordem_servico.*` das OS com `origem = projeto` (início, encerramento, cancelamento) para passar a etapa a `em_andamento` e conferir a conclusão. OS não importa `projetos`.
+- Prazos do contrato com cliente (Fase 2): CTR escuta `ordem_servico.*` das OS dos itens cobertos e publica `contrato_cliente.sla_violado` quando o prazo de atendimento ou de solução estoura, como TER faz com o SLA de fornecedor. OS não importa `contratos`.
+- Regras configuráveis: `configuracao` escuta os eventos que correspondem às condições do catálogo (`ordem_servico.concluida`, `checklist_execucao.item_reprovado`, `leitura_medidor.registrada`, `documento_vencimento.vencendo`) e aplica o efeito pela API pública do módulo dono do dado (seção 5.6). Nenhum módulo importa `configuracao`.
 
 Regras:
 
@@ -419,6 +487,9 @@ Regras:
 6. Escutar um evento não cria dependência de importação: os tipos de payload ficam em `plataforma/eventos/contratos` e o `eventos.go` de cada módulo só os reexporta. Assim TER pode escutar `ordem_servico.*` sem importar `ordemservico`, embora OS chame TER. **(proposta)**
 7. Nenhum módulo de domínio chama SRV. SRV fica acima de OS, ATV, TER e ADM e reage a eles por eventos. Assim, uma empresa sem o módulo SRV e sem conexões não executa nenhum código de `servicos` no caminho das suas requisições.
 8. Só o pacote `servicos` (código de aplicação de mensagens) roda dentro do sincronizador com o papel `tenaz_sinc`, e só chama as funções de OS e ATV marcadas como "remotas" (`AplicarExecucaoRemota`, `AplicarCadastroRemoto`...), que aceitam apenas os campos da lista fechada (seção 6.8). O `depguard` impede que outros pacotes importem o cliente de banco do sincronizador.
+9. **Exceção estreita à regra 7 (versão 0.5).** O sumário (seção 3.1) faz `cliente_servico` existir nas contas com SRV e nas contas com CTR. Enquanto o dono da tabela continuar sendo SRV (pendência na seção 16), CTR e PRJ podem chamar de `servicos` **só** a leitura e o cadastro de `cliente_servico` (`servicos.Servico.ClienteAtendido`), que não toca conexão, vínculo nem sincronizador. O `depguard` restringe essa importação a esse arquivo de API. **(proposta)**
+10. **`configuracao` é pacote de borda**, como INT, IA e MOB (regra 4): depende de ATV, MED, SOL, CHK, PRE, CON, OS, PRJ e ADM, e ninguém depende dele. Reage por eventos e grava sempre pela API pública do módulo dono do dado; nunca grava em tabela de outro módulo (regra 2). **(proposta)**
+11. **Verificação sem importação.** Quando um módulo de baixo precisa confirmar uma condição de um módulo de cima antes de uma ação síncrona, ele declara uma interface no seu pacote raiz e o módulo de cima a implementa; a ligação é feita em `cmd/tenaz`, na inicialização. Primeiro caso: `colocar_em_operacao` (RF-ATV-013) exige que não haja OS `implantacao` não encerrada e que os documentos críticos da classe estejam válidos. ATV declara `atv.VerificadorEntradaOperacao`; OS e CON o implementam. As importações continuam OS → ATV e CON → ATV, a chamada roda na mesma transação e o grafo continua sem ciclo. **(proposta, validar em código)**
 
 ### 5.4 Como um módulo chama outro
 
@@ -470,6 +541,93 @@ Exemplos de uso: `checklist_execucao.item_reprovado` → SOL cria solicitação;
 
 Os eventos de uma conta nunca são entregues a assinantes de outra conta. O que atravessa contas não é o evento, e sim uma **mensagem de conexão** montada pelo sincronizador só com os campos permitidos (seção 6.8).
 
+**Eventos citados pelos requisitos da versão 0.5** (nomes de [1_ESPECIFICACAO_REQUISITOS.md](1_ESPECIFICACAO_REQUISITOS.md); a lista pública de webhooks é de `3_ESPECIFICACAO_APIS.md`): `ativo.colocado_em_operacao` (RF-ATV-013); na Fase 2, `projeto.iniciado`, `projeto.concluido`, `projeto.cancelado` (RF-PRJ-002), `contrato_cliente.ativado`, `contrato_cliente.encerrado`, `contrato_cliente.sla_violado` (RF-CTR-001) e `medicao_contrato.fechada` (RF-CTR-004). O disparo de uma regra não é evento novo: fica em `disparo_regra`, e o efeito publica os eventos do módulo dono (por exemplo, a mudança de status do ativo bloqueado). Eventos gerados por efeito de regra levam `origem = regra` (seção 5.6).
+
+### 5.6 Configuração por segmento
+
+Sumário, seção 3.7; requisitos RF-ADM-016, RF-ADM-017, RF-ATV-013 e RF-OS-021 em [1_ESPECIFICACAO_REQUISITOS.md](1_ESPECIFICACAO_REQUISITOS.md). Decisão e alternativas no [ADR-010](#adr-010--configuração-por-segmento-com-catálogos-fechados). A empresa configura **blocos que o código já conhece**; não cria estados, telas, fluxos nem colunas.
+
+**Núcleo canônico (não configurável).**
+
+| Item | Onde vive | Por que é fixo |
+|---|---|---|
+| Estados (OS, solicitação, projeto, etapa, contratos, medição, conexão) | Domínio Go e `pacotes/dominio`, com casos JSON compartilhados (seção 7) | O app offline resolve conflitos por estado (seção 10.5) e a conexão entre contas define dono por estado (seção 6.8) |
+| Fórmulas dos indicadores | IND, sobre as visões `vw_` (regra 3 da seção 5.3) | Indicadores comparáveis entre empresas e entre segmentos. A exclusão da OS `implantacao` e do ativo `em_implantacao` é regra fixa da visão, não configuração. A disponibilidade contratual de CTR é cálculo próprio de `contratos` e não altera a disponibilidade técnica de IND |
+| Regras do app offline | Seções 10.3 a 10.5 | Uma regra configurável não roda no aparelho |
+| Isolamento | Seção 6 | Nenhum bloco cria tabela, política ou escopo |
+| Campos da conexão entre contas | `campos_conexao.yaml` (seção 6.8) | Campos extras nunca entram na lista no lançamento (sumário 3.6) |
+
+**Blocos configuráveis e dono de cada um.**
+
+| Bloco | Pacote dono | Onde fica | Fase |
+|---|---|---|---|
+| Classes de ativo | `atv` | Tabelas da empresa (já existiam) | MVP |
+| Campos extras da OS | `ordemservico` | Definição em `campo_extra_os`; valores em `ordem_servico.campos_extras` (jsonb) | MVP |
+| Tipos de documento | `con` | `tipo_documento` (já existia) | MVP |
+| Regras de condição e efeito | `configuracao` | `regra_automacao` e `disparo_regra` | MVP |
+| Fase de ciclo de vida | `atv` | `ativo.fase_ciclo_vida` e `data_entrada_operacao` | MVP |
+| Modelos de projeto | `projetos` | `modelo_projeto` e `modelo_etapa_projeto` | Fase 2 |
+| Contratos com clientes | `contratos` | `contrato_cliente`, `item_contrato_cliente` e `faixa_desconto_contrato` | Fase 2 |
+| Pacotes de segmento | `configuracao` | `pacote_segmento` (catálogo global) e `aplicacao_pacote` (por empresa) | Fase 2 |
+
+Toda tabela de configuração da empresa tem `empresa_id`, RLS forçado e a política `escopo_externo` padrão (só `interno`); a única que entra na lista de acesso externo é `campo_extra_os` (seção 6.6). `pacote_segmento` é a única tabela global nova.
+
+**Catálogos fechados no código** **(proposta)**.
+
+- Cada condição e cada efeito é um tipo Go do pacote `configuracao` que implementa a interface `Condicao` (código, validação dos parâmetros, busca de candidatos) ou `Efeito` (código, validação dos parâmetros, aplicação). O registro é uma lista fixa, compilada no binário: não há plugin, carga dinâmica, expressão nem script.
+- No banco, `regra_automacao.condicao` e `regra_automacao.efeito` só aceitam os códigos do catálogo (restrição `CHECK` ou tipo enumerado, a decidir no documento 2). Código novo exige migração, requisito em [1_ESPECIFICACAO_REQUISITOS.md](1_ESPECIFICACAO_REQUISITOS.md) e teste no mesmo PR (risco R7).
+- Os parâmetros da condição e do efeito ficam em jsonb e são decodificados no struct do tipo, com rejeição de campo desconhecido.
+- A matriz de combinações permitidas (RF-ADM-016) é uma tabela no código. O CI falha se uma combinação permitida não tiver caso de teste.
+- Os códigos da Fase 2 (`capacitacao_vencida`, `etapa_projeto_atrasada`, `impedir_atribuicao`) só entram no catálogo quando o requisito for implementado.
+
+**Avaliação das regras.**
+
+```mermaid
+sequenceDiagram
+    participant UC as Caso de uso (OS, CHK, MED, CON)
+    participant PG as PostgreSQL
+    participant AG as Agendador River
+    participant W as Worker (fila regras)
+    participant MD as Módulo dono do efeito
+
+    UC->>PG: T1 grava o fato + evento_dominio + job (outbox)
+    W->>PG: T2 em NaEmpresa, regras ativas com a condição do evento e filtro que casa
+    W->>PG: INSERT disparo_regra (regra, chave do fato) ON CONFLICT DO NOTHING
+    W->>MD: só se o disparo foi inserido, aplica o efeito pela API pública (mesma T2)
+    MD->>PG: bloqueio_ativo, solicitacao ou notificação, com origem regra
+    AG->>W: rotina diária, um job por empresa ativa
+    W->>PG: T3 em NaEmpresa, candidatos de cada regra ativa sem disparo_regra
+    W->>MD: aplica o efeito dos candidatos novos (mesma T3)
+```
+
+- **Por evento.** Para as condições ligadas a um fato (`os_concluida_com_campo`, `item_checklist_reprovado`, `leitura_fora_faixa`), o assinante de `configuracao` avalia a regra no job do outbox, logo depois do fato. O registro em `disparo_regra` e o efeito vão na **mesma transação**: ou os dois existem, ou nenhum.
+- **Rotina diária idempotente.** Segue o padrão da seção 6.4 (um job por empresa ativa, cada um em `NaEmpresa`, sem `BYPASSRLS`). Avalia as condições de tempo (`documento_vencido`, `documento_a_vencer` e, na Fase 2, `capacitacao_vencida` e `etapa_projeto_atrasada`) e repassa as condições de fato, para recuperar uma avaliação perdida ou que falhou. Roda depois da rotina de alertas de vencimento e termina no mesmo prazo (RNF-009).
+- **Idempotência pela chave do fato.** `disparo_regra` tem chave única `(empresa_id, regra_automacao_id, chave_fato)`. A chave identifica o fato, não o dia: documento (`documento_vencimento_id` e validade), OS (`ordem_servico_id`), item de checklist (`checklist_execucao_id` e item), leitura (`leitura_medidor_id`), capacitação (`capacitacao_id` e validade), etapa (`etapa_projeto_id` e data prevista). Um documento renovado que vence de novo dispara de novo; o mesmo vencimento, nunca. **(proposta; colunas finais no documento 2)**
+- **Efeito pelo dono do dado.** `bloquear_ativo` e `bloquear_ativo_ate_documento` chamam CON, dono de `bloqueio_ativo` (`origem = regra`); `abrir_solicitacao` chama SOL (origem `regra`); `notificar` usa o mesmo caminho de envio dos alertas de vencimento. Em `bloquear_ativo_ate_documento`, o bloqueio guarda o tipo de documento exigido e a data do fato; quem levanta o bloqueio é o próprio CON, no caso de uso que registra o documento, sem nova avaliação de regra.
+- **Sem cascata.** Os eventos gerados por um efeito levam `origem = regra`, e o assinante de `configuracao` os ignora. Uma regra nunca dispara outra. O teste da matriz de combinações confere isso para cada condição nova.
+- **Simular sem gravar.** A simulação (RF-ADM-016) usa a mesma busca de candidatos, numa transação somente leitura na réplica (seção 4.2), sem `disparo_regra` e sem efeito.
+- **Inativar.** Inativar a regra não levanta bloqueios; a lista dos bloqueios ainda ativos vem de `disparo_regra` ligado a `bloqueio_ativo` com `origem = regra`.
+- **Auditoria.** Todo efeito grava `evento_auditoria` com `origem = regra` e o ID da regra **(proposta)**. Os jobs rodam no escopo `interno`.
+- **Conexão entre contas.** A regra é avaliada só na conta onde o evento aconteceu, e o efeito grava só nessa conta. Um evento aplicado pelo sincronizador (`origem = conexao`) é avaliado normalmente na conta de destino, mas os campos extras não trafegam: no lançamento, `os_concluida_com_campo` não dispara na conta do cliente para a OS executada por uma subcontratada conectada (pendência na seção 16).
+
+**Campos extras da OS.**
+
+- A definição (`campo_extra_os`) é de OS; os valores ficam em `ordem_servico.campos_extras`, um objeto jsonb indexado pela chave da definição. Nenhuma empresa ganha coluna própria.
+- A validação é **uma função** do domínio da OS em Go e a mesma função em `pacotes/dominio` (TypeScript), com os mesmos casos JSON em `backend/testes/casos/` (seção 7): chave conhecida na empresa, tipo, opções da lista, obrigatoriedade na abertura ou na conclusão para o tipo de OS e a classe do ativo. Chave desconhecida é recusada; valor de definição inativada é preservado.
+- O servidor é a autoridade. A web e o app validam antes de enviar; o app valida **antes de enfileirar o comando** (seção 10.3).
+- Filtro e exportação por campo extra usam operadores jsonb com índice GIN **(proposta; documento 2)**. O limite de 30 campos ativos por combinação (RF-OS-021) limita o tamanho do payload e do pull.
+- Nenhuma fórmula de indicador lê `campos_extras`.
+- Escopo externo: o prestador lê as definições que se aplicam às OS do seu fornecedor; o link de uso único, só as marcadas como do prestador **(proposta)**. A projeção para escopo externo leva só os valores desses campos.
+- Conexão entre contas: `campos_extras` não está em `campos_conexao.yaml` e o teste com três contas confere (seção 9.3).
+
+**Pacotes de segmento** (Fase 2) **(proposta)**.
+
+- **Fonte versionada.** Cada pacote é um arquivo no repositório (`backend/internal/modulos/configuracao/pacotes/<codigo>.yaml`), revisado em PR e validado no CI: condições e efeitos do catálogo, combinações permitidas, regras nascendo `inativa`, chaves naturais únicas, tipos de campo válidos.
+- **Catálogo global.** `tenaz migrate` publica cada versão em `pacote_segmento`, tabela sem `empresa_id`, na lista de tabelas globais do teste da seção 9.3, com só `SELECT` para `tenaz_app`; escrita só pelo papel `tenaz_dono`, nas migrações. Nenhuma conta grava no catálogo.
+- **Cópia idempotente que só cria o que falta.** Um job `aplicar_pacote`, único por empresa, pacote e versão, roda numa transação em `NaEmpresa`. Percorre os itens na ordem de dependência (classes, campos extras, tipos de documento, procedimentos, planos, checklists, modelos de projeto, regras) e, para cada um, chama a função `Garantir...` do módulo dono, que cria o item só se a chave natural não existir na conta (chave única por empresa e `ON CONFLICT DO NOTHING`) e devolve "criado" ou "ignorado". Nunca altera nem apaga. Item de módulo fora do plano é "ignorado". O resultado vai para `aplicacao_pacote`.
+- **Prévia** ("ver antes de aplicar"): o mesmo percurso numa transação somente leitura.
+- **Cópia, não referência.** Depois de aplicado, nada na conta aponta para o pacote em tempo de execução: o que foi criado é configuração comum da empresa. Uma versão nova do pacote não muda nenhuma conta até ser aplicada, e mesmo assim só cria o que falta.
+
 ---
 
 ## 6. Isolamento entre empresas no código
@@ -494,7 +652,7 @@ O modelo é pool (tabelas compartilhadas) com RLS. A decisão e as alternativas 
 ### 6.2 Política e função de contexto
 
 ```sql
-CREATE FUNCTION tenaz.empresa_atual() RETURNS uuid
+CREATE FUNCTION app.empresa_atual() RETURNS uuid
   LANGUAGE sql STABLE
   AS $$ SELECT NULLIF(current_setting('app.empresa_id', true), '')::uuid $$;
 
@@ -502,14 +660,14 @@ ALTER TABLE ordem_servico ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ordem_servico FORCE ROW LEVEL SECURITY;
 
 CREATE POLICY isolamento_empresa ON ordem_servico
-  USING      (empresa_id = (SELECT tenaz.empresa_atual()))
-  WITH CHECK (empresa_id = (SELECT tenaz.empresa_atual()));
+  USING      (empresa_id = (SELECT app.empresa_atual()))
+  WITH CHECK (empresa_id = (SELECT app.empresa_atual()));
 ```
 
 Detalhes que importam:
 
 - `NULLIF(..., '')`: depois que uma transação termina, a configuração volta a texto vazio, não a nulo. Sem o `NULLIF`, o cast falharia com erro em vez de devolver zero linhas.
-- `(SELECT tenaz.empresa_atual())`: o subselect faz o Postgres avaliar a função uma vez por consulta, e não uma vez por linha.
+- `(SELECT app.empresa_atual())`: o subselect faz o Postgres avaliar a função uma vez por consulta, e não uma vez por linha.
 
 ### 6.3 Transação com contexto de empresa no Go
 
@@ -526,13 +684,13 @@ func (db *DB) NaEmpresa(ctx context.Context, empresaID uuid.UUID, fn func(ctx co
 }
 ```
 
-O middleware HTTP extrai a empresa **e o escopo** (seção 6.6) da sessão autenticada e chama `NaEmpresa`. Nenhum handler recebe `empresa_id`, `fornecedor_id` ou `locatario_id` do corpo ou da URL para decidir o escopo. Na versão com escopo, `NaEmpresa` recebe também um `Escopo{Tipo, ID}` e define `app.escopo_tipo` e `app.escopo_id` na mesma transação, com o mesmo `set_config(..., true)`.
+O middleware HTTP extrai a empresa **e o escopo** (seção 6.6) da sessão autenticada e chama `NaEmpresa`. Nenhum handler recebe `empresa_id`, `fornecedor_id` ou `locatario_id` do corpo ou da URL para decidir o escopo. Na versão com escopo, `NaEmpresa` recebe também um `Escopo{Tipo, ID}` e define `app.escopo` e `app.escopo_id` na mesma transação, com o mesmo `set_config(..., true)`.
 
 ### 6.4 Rotinas que atravessam empresas
 
 Algumas rotinas precisam percorrer todas as empresas (exemplo: verificar planos preventivos vencidos). Elas **não** usam um papel com `BYPASSRLS`. O padrão é:
 
-1. Um job agendador chama a função `tenaz.empresas_ativas()`, `SECURITY DEFINER`, que devolve **apenas os IDs** das empresas ativas.
+1. Um job agendador chama a função `app.empresas_ativas()`, `SECURITY DEFINER`, que devolve **apenas os IDs** das empresas ativas.
 2. Para cada empresa, enfileira um job com `empresa_id`.
 3. Cada job roda dentro de `NaEmpresa`, com RLS ativo.
 
@@ -550,7 +708,7 @@ Risco R4 do sumário. O RLS por empresa impede que uma empresa veja outra, mas n
 
 **Escopos.**
 
-| `app.escopo_tipo` | Quem | `app.escopo_id` | De onde vem |
+| `app.escopo` | Quem | `app.escopo_id` | De onde vem |
 |---|---|---|---|
 | `interno` | Usuários com perfis da empresa, jobs, chaves de API | vazio | Sessão, job ou chave |
 | `prestador` | Usuário com perfil `prestador` | `usuario.fornecedor_id` | Cadastro do usuário no banco |
@@ -562,49 +720,49 @@ Regras:
 1. O escopo é resolvido no servidor a partir do banco, a cada requisição, como as permissões. Nunca vem do token, do corpo ou da URL.
 2. Perfis `prestador` e `locatario` são exclusivos: o usuário não acumula perfil interno. A regra anti-escalada impede que um administrador conceda permissão interna a usuário externo.
 3. A mesma empresa externa que atende duas contratantes tem um cadastro de `fornecedor` (ou de `locatario`) e um usuário em cada empresa contratante, com um token por empresa, como qualquer usuário com acesso a duas empresas. Nada liga os dois cadastros no banco.
-4. Sem `app.escopo_tipo` definido, as políticas restritivas devolvem zero linhas. Falha fechada, igual à empresa.
+4. Sem `app.escopo` definido, as políticas restritivas devolvem zero linhas. Falha fechada, igual à empresa.
 5. O escopo `prestador` é para a subcontratada **sem** conta própria. A subcontratada com conta Tenaz Serviços (SRV) não usa escopo externo: seus técnicos e gestores são usuários `interno` da conta dela, e o que vem do cliente chega como cópia pela conexão (seção 6.8). Os dois caminhos convivem: um cliente pode ter uma subcontratada conectada e outra que usa o perfil `prestador`.
 6. Os valores de escopo são só estes quatro (sumário 3.6). O sincronizador não é um escopo: é um papel de banco distinto (`tenaz_sinc`), com política própria (seção 6.8).
 
 **No banco.** Toda tabela com `empresa_id` recebe, além da política permissiva `isolamento_empresa`, uma política **restritiva** `escopo_externo`. Como o PostgreSQL combina políticas restritivas com `AND`, a linha precisa passar nas duas. O padrão é "só escopo interno"; apenas as tabelas da lista abaixo têm predicado para escopos externos.
 
 ```sql
-CREATE FUNCTION tenaz.escopo_tipo() RETURNS text
+CREATE FUNCTION app.escopo_atual() RETURNS text
   LANGUAGE sql STABLE
-  AS $$ SELECT NULLIF(current_setting('app.escopo_tipo', true), '') $$;
+  AS $$ SELECT NULLIF(current_setting('app.escopo', true), '') $$;
 
-CREATE FUNCTION tenaz.escopo_id() RETURNS uuid
+CREATE FUNCTION app.escopo_id() RETURNS uuid
   LANGUAGE sql STABLE
   AS $$ SELECT NULLIF(current_setting('app.escopo_id', true), '')::uuid $$;
 
 -- Padrão para tabelas sem acesso externo (ex.: pedido_compra)
 CREATE POLICY escopo_externo ON pedido_compra AS RESTRICTIVE
-  USING      ((SELECT tenaz.escopo_tipo()) = 'interno')
-  WITH CHECK ((SELECT tenaz.escopo_tipo()) = 'interno');
+  USING      ((SELECT app.escopo_atual()) = 'interno')
+  WITH CHECK ((SELECT app.escopo_atual()) = 'interno');
 
 -- OS: cada escopo vê só o que lhe foi atribuído
 CREATE POLICY escopo_externo ON ordem_servico AS RESTRICTIVE
   USING (
-    CASE (SELECT tenaz.escopo_tipo())
+    CASE (SELECT app.escopo_atual())
       WHEN 'interno'    THEN true
       WHEN 'prestador'  THEN executor_tipo = 'fornecedor'
-                         AND fornecedor_id = (SELECT tenaz.escopo_id())
-      WHEN 'link'       THEN id = (SELECT tenaz.escopo_id())
-      WHEN 'locatario'  THEN tenaz.ativo_locado_ao_escopo(ativo_id, data_abertura)
+                         AND fornecedor_id = (SELECT app.escopo_id())
+      WHEN 'link'       THEN id = (SELECT app.escopo_id())
+      WHEN 'locatario'  THEN app.ativo_locado_ao_escopo(ativo_id, data_abertura)
       ELSE false
     END)
   WITH CHECK (
-    CASE (SELECT tenaz.escopo_tipo())
+    CASE (SELECT app.escopo_atual())
       WHEN 'interno'    THEN true
       WHEN 'prestador'  THEN executor_tipo = 'fornecedor'
-                         AND fornecedor_id = (SELECT tenaz.escopo_id())
-      WHEN 'link'       THEN id = (SELECT tenaz.escopo_id())
+                         AND fornecedor_id = (SELECT app.escopo_id())
+      WHEN 'link'       THEN id = (SELECT app.escopo_id())
       ELSE false        -- locatário não grava OS; abre solicitação
     END);
 ```
 
 - O `WITH CHECK` impede que o prestador reatribua a OS a outro fornecedor ou a converta em execução interna.
-- `tenaz.ativo_locado_ao_escopo(ativo_id, data)` é uma função SQL `STABLE` (não `SECURITY DEFINER`, portanto sujeita ao RLS) que verifica em `item_contrato_locacao` e `contrato_locacao` se o ativo estava cedido ao locatário do escopo naquela data, entre a entrega e a devolução. Índice `(empresa_id, ativo_id)` em `item_contrato_locacao`. Se o custo da consulta pesar, a alternativa é gravar o locatário na OS no momento da criação (campo a propor no documento 2). **(proposta)**
+- `app.ativo_locado_ao_escopo(ativo_id, data)` é uma função SQL `STABLE` (não `SECURITY DEFINER`, portanto sujeita ao RLS) que verifica em `item_contrato_locacao` e `contrato_locacao` se o ativo estava cedido ao locatário do escopo naquela data, entre a entrega e a devolução. Índice `(empresa_id, ativo_id)` em `item_contrato_locacao`. Se o custo da consulta pesar, a alternativa é gravar o locatário na OS no momento da criação (campo a propor no documento 2). **(proposta)**
 
 **Tabelas com acesso externo** (lista fechada, revisada em code review e conferida pelo teste da seção 9.3; qualquer outra tabela devolve zero linhas a escopo externo):
 
@@ -617,6 +775,7 @@ CREATE POLICY escopo_externo ON ordem_servico AS RESTRICTIVE
 | `fornecedor`, `servico_fornecedor`, `contrato_prestacao` | O próprio cadastro, catálogo e contratos; só leitura | Nenhuma | Nenhuma |
 | `locatario`, `contrato_locacao`, `item_contrato_locacao`, `vistoria_locacao` | Nenhuma | Os próprios; só leitura; assina a vistoria | Nenhuma |
 | `usuario`, `pessoa` | Usuários e técnicos do próprio fornecedor | O próprio usuário | Nenhuma |
+| `campo_extra_os` (versão 0.5, **proposta**) | Definições ativas que se aplicam às OS do seu fornecedor; só leitura. Os valores estão em `ordem_servico.campos_extras`, já coberta pela linha da OS | Nenhuma | Só as definições marcadas como do prestador, da OS do link; só leitura |
 
 **Fora do banco.**
 
@@ -694,12 +853,12 @@ Risco R5 do sumário: a sincronização entre contas conectadas copia dado além
 | Atributos | `NOLOGIN` herdado por um usuário de conexão próprio; sem `BYPASSRLS`, sem superusuário, não é dono de tabela |
 | Tabelas | `GRANT` só nas tabelas da lista fechada: `ordem_servico`, `tarefa_os`, `apontamento`, itens de material da OS, `servico_os`, `anexo` da OS, assinaturas, `ativo`, `medidor`, `leitura_medidor`, `vinculo_os`, `envio_conexao`, `recebimento_conexao`, `evento_auditoria` (só `INSERT`), `evento_dominio` (só `INSERT`), tabelas da fila River e `SELECT` em `plataforma.conexao_empresa`. Qualquer outra tabela responde "permissão negada", não zero linhas |
 | Colunas | `GRANT SELECT (...)`, `INSERT (...)` e `UPDATE (...)` **por coluna**, exatamente as da lista de campos abaixo. Uma consulta que peça coluna fora da lista falha no banco, mesmo que o código Go esteja errado. Validar na prova de conceito a interação entre privilégio por coluna e predicados de RLS |
-| Contexto | Cada transação define `app.empresa_id` (uma só empresa), `app.escopo_tipo = 'interno'` e `app.conexao_empresa_id` |
+| Contexto | Cada transação define `app.empresa_id` (uma só empresa), `app.escopo = 'interno'` e `app.conexao_empresa_id` |
 | Política restritiva | Toda tabela da lista tem a política `conexao_sinc AS RESTRICTIVE TO tenaz_sinc`: a linha precisa estar ligada a um `vinculo_os` (ou a um ativo compartilhado) da conexão em processamento |
 | Credencial | Segredo próprio, lido só pela tarefa do `tenaz sincronizador` (seção 4.1); rotação automática |
 
 ```sql
-CREATE FUNCTION tenaz.conexao_atual() RETURNS uuid
+CREATE FUNCTION app.conexao_atual() RETURNS uuid
   LANGUAGE sql STABLE
   AS $$ SELECT NULLIF(current_setting('app.conexao_empresa_id', true), '')::uuid $$;
 
@@ -708,12 +867,12 @@ CREATE POLICY conexao_sinc ON ordem_servico AS RESTRICTIVE TO tenaz_sinc
   USING (EXISTS (
     SELECT 1 FROM vinculo_os v
      WHERE v.empresa_id = ordem_servico.empresa_id
-       AND v.conexao_empresa_id = (SELECT tenaz.conexao_atual())
+       AND v.conexao_empresa_id = (SELECT app.conexao_atual())
        AND ordem_servico.id IN (v.os_cliente_id, v.os_prestador_id)))
   WITH CHECK (EXISTS (
     SELECT 1 FROM vinculo_os v
      WHERE v.empresa_id = ordem_servico.empresa_id
-       AND v.conexao_empresa_id = (SELECT tenaz.conexao_atual())
+       AND v.conexao_empresa_id = (SELECT app.conexao_atual())
        AND ordem_servico.id IN (v.os_cliente_id, v.os_prestador_id)));
 
 -- Lista fechada por coluna (trecho)
@@ -824,6 +983,8 @@ tenaz/
 │   │   │                         # eventos, fila, auditoria, arquivos, erros, obs, config
 │   │   └── modulos/              # adm, atv, med, sol, ordemservico, pre, chk, est,
 │   │                             # terceiros, servicos, locacao, fro, con, ind, integracoes, ia, mob
+│   │                             # + projetos, contratos, configuracao (versão 0.5;
+│   │                             # configuracao/pacotes/: pacotes de segmento em YAML)
 │   ├── db/
 │   │   ├── migracoes/            # goose: NNNN_descricao.sql
 │   │   └── sementes/             # dados de desenvolvimento e de teste (empresas fictícias)
@@ -883,6 +1044,8 @@ tenaz/
 | Orquestração de tarefas | Scripts do pnpm; Turborepo só se o tempo de CI justificar | Menos ferramentas no início |
 | Regras duplicadas Go e TS | `pacotes/dominio` com casos de teste em JSON em `backend/testes/casos/`, executados pelas duas suítes | A máquina de estados da OS e a validação de leitura existem nos dois lados (o app valida offline). Os mesmos casos impedem divergência. |
 | Desenvolvimento local | `docker compose` com Postgres, Valkey e MinIO; backend e web rodando no host | Ciclo rápido |
+| Validação de campos extras Go e TS (versão 0.5) | Mesma função no domínio da OS e em `pacotes/dominio`, com casos JSON em `backend/testes/casos/` | O app valida os campos extras offline antes de enfileirar o comando; o servidor revalida. Os mesmos casos impedem que o app aceite o que o servidor recusa (seção 5.6) |
+| Pacotes de segmento (versão 0.5) | Arquivos YAML em `backend/internal/modulos/configuracao/pacotes/`, validados no CI e publicados por `tenaz migrate` | Revisão em PR e teste antes de chegar a qualquer conta (seção 5.6) |
 
 ---
 
@@ -986,6 +1149,10 @@ Metas de cobertura **(proposta)**: 80% de linhas nos pacotes `dominio` e `app`. 
 11. SRV sem cliente na Tenaz: a subcontratada cadastra técnico com especialidade, cliente atendido e equipamento; abre OS de serviço com técnico e serviço a realizar; o técnico recebe a notificação push, executa em modo avião, registra componente substituído com leitura do número de série, fotos e assinatura do cliente, conclui; o gestor da subcontratada encerra e gera o relatório PDF.
 12. SRV com cliente conectado: o cliente convida, a subcontratada aceita; o cliente atribui uma OS ao fornecedor conectado; a OS aparece na subcontratada em menos de 60 s; a subcontratada distribui; o técnico assume e executa; o andamento aparece no cliente com o selo da subcontratada e campos somente leitura; o cliente recusa a liberação, a OS volta a `em_execucao` nas duas contas; o técnico corrige; o cliente encerra e a OS da subcontratada encerra.
 13. A subcontratada abre OS num ativo do cliente conectado: nasce `aberta` no cliente com `origem = prestador`; depois, a conexão é encerrada, nada mais trafega e as duas contas mantêm o histórico.
+14. Regra e campo extra (versão 0.5): a empresa cria o campo extra `sim_nao` "Rompeu lacre?" obrigatório na conclusão e a regra "OS concluída com o campo → `bloquear_ativo_ate_documento`"; o técnico tenta concluir em modo avião sem preencher e o app recusa antes de enfileirar; preenche "sim", conclui, reconecta; o ativo fica `parado` com bloqueio de `origem = regra` e um `disparo_regra`; reprocessar o mesmo evento não cria segundo bloqueio; o registro do documento exigido, com emissão posterior, levanta o bloqueio sozinho.
+15. Implantação (versão 0.5): ativo cadastrado `em_implantacao` fica `inativo` e fora dos KPIs; OS `implantacao` executada no app não entra em MTTR nem no custo de manutenção; `colocar_em_operacao` é recusado enquanto houver OS `implantacao` não encerrada; depois de aceito, o ativo fica `operando` e os planos ativam a partir de `data_entrada_operacao`.
+16. (Fase 2) Projeto e contrato com cliente: projeto criado de um modelo libera as etapas pela ordem das dependências, gera OS `implantacao` atribuídas ao prestador, conclui e coloca os ativos em operação, incluídos no contrato com cliente; a medição mensal desconta só a parada com causa externa aceita e aprovada, e a disponibilidade técnica do ativo não muda.
+17. (Fase 2) Pacote de segmento aplicado duas vezes à mesma conta: a segunda aplicação não cria nada e não altera nenhum item que a empresa editou depois da primeira; as regras do pacote nascem `inativa`.
 
 ### 9.3 Teste de vazamento entre empresas
 
@@ -1003,6 +1170,8 @@ Roda em todo build, com duas empresas fictícias, A e B, populadas com dados em 
 | Arquivos | URL de arquivo de B não é assinada para usuário de A. |
 | Jobs | Job enfileirado para A não lê nem grava dados de B. |
 | Consultas sqlc | Toda consulta sobre tabela de cliente contém filtro por `empresa_id`. |
+| Catálogos globais só leitura (versão 0.5) | Conectado como `tenaz_app`, `INSERT`, `UPDATE` e `DELETE` em `pacote_segmento` falham. A aplicação de um pacote em A não cria nem altera nada em B. |
+| Regras e disparos (versão 0.5) | A rotina diária de regras de A não lê candidatos nem grava `disparo_regra`, bloqueio ou solicitação em B. |
 
 **Isolamento por fornecedor e por locatário** (risco R4), na mesma suíte e com a mesma regra de bloqueio. As sementes têm, na empresa A, os fornecedores F1 e F2 (com OS, almoxarifados `em_terceiro` e usuários `prestador`) e os locatários L1 e L2 (com contratos, vistorias e solicitações); na empresa B, um fornecedor F3 com o **mesmo CNPJ** de F1, para simular o prestador que atende duas contratantes.
 
@@ -1018,6 +1187,7 @@ Roda em todo build, com duas empresas fictícias, A e B, populadas com dados em 
 | Link de uso único | Token inválido, expirado, revogado, consumido ou já ativado em outra sessão: mesma resposta 404; o link não acessa outra OS mesmo trocando IDs na requisição. |
 | Sincronização do app | Pull com usuário F1 não traz nenhuma linha de F2 nem de OS internas. |
 | Arquivos e cache | Anexo de OS de F2 não recebe URL assinada para F1; chaves de cache distintas por escopo. |
+| Campos extras (versão 0.5) | Com escopo F1, `campo_extra_os` devolve só as definições das OS de F1; com escopo `link`, só as marcadas como do prestador; com escopo L1, nenhuma. Escrita em `campo_extra_os` sob escopo externo falha. |
 
 Qualquer falha é tratada como incidente de segurança de severidade alta, mesmo no CI.
 
@@ -1038,6 +1208,7 @@ Qualquer falha é tratada como incidente de segurança de severidade alta, mesmo
 | API e app | Token de usuário de S com IDs de OS, ativo ou conexão de C1 ou C2: 404. Pull de um técnico de S traz só dados de S. `GET /v1/conexoes-empresa` em C2 não mostra a conexão C1–S |
 | Cobrança | Técnicos de S não contam como técnicos cobrados em C1 nem em C2 |
 | Auditoria | Cada mensagem aplicada tem registro na origem e no destino com o mesmo `hash_conteudo` |
+| Campos extras e regras (versão 0.5) | OS de C1 com `campos_extras` preenchidos com valores sentinela, atribuída a S e executada por S com campos extras próprios: nenhum valor sentinela aparece em S e nenhum valor de S aparece em C1. Regra ativa em C1 não grava nada em S, e regra ativa em S não grava nada em C1 |
 
 ### 9.4 Pipeline
 
@@ -1136,10 +1307,13 @@ O escopo de sincronização é calculado por usuário, a partir das unidades e d
 | Códigos de falha | Catálogo das classes em escopo |
 | Documentos e manuais | Só os marcados como "disponível offline", com limite de tamanho por empresa |
 | Fotos de OS antigas | Miniaturas; original sob demanda |
+| Cache de configuração (versão 0.5) | Definições ativas de `campo_extra_os` que se aplicam aos tipos de OS e às classes de ativo em escopo, com a versão de cada uma |
 
 Usuário `prestador` no app: o escopo é calculado sob o escopo `prestador` (seção 6.6). Vão para o aparelho só as OS atribuídas ao fornecedor dele (em aberto e encerradas nos últimos 30 dias), os ativos dessas OS com medidores, os procedimentos referenciados e o saldo do almoxarifado `em_terceiro` do fornecedor. Nenhum dado de outra OS, de outro fornecedor ou de cadastro interno. **(proposta)**
 
 Técnico da subcontratada com conta própria (SRV): é usuário `interno` da conta dela, e o escopo segue a tabela acima, com o significado do lado de quem presta serviço: OS atribuídas a ele ou à equipe dele (inclusive as vinculadas a clientes conectados) e as `aberta` ou `planejada` da equipe que ele pode assumir; os equipamentos de clientes (`propriedade = de_cliente`) dessas OS, com medidores; o `cliente_servico` de cada OS (nome, endereço de atendimento, contato); o catálogo `servico_fornecedor` da própria conta; o catálogo de itens e o saldo do estoque básico. Ele não recebe a carteira inteira de clientes nem os equipamentos de clientes sem OS para ele. **(proposta)**
+
+**Cache de configuração (versão 0.5).** As definições de campos extras da OS (RF-OS-021) vão ao aparelho no **cache de configuração**, pelo mesmo pull incremental das demais tabelas (seção 10.4), sob o RLS e o escopo do usuário: o prestador recebe só as definições das OS do seu fornecedor (seção 6.6). O app não edita configuração. Os ativos `em_implantacao` das unidades do usuário também vão ao aparelho, porque recebem OS `implantacao`. As regras configuráveis (`regra_automacao`) **não** vão ao aparelho e não são avaliadas nele: o servidor avalia quando aplica o comando, e o efeito (por exemplo, o ativo `parado`) chega no pull seguinte (seção 5.6). **(proposta)**
 
 ### 10.3 Modelo: comandos para cima, alterações para baixo
 
@@ -1163,6 +1337,8 @@ sequenceDiagram
 ```
 
 **Comandos**, não diffs de linha. O app envia intenções de domínio: `AssumirOS` (técnico se atribui OS `aberta` ou `planejada` da sua equipe; grava `data_reconhecimento`), `IniciarOS`, `PausarOS`, `ApontarHoras`, `RegistrarLeitura`, `ResponderItemChecklist`, `RegistrarComponente` (com `tipo_material` e números de série retirado e instalado), `ConcluirOS`, `AbrirOS` (na subcontratada, com equipamento, técnico e serviço a realizar), `AbrirSolicitacao`, `AnexarArquivo`, `Assinar` (técnico) e `ColetarAssinaturaCliente`. O servidor aplica cada comando pelos mesmos casos de uso da API pública. Não existe caminho de escrita exclusivo do app.
+
+**Campos extras nos comandos (versão 0.5).** Os valores dos campos extras viajam no payload de `AbrirOS` e `ConcluirOS`, e o preenchimento durante a execução usa o comando `RegistrarCamposExtras` **(proposta)**. Antes de **enfileirar** qualquer um desses comandos na outbox, o app valida os valores contra as definições do cache de configuração, com a mesma função compartilhada de `pacotes/dominio` (seção 7): chave, tipo, opções e obrigatoriedade na abertura ou na conclusão. Comando inválido não entra na fila; o técnico corrige na hora, mesmo sem sinal (RF-OS-021). O comando leva a versão das definições usadas, e o servidor revalida tudo ao aplicar.
 
 | Elemento | Definição **(proposta)** |
 |---|---|
@@ -1198,6 +1374,7 @@ Não há CRDT genérico. Cada tipo de dado tem uma regra explícita.
 | Consumo de peça sem saldo suficiente ao sincronizar | Aceito (a peça foi usada). Gera pendência de ajuste para o almoxarife. |
 | Transição de estado impossível | Rejeitada com motivo legível; o app mostra na lista "Pendências de sincronização". |
 | Assinatura offline | Aceita se o conteúdo assinado (hash) ainda corresponde ao registro. Se o registro mudou no servidor, a assinatura é guardada como evidência e o responsável é chamado a assinar de novo. |
+| Campo extra obrigatório criado ou alterado depois do último pull do aparelho (versão 0.5) | `ConcluirOS` validado no aparelho com as definições que ele tinha é aceito (o trabalho aconteceu); a OS fica `concluida` com uma pendência de preenchimento para o gestor antes da liberação. Valor de tipo ou opção inválidos para a definição que o aparelho tinha é rejeitado com motivo. **(proposta; regra a numerar em `4_FLUXOS_PROCESSO.md`)** |
 
 Nenhum comando rejeitado desaparece em silêncio. O app mostra o motivo e o que foi preservado.
 
@@ -1456,6 +1633,7 @@ Tabelas **(proposta)**: `plano`, `plano_recurso` (recurso, valor), `empresa_assi
 - O que cada plano inclui vem só da tabela de recursos do sumário (seção 2.1). Prestadores com catálogo, perfil `prestador` e link de uso único estão em todos os planos; estoque em terceiros, ordem de reparo, contratos de prestação e locação, no Profissional e no Enterprise.
 - Cache de 60 segundos no Valkey, invalidado na mudança de plano.
 - Avaliação de flags pela interface OpenFeature, para permitir trocar o armazenamento por um serviço externo no futuro sem mudar o código.
+- Configuração por segmento (versão 0.5, sumário 2.1): campos extras na OS, regras configuráveis, fase de ciclo de vida e pacotes de segmento estão em todos os planos e não têm entitlement de liberação; o custo é limitado pelos limites de RF-ADM-016 (50 regras ativas) e RF-OS-021 (30 campos ativos por combinação), guardados como recursos de quantidade (`regras_ativas_max`, `campos_extras_max`) para permitir ajuste negociado. PRJ e CTR, no Profissional e no Enterprise, usam os entitlements `projetos` e `contratos_cliente`. Na aplicação de um pacote, item de módulo sem entitlement é "ignorado" (seção 5.6). **(proposta)**
 
 ### 13.5 Recuperação de desastre regional: pendência P7
 
@@ -1562,6 +1740,7 @@ Formato: contexto, decisão, alternativas consideradas e consequências. Status 
 | [ADR-007](#adr-007--ia-com-provedor-externo-rag-isolado-e-ferramentas-tipadas) | IA com provedor externo, RAG isolado e ferramentas tipadas | Proposta |
 | [ADR-008](#adr-008--acesso-externo-por-escopo-restritivo-e-link-de-uso-único) | Acesso externo por escopo restritivo e link de uso único | Proposta |
 | [ADR-009](#adr-009--conexão-entre-contas) | Conexão entre contas | Proposta |
+| [ADR-010](#adr-010--configuração-por-segmento-com-catálogos-fechados) | Configuração por segmento com catálogos fechados | Proposta |
 
 ---
 
@@ -1835,9 +2014,55 @@ Motivos:
 
 ---
 
+### ADR-010 — Configuração por segmento com catálogos fechados
+
+**Status:** Proposta · **Data:** 12/11/2026
+
+**Contexto.** A versão 0.5 do sumário torna a Tenaz configurável por segmento (seção 3.7). A origem é o caso de um fornecedor de radares de fiscalização eletrônica, instalados e mantidos por prestadores em várias cidades: precisa registrar lacres na OS, impedir que o radar volte a operar depois de romper o lacre ou vencer a verificação metrológica, implantar pontos por etapas (autorização, energia, fundação e poste, laços, montagem, aferição, entrega) e medir a disponibilidade exigida em contrato com a prefeitura. Outros segmentos do público-alvo (telecomunicações, energia, saneamento, elevadores, além de transportadoras, indústria, comércio e locadoras) têm pedidos do mesmo tipo, cada um com o seu vocabulário. O risco R7 do sumário é a configuração crescer até virar um sistema "faça você mesmo", com estados e fluxos livres: indicadores deixam de ser comparáveis, os testes deixam de cobrir o que roda e a implantação fica cara. Ao mesmo tempo, a configuração não pode abrir brecha no isolamento (R2, R4, R5) nem quebrar o app offline, que valida regras sem conexão (ADR-004).
+
+**Decisão.**
+
+1. **Núcleo canônico fixo.** Estados, fórmulas dos indicadores, regras do app offline, isolamento (RLS, escopos, papel do sincronizador) e a lista de campos da conexão entre contas não são configuráveis. Ficam no código e nos testes (seção 5.6).
+2. **Configuração por blocos de catálogo fechado.** A empresa configura só blocos que o código conhece (classes de ativo, campos extras da OS, tipos de documento, regras, fase de ciclo de vida e, na Fase 2, modelos de projeto, contratos com clientes e pacotes), cada um com um pacote Go dono. Nenhum bloco cria tabela, coluna, estado, tela, política nem escopo.
+3. **Regras condição → efeito com catálogos no código.** Cada condição e cada efeito é um tipo Go registrado numa lista compilada; o banco só aceita os códigos do catálogo; condição ou efeito novo entra por requisito, migração e teste. Uma regra nunca muda estado de OS, nunca altera fórmula e nunca grava em outra conta, e um efeito de regra nunca dispara outra regra.
+4. **Avaliação por evento interno e por rotina diária idempotente, na fila de jobs existente.** As condições de fato são avaliadas pelo assinante do outbox (seção 5.5); as de tempo, e a repescagem das de fato, por uma rotina diária com um job por empresa (padrão da seção 6.4). Tudo roda no River (ADR-005), numa fila própria `regras`, sem componente novo. Cada disparo grava `disparo_regra` com chave única pelo fato, na mesma transação do efeito: repetir o evento ou a rotina não repete o efeito.
+5. **Campos extras em jsonb validados pela definição.** Valores em `ordem_servico.campos_extras`, definição em `campo_extra_os` (dono: OS). A mesma função de validação existe em Go e em `pacotes/dominio`, com casos compartilhados; o app valida antes de enfileirar o comando, e o servidor revalida ao aplicar. Campos extras não entram em indicador nem na lista de campos da conexão.
+6. **Pacotes como catálogo global aplicado por cópia idempotente.** Pacotes versionados no repositório, validados no CI e publicados no catálogo global `pacote_segmento` (sem `empresa_id`, só leitura para as contas). Aplicar copia para a conta, pela API pública de cada módulo dono, só o que falta pela chave natural; nunca altera nem apaga. Depois da cópia, nada na conta depende do pacote.
+
+**Alternativas consideradas.**
+
+| Alternativa | A favor | Contra | Resultado |
+|---|---|---|---|
+| **Editor livre de fluxos ou estados (low-code)**: a empresa desenha os estados da OS, as transições e as telas | Atende qualquer segmento sem desenvolvimento; argumento de venda forte | Indicadores deixam de ser comparáveis (MTTR de quem tem um estado a mais não é o MTTR de quem não tem); a máquina de estados duplicada no app offline, as regras de conflito (seção 10.5) e o dono de cada dado na conexão entre contas (seção 6.8) dependem de estados conhecidos; o número de combinações torna os testes impossíveis; a implantação vira projeto de consultoria. É exatamente o risco R7 | Descartada |
+| **Motor de regras genérico com expressões ou scripts** (linguagem de expressão como CEL ou expr, scripts em Lua ou JavaScript em sandbox, motor externo) | Combinações ilimitadas sem requisito novo; menos código por condição | Uma expressão pode ler dados que o efeito não deveria ver e escapa da revisão por requisito; custo de avaliação sem limite na rotina diária; sem teste por combinação; sandbox de script é superfície de ataque nova e, como serviço externo, um componente a mais sem gatilho mensurável (princípio 2); erros de regra viram suporte | Descartada. Gatilho de revisão abaixo |
+| **Campos extras como colunas criadas por empresa** (DDL dinâmico) **ou em tabela chave-valor** (EAV) | Coluna nativa: tipo e índice do banco. EAV: sem mudar o esquema | DDL dinâmico: tabelas são compartilhadas no modelo pool (ADR-002), então a coluna de uma empresa aparece para todas; `ALTER TABLE` em produção bloqueia a tabela da OS; o sqlc tipado e as migrações expandir e contrair deixam de valer; o esquema diverge por empresa. EAV: uma linha por valor, junções pesadas em toda listagem, validação de tipo fraca, mais uma tabela no pull do app e na política `escopo_externo` | Descartadas: jsonb numa coluna da OS, validado pela definição |
+| **Pacote por referência**: a conta aponta para o pacote e herda as mudanças de cada versão | Melhorias do pacote chegam a todos sem ação | Mudança no catálogo global altera a configuração de muitas contas sem aviso; conflita com o que a empresa editou; toda consulta de configuração passaria a ler o catálogo global em tempo de execução, misturando dado global e dado da empresa | Descartada: cópia idempotente |
+| **Avaliar regras só por evento** ou **só pela rotina diária** | Um mecanismo só | Só evento: as condições de tempo (vencimento) não têm evento no instante certo, e um evento perdido nunca é recuperado. Só rotina diária: até 24 horas entre o lacre rompido e o bloqueio, com o radar operando nesse intervalo | Descartadas: os dois, com a mesma chave de idempotência |
+
+**Consequências.**
+
+- Positivas: o R7 é tratado por construção, não por disciplina: o que não está no catálogo não existe no banco nem no binário. Os indicadores continuam comparáveis entre empresas e segmentos. O isolamento não muda: toda tabela nova tem `empresa_id`, RLS e `escopo_externo`, e só `pacote_segmento` entra na lista de tabelas globais. O app offline continua validando sem conexão, com a mesma função do servidor. Nenhum componente novo na stack.
+- Negativas: cada condição ou efeito novo custa um ciclo de requisito, código, migração e teste, e alguns pedidos de clientes vão esperar por isso. Campos extras em jsonb têm filtro e ordenação menos eficientes que coluna nativa e exigem índice GIN. A rotina diária soma carga ao primário no início do dia. A regra de conflito do campo obrigatório criado com o aparelho offline (seção 10.5) aceita OS concluída sem o campo novo, com pendência para o gestor. Os campos extras não trafegam na conexão entre contas no lançamento: a regra do cliente com `os_concluida_com_campo` não dispara para OS executada por subcontratada conectada (seção 16).
+- Métricas **(proposta)**: atraso entre o fato e o efeito na avaliação por evento (p95), duração da rotina diária por empresa, disparos por regra e por dia, efeitos com erro por motivo, itens criados e ignorados por aplicação de pacote.
+- Gatilhos de revisão: (a) rotina diária de regras de uma empresa com 2.000 ativos acima de 5 minutos, ou alertas das 07h00 atrasados por causa dela (referência RNF-009) → mover a busca de candidatos para a réplica ou tornar a avaliação incremental; (b) atraso p95 entre o fato e o efeito acima de 60 segundos sem correção simples → revisar a fila `regras`; (c) mais de 6 condições ou efeitos novos por requisito em 12 meses, ou o mesmo pedido fora do catálogo vindo de 3 ou mais clientes pagantes → avaliar uma linguagem de expressão restrita **só para o filtro** da regra, com efeitos ainda fechados, num ADR novo; (d) filtro por campo extra acima da meta de RNF-008 em listas → promover o campo mais usado a coluna canônica, por requisito, para todas as empresas.
+
+---
+
 ## 16. Alinhamento com o sumário e pendências
 
-Situação deste documento em relação ao sumário executivo 0.4.
+Situação deste documento em relação ao sumário executivo 0.5.
+
+**Resolvido pelo sumário 0.5 e aplicado aqui**
+
+| Tema | Como ficou |
+|---|---|
+| Configuração por segmento (sumário 3.7, R7) | [ADR-010](#adr-010--configuração-por-segmento-com-catálogos-fechados) e seção 5.6: núcleo canônico fixo, blocos de catálogo fechado, catálogos de condição e efeito no código e no banco. |
+| Regras configuráveis (`regra_automacao`, `disparo_regra`) | Pacote `configuracao`; avaliação por evento e por rotina diária idempotente na fila River `regras`, sem cascata e sem efeito em outra conta (seções 4.3, 5.3 e 5.6). |
+| Campos extras da OS (`campo_extra_os`, `ordem_servico.campos_extras`) | Dono OS; jsonb validado pela definição em Go e em `pacotes/dominio`; no cache de configuração do app, validados antes de enfileirar o comando; fora da conexão entre contas e dos indicadores (seções 5.6, 6.6, 7, 9.3, 10.2, 10.3 e 10.5). |
+| Fase de ciclo de vida e OS `implantacao` | `ativo.colocado_em_operacao` ativa os planos por evento; verificação de `colocar_em_operacao` por interface, sem ciclo ATV → OS (regra 11 da seção 5.3); exclusão fixa dos KPIs (seção 5.6); fluxo E2E 15. |
+| Pacotes Go `projetos`, `contratos` e `configuracao` (sumário 3.4) | Mapa de módulos (seção 5.1), dependências e reações (seção 5.3), repositório (seção 7). |
+| PRJ e CTR (Fase 2) | `projetos` usa `ordemservico` pelos contratos internos e reage a `ordem_servico.*`; `contratos` lê as paradas da OS e acompanha prazos por evento; nenhum dos dois é importado por OS (seção 5.3); fluxo E2E 16; entitlements `projetos` e `contratos_cliente` (seção 13.4). |
+| Pacotes de segmento (`pacote_segmento`, `aplicacao_pacote`) | Catálogo global versionado no repositório, só leitura para as contas; cópia idempotente que só cria o que falta (seção 5.6); fluxo E2E 17; verificação de catálogo global só leitura (seção 9.3). |
 
 **Resolvido pelo sumário 0.4 e aplicado aqui**
 
@@ -1871,3 +2096,14 @@ Situação deste documento em relação ao sumário executivo 0.4.
 | — | Política `escopo_externo` e índices de `item_contrato_locacao` a registrar em `2_ARQUITETURA_BANCO_DADOS.md`; decidir se o locatário é gravado na OS. | Seção 6.6 |
 | — | Contrato de payload de eventos em `plataforma/eventos/contratos` (regra 6 da seção 5.3) a validar em código. | Seção 5.3 |
 | — | Escolha da ferramenta de release (release-please ou git-cliff) e da janela de versões de app aceitas pela API. | Seção 9.5 |
+| — | **Divergência (versão 0.5):** RF-ADM-016 diz que, na conexão entre contas, o efeito de uma regra (o ativo `parado`) chega à outra conta "pelo campo de status já compartilhado", mas o grupo "Cadastro do ativo" de `campos_conexao.yaml` não tem o status do ativo. Decidir se o status entra na lista (revisão de segurança, R5) ou corrigir o requisito. | Seção 6.8 e [1_ESPECIFICACAO_REQUISITOS.md](1_ESPECIFICACAO_REQUISITOS.md) |
+| — | Campos extras não trafegam na conexão (sumário 3.6): a regra do cliente com `os_concluida_com_campo` (ex.: "Rompeu lacre?" no caso dos radares) não dispara para OS executada por subcontratada conectada. Só se resolve com um grupo novo na lista fechada, decidido no sumário. | Seção 5.6 e sumário 3.6 |
+| — | Dono de `cliente_servico` agora que a tabela existe também em contas com CTR sem SRV: continua SRV com a exceção estreita da regra 9 da seção 5.3 (proposta aqui) ou passa a cadastro comum. Decisão no documento 2. | Seção 5.3 |
+| — | Definição em `2_ARQUITETURA_BANCO_DADOS.md` de `regra_automacao`, `disparo_regra` (chave única pelo fato), `campo_extra_os` (dono OS, índice GIN em `campos_extras`), `pacote_segmento` (tabela global), `aplicacao_pacote` e das tabelas de PRJ e CTR, com o módulo dono de cada uma. | Seção 5.6 |
+| — | Marca "do prestador" na definição de campo extra (RF-OS-021, proposta) ainda não está nos dados principais do requisito; a lista de acesso externo da seção 6.6 depende dela. | Seções 5.6 e 6.6 |
+| — | Regra de conflito do campo extra obrigatório criado com o aparelho offline, a numerar em `4_FLUXOS_PROCESSO.md`; comando `RegistrarCamposExtras` e rotas a registrar em `3_ESPECIFICACAO_APIS.md`. | Seções 10.3 e 10.5 |
+| — | Interface `atv.VerificadorEntradaOperacao` (regra 11 da seção 5.3) e `depguard` da exceção da regra 9, a validar em código. | Seção 5.3 |
+| — | Nomes dos entitlements `projetos`, `contratos_cliente`, `regras_ativas_max` e `campos_extras_max` (proposta); o preço de PRJ e CTR segue a P4. | Seção 13.4 |
+| P9 | Regras metrológicas dos radares: as regras do pacote `fiscalizacao_eletronica` nascem `inativa` até a decisão. Não afeta a arquitetura. | Sumário, seção 6 |
+| P10 | Acesso próprio do cliente final do contrato (ex.: prefeitura). Se aprovado, exige um escopo novo além dos quatro do sumário 3.6 e revisão do ADR-008; até lá, a medição sai em PDF e XLSX. | Sumário, seção 6 |
+| — | **Resíduos da troca de nomes da versão 0.4: resolvidos na versão 0.5.** As seções 6.4 e 6.8 passaram a citar `app.empresas_ativas()`, `app.conexao_atual()` e `app.escopo = 'interno'`, conforme o documento 2. Continuam abertos dois itens do mesmo bloco: o diagrama de sequência da seção 6.7 usa `#35;` no texto de uma mensagem, o que a regra dos diagramas proíbe; e o sumário 3.4 dá o exemplo `internal/ordemservico`, enquanto a seção 7 usa `backend/internal/modulos/ordemservico`. | Seções 6.7 e 7 |

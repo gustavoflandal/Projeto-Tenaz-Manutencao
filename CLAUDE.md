@@ -80,6 +80,7 @@ Regere o PDF de todo documento alterado. O conversor precisa de internet para de
 - **Stack:** Go (monólito modular) + React/TypeScript (web) + React Native/Expo (app offline-first, SQLite) + PostgreSQL com Row-Level Security; Docker. Ver ADR-001 a ADR-009 no documento 5.
 - **Isolamento:** coluna `empresa_id` em toda tabela de negócio, RLS forçado, escopos `interno`, `prestador`, `locatario`, `link`; conexão entre contas (SRV) só pelo processo de sincronização.
 - **Versionamento:** SemVer `MAJOR.MINOR.PATCH` vindo da tag `vX.Y.Z`; versão sempre visível no canto inferior direito da tela principal e do login (RNF-039); `CHANGELOG.md` sempre atualizado (RNF-040).
+- **Configuração por segmento:** a empresa configura blocos de catálogo fechado (campos extras, regras de condição e efeito, modelos de projeto, contratos com clientes, pacotes de segmento). Estados, fórmulas de indicadores, regras do offline, isolamento e campos da conexão entre contas não são configuráveis. Condição ou efeito novo entra por requisito com teste, nunca por configuração (sumário 3.7, risco R7).
 - **Marca:** cores Aço `#14202E` e Sinal `#FF6A13`; Archivo Expanded, Inter, JetBrains Mono; regras de contraste em [marca/README.md](marca/README.md). Texto sobre Sinal é sempre Aço.
 
 ## 5. Pendências que dependem do dono do produto
@@ -103,6 +104,12 @@ Consulte a seção 6 do sumário. Principais: P1 (ICP-Brasil na NR-1), P4 (preç
 CLAUDE.md               este prompt inicial
 CHANGELOG.md            histórico de versões do produto (RNF-040)
 README.md               apresentação do projeto
+backend/                Go: cmd/tenaz, internal/plataforma, internal/modulos,
+                        db/migracoes, api/openapi.yaml, testes/vazamento
+web/                    React + TypeScript (Vite)
+app/                    React Native + Expo, offline-first (src/sync: fila de comandos)
+infra/docker/           compose de desenvolvimento (PostgreSQL, Valkey, MinIO)
+.github/workflows/      esteira de CI
 marca/                  identidade visual (brandbook, logos, regras)
 docs/                   documentação do projeto (0 a 9)
 docs/etapas/            registro de todas as etapas do projeto
@@ -111,7 +118,22 @@ docs/prompts/           o prompt de cada etapa, escrito antes do trabalho
 docs/screenshots/       evidência visual das telas entregues
 docs/pdf/               PDFs gerados dos documentos
 docs/pesquisa/          estudo de mercado e notas de pesquisa
-ferramentas/            md2pdf.py e verificar_docs.py
+ferramentas/            md2pdf.py, verificar_docs.py, versao.sh, tarefas.sh
 .claude/agents/         os 16 agentes especializados do projeto
 .claude/skills/         as 12 skills com os procedimentos obrigatórios
 ```
+
+## 8. Comandos do dia a dia
+
+Todas as tarefas passam por um script único, para que "passa na minha máquina" e "passa no CI" signifiquem a mesma coisa. O CI chama exatamente estes subcomandos.
+
+```bash
+ferramentas/tarefas.sh ajuda         # lista todas as tarefas
+ferramentas/tarefas.sh infra         # sobe PostgreSQL e Valkey
+ferramentas/tarefas.sh migrar        # aplica as migrações
+ferramentas/tarefas.sh conferir      # formato, análise, contrato, tipos, documentação
+ferramentas/tarefas.sh tudo          # conferências + todos os testes
+ferramentas/tarefas.sh vazamento     # suíte de isolamento (bloqueia merge e deploy)
+```
+
+Requisitos locais: Go 1.27+, Node 22.17+, Docker e Python 3.13+. O `pnpm` é chamado por `npx` porque `corepack enable` precisa de privilégio de administrador no Windows; quem tiver o pnpm instalado globalmente pode usá-lo direto.

@@ -60,4 +60,13 @@ Qualquer requisito funcional. Ambiente de produção. SSO (E10). Suíte de três
 
 ## Ajustes durante a etapa
 
-Nenhum até agora.
+**2026-11-12 — Trabalho segue em ambiente de desenvolvimento.** Por decisão do dono do produto, os dois itens do portão que dependem de conta externa saem desta etapa e passam para a fase de produção:
+
+| Item do portão | Novo destino |
+|---|---|
+| Infraestrutura em São Paulo criada por código | Fase de produção. `infra/tofu/` não é escrito agora; o ambiente é o compose local de `infra/docker/` |
+| Build interno do app instalável | Fase de produção, junto com as contas de desenvolvedor das lojas |
+
+Motivo: não há conta de nuvem nem conta de loja, e a pendência **P7** (local da cópia de recuperação de desastre) segue aberta — provisionar produção antes dela exigiria refazer a configuração de backup e republicar o RTO.
+
+Os demais itens do portão continuam exigidos e foram cumpridos em ambiente de desenvolvimento. O que **não** foi afrouxado: a esteira de versão, a suíte de isolamento, o contrato OpenAPI e o verificador de documentação valem igual. A etapa fecha com esses dois itens registrados como pendência da fase de produção, não como dívida silenciosa.

@@ -1,7 +1,7 @@
 # Arquitetura de Banco de Dados — Tenaz
 
-**Versão:** 0.3 · **Data:** 12/11/2026 · **Status:** Em elaboração
-**Alinhado ao sumário executivo 0.4**
+**Versão:** 0.4 · **Data:** 12/11/2026 · **Status:** Em elaboração
+**Alinhado ao sumário executivo 0.5**
 **Produto:** Tenaz · Gestão de Manutenção e Frota
 **SGBD:** PostgreSQL 16 ou superior (recomendado 18) · **Acesso:** Go com pgx v5 e sqlc (SQL explícito, sem ORM)
 
@@ -10,6 +10,8 @@ Este documento define o modelo de dados da Tenaz: isolamento entre empresas, tab
 A versão 0.2 inclui a entidade `pessoa`, os perfis `comprador`, `plh`, `prestador` e `locatario`, os marcos `data_*` da OS, as transições da OS e da solicitação do sumário 0.3, os módulos **TER** (terceiros) e **LOC** (locação), o estoque em poder de terceiros, as peças serializadas e reparáveis com ordem de reparo, e o isolamento adicional do prestador e do locatário (risco R4, seção 2.9).
 
 A versão 0.3 inclui o módulo **SRV** (gestão de serviços do prestador, MVP): conta própria da subcontratada com clientes atendidos, equipamentos de clientes, especialidades de técnicos, serviço a realizar e componentes na OS; a conexão entre contas em `plataforma.conexao_empresa`, o vínculo de OS e o processo de sincronização entre contas com papel de banco próprio (risco R5, seção 2.10). Aplica também as decisões da seção 3.6 do sumário 0.4: permissão `os.encerrar`, ação `assumir`, origens da OS e da solicitação, franquias da locação, papéis `posto_combustivel` e `seguradora`, permissão `est.decidir_destino`, peça em trânsito não consumível e o link de uso único com token no fragmento.
+
+**Mudanças da versão 0.4:** configuração por segmento (sumário 0.5, seções 3.6 e 3.7). No MVP: `ativo.fase_ciclo_vida` (`em_implantacao`, `em_operacao`) e `ativo.data_entrada_operacao`, com `em_implantacao` implicando status `inativo` (RF-ATV-013); `bloqueio_ativo.origem` (`manual`, `conformidade`, `regra`) e a liberação automática pelo tipo de documento exigido; na OS, o tipo `implantacao`, a origem `projeto`, `campos_extras` e `causa_externa` (a OS não tem origem `regra`: nenhum efeito de regra abre OS); a origem `regra` na solicitação; as permissões da configuração, de PRJ e de CTR (sumário 3.6); as tabelas `campo_extra_os`, `regra_automacao` e `disparo_regra` (seção 5.13). Na Fase 2: o catálogo global `plataforma.pacote_segmento` e `aplicacao_pacote` (13.11), o módulo **PRJ** com `modelo_projeto`, `modelo_etapa_projeto`, `projeto` e `etapa_projeto` (estados `pendente`, `disponivel`, `em_andamento`, `concluida`, `dispensada`) (13.12), o módulo **CTR** com `contrato_cliente`, `item_contrato_cliente`, `faixa_desconto_contrato`, `medicao_contrato` e a `decisao_exclusao` da parada por causa externa (`pendente`, `aprovada`, `recusada`) (13.13), e a numeração `PJ` e `CT`. `cliente_servico` passa a existir também nas contas com CTR. A lista explícita de tabelas globais ganha seção própria (2.11), e a lista fechada da conexão entre contas registra que campos extras, causa externa, etapa de projeto da OS, fase de ciclo de vida, projeto e contrato nunca atravessam (2.10.5). Nomes sem correspondência no sumário estão marcados como proposta e listados na seção 17.1.
 
 Os itens marcados como **Proposta** são decisões de projeto ainda não validadas em implementação e podem mudar até a versão 1.0. Segurança, backup e recuperação de desastre aparecem aqui em alto nível; o detalhe fica em [9_SEGURANCA_CONFIABILIDADE.md](9_SEGURANCA_CONFIABILIDADE.md).
 
@@ -56,6 +58,7 @@ Nomes em negrito são entidades canônicas do sumário executivo. Os demais são
 | SRV | MVP | **`cliente_servico`**, **`especialidade_tecnico`**, `pessoa_especialidade`, `servico_os`, **`vinculo_os`**, **`plataforma.conexao_empresa`**, `plataforma.grupo_campo_conexao`, `plataforma.catalogo_campo_conexao`, `ativo_compartilhado`, `envio_conexao`, `recebimento_conexao`, `espelho_conexao`, `comentario` (usa `ativo.propriedade = 'de_cliente'`, `ativo.tag_cliente`, `ordem_servico.descricao_servico` e `material_os.tipo_material`) |
 | EST (básico) | MVP | **`item_estoque`**, **`almoxarifado`**, **`movimentacao_estoque`**, `saldo_estoque`, visão `vw_estoque_geral` |
 | CON | MVP | **`documento_vencimento`**, `tipo_documento`, `registro_nr12`, `bloqueio_ativo`, visão `vw_inventario_nr12` |
+| Configuração (ADM, OS) | MVP | **`regra_automacao`**, `disparo_regra`, `campo_extra_os` (valores em `ordem_servico.campos_extras`; usa também `ativo.fase_ciclo_vida`, `ativo.data_entrada_operacao` e `bloqueio_ativo.origem`) |
 | Transversal | MVP | **`evento_auditoria`**, `selo_auditoria`, `arquivo_auditoria`, `anexo`, `dispositivo`, `comando_sync`, `exclusao_sync`, `evento_saida`, `notificacao` |
 | IND | MVP | `kpi_ativo_dia`, `kpi_preventiva_mes`, `kpi_backlog_semana`, `kpi_pendente` |
 | FRO | Fase 2 | **`pneu`**, **`abastecimento`**, **`multa`**, **`sinistro`**, `movimentacao_pneu`, `afericao_pneu` |
@@ -66,17 +69,22 @@ Nomes em negrito são entidades canônicas do sumário executivo. Os demais são
 | CON | Fase 2 | **`capacitacao`**, `tipo_capacitacao`, `exigencia_capacitacao`, `equipamento_nr13`, `inspecao_nr13`, `regra_prazo_nr13`, `ponto_bloqueio`, `bloqueio_energia`, `bloqueio_ponto` |
 | INT | Fase 2 | `conector_integracao`, `vinculo_telematica`, `evento_telematica`, `regra_telematica`, `assinatura_webhook`, `entrega_webhook` |
 | IA | Fase 2 | `documento_ia`, `trecho_ia`, `interacao_ia`, `rascunho_ia` |
+| Configuração (pacotes) | Fase 2 | `plataforma.pacote_segmento` (catálogo global, seção 2.11), `aplicacao_pacote` |
+| PRJ | Fase 2 | **`projeto`**, `modelo_projeto`, `modelo_etapa_projeto`, `etapa_projeto`, `dependencia_etapa_modelo`, `ativo_projeto`, `lancamento_custo_projeto`, `medicao_etapa_projeto` (usa `ordem_servico.etapa_projeto_id`) |
+| CTR | Fase 2 | **`contrato_cliente`**, `item_contrato_cliente`, `faixa_desconto_contrato`, `medicao_contrato`, `item_medicao_contrato`, `exclusao_parada_contrato` (usa `cliente_servico`, seção 5.12, e `ordem_servico.causa_externa`) |
 | Fase 3 | Fase 3 | `serie_sensor` (TimescaleDB), `analise_rcm`, `modo_falha_fmea`, `custo_ciclo_vida` |
 
 Os nomes das entidades auxiliares seguem a seção 3.2 do sumário: `segmento_medidor`, `registro_nr12`, `bloqueio_ativo`, `exigencia_capacitacao`, `requisicao_compra`, `regra_telematica`, `assinatura_webhook`, `entrega_webhook`, `comando_sync` e `rascunho_ia` substituem os nomes provisórios da versão 0.1. A oficina externa deixa de ser uma tabela de FRO e passa a ser uma OS executada por fornecedor, com `orcamento_fornecedor` (TER).
 
 No SRV, `cliente_servico`, `especialidade_tecnico`, `vinculo_os` e `conexao_empresa` são entidades do sumário (3.1 e 3.2); `pessoa_especialidade` e `servico_os` são nomes fixados na ficha de alinhamento da versão 0.4. Os 15 nomes de grupo de `campos_compartilhados`, `numero_os_remota` e `ativos_compartilhados` são os do documento 3 (seção 22.5); `envio_conexao`, `recebimento_conexao`, o papel `tenaz_sinc` e a policy `conexao_sinc` são os do documento 5 (seção 6.8); `tag_cliente` e a origem `cliente_conectado` são os do documento 4. São auxiliares deste documento, sem nome no sumário: `grupo_campo_conexao` e `catalogo_campo_conexao` (lista fechada de grupos e campos), `ativo_compartilhado` (seleção de ativos do cliente), `espelho_conexao` (correspondência de ids e sequência das cópias), `comentario` (comentários de solicitação e OS, das rotas `/comentarios` do documento 3) e `recebimento_remessa` (confirmação de recebimento de peça em trânsito).
 
+Na configuração por segmento, `regra_automacao`, `projeto` e `contrato_cliente` são entidades principais do sumário (3.1); `campo_extra_os`, `disparo_regra`, `pacote_segmento`, `aplicacao_pacote`, `modelo_projeto`, `modelo_etapa_projeto`, `etapa_projeto`, `item_contrato_cliente`, `faixa_desconto_contrato` e `medicao_contrato` são auxiliares do sumário (3.2). São **propostas** deste documento, sem nome no sumário: `dependencia_etapa_modelo` (predecessoras de cada etapa do modelo), `ativo_projeto` (ativos implantados por um projeto), `lancamento_custo_projeto` (lançamentos avulsos de custo do projeto, RF-PRJ-005), `medicao_etapa_projeto` (medição de etapas para pagamento do prestador, RF-PRJ-006), `item_medicao_contrato` (linha da medição por item coberto, RF-CTR-004) e `exclusao_parada_contrato` (guarda a `decisao_exclusao` do sumário 3.6, `pendente`, `aprovada` ou `recusada`, de uma parada por causa externa, RF-CTR-003).
+
 ### 1.2 Princípios
 
 1. **Isolamento em quatro camadas.** RLS forçado no banco, filtro explícito por `empresa_id` em toda consulta do repositório, chaves estrangeiras compostas com `empresa_id` e teste automatizado de vazamento em todo build. Uma camada falhar não basta para vazar dados. Usuários externos (perfis `prestador` e `locatario`, e o link de uso único) recebem, dentro da empresa, um **escopo** adicional também aplicado por RLS, com o mesmo padrão de camadas (seção 2.9). A troca de dados entre contas conectadas (SRV) nunca lê duas empresas na mesma transação: um papel de banco próprio grava em cada conta numa transação separada, só com os campos permitidos pela conexão (seção 2.10).
 2. **SQL explícito.** O sqlc gera o código Go a partir das migrações e das consultas `.sql`. Não há ORM. Toda consulta cita `empresa_id` no `WHERE`, mesmo com RLS ligado.
-3. **Integridade no banco.** O que cabe numa constraint fica numa constraint (`CHECK`, FK, `UNIQUE`, `EXCLUDE`). Regras de fluxo vivem no Go; triggers cobrem só as regras críticas, como última barreira: transição de estado da OS, da solicitação, da ordem de reparo e do contrato de locação, campos da NR-12, imutabilidade de auditoria e de OS encerrada, coerência entre saldo e peças serializadas.
+3. **Integridade no banco.** O que cabe numa constraint fica numa constraint (`CHECK`, FK, `UNIQUE`, `EXCLUDE`). Regras de fluxo vivem no Go; triggers cobrem só as regras críticas, como última barreira: transição de estado da OS, da solicitação, da ordem de reparo, do contrato de locação, do projeto, da etapa de projeto, do contrato com cliente e da medição do contrato, fase de ciclo de vida do ativo, campos da NR-12, imutabilidade de auditoria e de OS encerrada, coerência entre saldo e peças serializadas.
 4. **Fatos não se apagam.** Cadastros usam exclusão lógica (`excluido_em`). Registros de fato (apontamento, leitura, movimentação de estoque, transição de status, auditoria) não são apagados: são estornados, rejeitados ou substituídos por um novo registro.
 5. **Identificador gerado no cliente.** Toda chave primária é UUID v7, gerada pelo backend ou pelo app, inclusive offline. Isso dispensa mapeamento de IDs temporários na sincronização.
 6. **Tempo em UTC, dia no fuso do cliente.** Todo instante é `timestamptz`. O "dia" de um indicador ou de um vencimento é calculado no fuso da unidade (ou da empresa).
@@ -410,7 +418,7 @@ SELECT c.oid::regclass FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnames
 WHERE n.nspname = 'app' AND c.relkind IN ('r', 'p') AND NOT c.relispartition
   AND NOT EXISTS (SELECT 1 FROM pg_attribute a
                   WHERE a.attrelid = c.oid AND a.attname = 'empresa_id' AND NOT a.attisdropped)
-  AND c.relname NOT IN ('empresa');
+  AND c.relname NOT IN ('empresa');           -- a única tabela de app sem empresa_id (lista da seção 2.11)
 
 -- 3. Nenhum papel de execução tem BYPASSRLS ou é superusuário
 SELECT rolname FROM pg_roles
@@ -441,6 +449,15 @@ SELECT i.indexrelid::regclass FROM pg_index i
 JOIN pg_class c ON c.oid = i.indrelid JOIN pg_namespace n ON n.oid = c.relnamespace
 JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = i.indkey[0]
 WHERE n.nspname = 'app' AND i.indisunique AND c.relname <> 'empresa' AND a.attname <> 'empresa_id';
+
+-- 8. Toda tabela de plataforma está na lista explícita de tabelas globais (seção 2.11), e os papéis de
+--    execução não escrevem nos catálogos só leitura ($2: lista versionada, revisada em revisão de código)
+SELECT c.oid::regclass FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'plataforma' AND c.relkind IN ('r', 'p') AND NOT c.relispartition
+  AND (c.relname <> ALL ($2::text[])
+       OR (c.relname IN ('pacote_segmento', 'grupo_campo_conexao', 'catalogo_campo_conexao')
+           AND (has_table_privilege('tenaz_app', c.oid, 'INSERT') OR has_table_privilege('tenaz_app', c.oid, 'UPDATE')
+                OR has_table_privilege('tenaz_job', c.oid, 'INSERT') OR has_table_privilege('tenaz_job', c.oid, 'UPDATE'))));
 ```
 
 **Parte 2: dados.** Um gerador de fixtures cria as empresas A e B com pelo menos uma linha em **cada** tabela de `app` (o teste falha se alguma tabela ficar vazia, o que obriga a manter o gerador junto com as migrações). Conectado como `tenaz_app`, para cada tabela:
@@ -596,10 +613,19 @@ Tabelas com acesso externo, regra por escopo (interno sempre vê tudo da empresa
 | `locatario`, `contrato_locacao`, `item_contrato_locacao`, `vistoria_locacao`, `responsabilidade_locacao` | Nenhum | Só do seu locatário (leitura; vistoria: assinatura) | Nenhum |
 | `usuario`, `pessoa` | Ele mesmo e pessoas do seu fornecedor | Ele mesmo e usuários do seu locatário | Nenhum |
 | `unidade`, `localizacao`, `classe_ativo`, `codigo_falha`, `procedimento`, `procedimento_tarefa`, `procedimento_material`, `checklist_modelo`, `checklist_item_modelo`, `item_estoque` | Leitura | Leitura de `unidade`, `localizacao` e `classe_ativo` | Leitura |
+| `campo_extra_os` | Leitura das definições com `preenchido_pelo_prestador` (proposta), para preencher a OS atribuída | Nenhum | Leitura das definições com `preenchido_pelo_prestador` |
 | `checklist_execucao`, `checklist_resposta` | Ativo de OS visível | Leitura, ativo visível | Ativo da OS do link |
 | `dispositivo`, `notificacao`, `comando_sync` | Só os do próprio usuário | Só os do próprio usuário | `comando_sync` sem usuário |
 | `evento_auditoria`, `evento_saida`, `kpi_pendente`, `exclusao_sync`, `contador_documento` | Só inserção (gravadas por trigger ou pelo serviço na mesma transação) | Só inserção | Só inserção |
-| Demais tabelas (custos agregados, KPIs, planos, contratos de prestação, documentos, capacitações, NR-13, compras, frota, integrações, IA, e as do SRV: `cliente_servico`, `especialidade_tecnico`, `pessoa_especialidade`, `ativo_compartilhado`, `vinculo_os`, `envio_conexao`, `recebimento_conexao`, `espelho_conexao`) | Nenhum | Nenhum | Nenhum |
+| Demais tabelas (custos agregados, KPIs, planos, contratos de prestação, documentos, capacitações, NR-13, compras, frota, integrações, IA, e as do SRV: `cliente_servico`, `especialidade_tecnico`, `pessoa_especialidade`, `ativo_compartilhado`, `vinculo_os`, `envio_conexao`, `recebimento_conexao`, `espelho_conexao`; as da configuração por segmento: `bloqueio_ativo`, `regra_automacao`, `disparo_regra`, `aplicacao_pacote`; as do PRJ: `modelo_projeto`, `modelo_etapa_projeto`, `dependencia_etapa_modelo`, `projeto`, `ativo_projeto`, `etapa_projeto`, `lancamento_custo_projeto`, `medicao_etapa_projeto`; e as do CTR: `contrato_cliente`, `item_contrato_cliente`, `faixa_desconto_contrato`, `medicao_contrato`, `item_medicao_contrato`, `exclusao_parada_contrato`) | Nenhum | Nenhum | Nenhum |
+
+**Configuração por segmento e escopo externo.** O padrão das tabelas novas é "só interno". A única exceção é o necessário à OS atribuída:
+
+- Os **valores** dos campos extras ficam na própria linha da OS (`ordem_servico.campos_extras`), que já é visível ao prestador e ao link pela policy da OS. Como o RLS corta linhas e não colunas, a projeção sqlc de cada escopo externo devolve só as chaves cujas definições têm `preenchido_pelo_prestador = true` (proposta), e o serviço aceita do prestador e do link a gravação só dessas chaves (RF-OS-021). A projeção do locatário não leva campos extras.
+- As **definições** (`campo_extra_os`) são lidas pelo prestador e pelo link só quando `preenchido_pelo_prestador`; nunca são gravadas por eles. O locatário não as lê.
+- A **causa externa** da parada (`ordem_servico.causa_externa`) pode ser marcada pelo prestador na OS atribuída (RF-CTR-003); a decisão sobre a exclusão na medição (`decisao_exclusao`, em `exclusao_parada_contrato`) é só interna.
+- O prestador que executa a OS de uma etapa de projeto vê a OS, nunca o projeto, a etapa, o contrato com cliente nem a medição; `etapa_projeto_id` fica fora das projeções externas.
+- `fase_ciclo_vida` e `data_entrada_operacao` são colunas da linha do ativo e seguem a regra do ativo; a ação `colocar_em_operacao` é só interna (`WITH CHECK (app.escopo_interno())` da policy do ativo).
 
 Na conta da subcontratada (SRV), os técnicos são usuários internos com perfil `tecnico`: o escopo `prestador` continua sendo só o do usuário de prestador dentro da conta do cliente, para subcontratadas sem conta própria. Uma OS do cliente ligada a uma conexão (`vinculo_os`) não aceita execução por usuário prestador nem por link de uso único: a execução chega pela sincronização (seção 2.10). O serviço recusa gerar link para OS vinculada e atribuir a ela um usuário prestador.
 
@@ -669,6 +695,12 @@ CREATE POLICY escopo_externo ON app.ativo AS RESTRICTIVE
           WHERE c.locatario_id = app.locatario_atual() AND c.status = 'vigente' AND i.situacao = 'entregue')))
   WITH CHECK (app.escopo_interno());          -- cadastro de ativo é interno
 
+-- Definições de campo extra: prestador e link leem só as que preenchem; ninguém externo grava
+CREATE POLICY escopo_externo ON app.campo_extra_os AS RESTRICTIVE
+  FOR ALL TO tenaz_app, tenaz_job, tenaz_leitura
+  USING (app.escopo_interno() OR (app.escopo_atual() IN ('prestador', 'link') AND preenchido_pelo_prestador))
+  WITH CHECK (app.escopo_interno());
+
 -- Infraestrutura gravada por trigger na transação do usuário externo: só inserção
 CREATE POLICY escopo_externo_leitura ON app.evento_auditoria AS RESTRICTIVE
   FOR SELECT TO tenaz_app, tenaz_job, tenaz_leitura
@@ -715,7 +747,10 @@ WHERE n.nspname = 'app' AND c.relkind IN ('r', 'p') AND NOT c.relispartition
 | Prestador F1: `INSERT` de `saida_os` no almoxarifado de F2, ou no seu almoxarifado apontando para OS de F2 | Erro `42501` |
 | Prestador F1: `INSERT` de `remessa_terceiro`, `ajuste` ou `entrada` | Erro `42501` |
 | Prestador F1: `UPDATE` de OS de F1 para `fornecedor_id = F2` | Erro `42501` |
+| Prestador F1 e link de F1: `campo_extra_os` sem `preenchido_pelo_prestador`; `INSERT` ou `UPDATE` em `campo_extra_os`; OS de etapa de projeto de F1: linhas de `projeto`, `etapa_projeto`, `contrato_cliente`, `medicao_contrato` | 0 linhas; erro `42501` na gravação |
+| API do prestador F1 e do link: OS com campos extras sem `preenchido_pelo_prestador` (valores sentinela) | Chaves ausentes da resposta; gravação dessas chaves recusada |
 | Locatário L1: OS, solicitações, ativos, contratos e vistorias de L2 | 0 |
+| Locatário L1: `campo_extra_os`, `regra_automacao`, `disparo_regra`, `bloqueio_ativo` | 0 linhas |
 | Locatário L1: `INSERT` de solicitação em ativo de L2 ou em ativo não locado | Erro `42501` |
 | Locatário L1: ativo devolvido (contrato encerrado) | Não aparece em `ativo`; as OS antigas do contrato continuam visíveis |
 | Link de F1: qualquer OS que não seja a do link | 0 |
@@ -984,6 +1019,20 @@ A carga é montada na origem só com os campos dos grupos ligados e conferida de
 
 Nunca atravessam, qualquer que seja a configuração: custos internos, `valor_aquisicao`, `valor_reposicao`, `centro_custo`, `responsavel_custo`, `custo_hora`, usuários, perfis e permissões, CPF, contatos pessoais, documentos, capacitações e dados de saúde de técnicos, OS do ativo não vinculadas, dados de outros clientes da subcontratada e o filtro de ativos compartilhados do cliente.
 
+**Configuração por segmento: fora da lista no lançamento** (sumário 3.6 e 3.7). Nenhum dos 15 grupos contém, e o `tenaz_sinc` não recebe privilégio de tabela nem de coluna em:
+
+| Dado | Onde | Por que não atravessa |
+|---|---|---|
+| Campos extras da OS | `ordem_servico.campos_extras` (valores) e `campo_extra_os` (definições) | Decisão do sumário 3.6: nunca compartilhados no lançamento; só entram por um grupo novo, decidido no sumário; as definições são da conta e as chaves não coincidem entre contas |
+| Fase de ciclo de vida | `ativo.fase_ciclo_vida`, `ativo.data_entrada_operacao` | Sumário 3.6 e RF-ATV-013: nunca compartilhada no lançamento; a cópia na subcontratada nasce `em_operacao` (padrão) e a fase da cópia é dado local da subcontratada, como unidade e localização |
+| Projeto e etapas | `projeto`, `etapa_projeto`, `modelo_projeto`, `modelo_etapa_projeto`, `dependencia_etapa_modelo`, `ativo_projeto`, `lancamento_custo_projeto`, `medicao_etapa_projeto`, `ordem_servico.etapa_projeto_id` | Sumário 3.6 (etapa de projeto da OS nunca compartilhada) e RF-PRJ-004: na conta conectada a OS chega como qualquer OS do cliente (tipo `implantacao`, grupo `os_dados_basicos`); projeto e etapas não são compartilhados |
+| Contrato com cliente e medição | `contrato_cliente`, `item_contrato_cliente`, `faixa_desconto_contrato`, `medicao_contrato`, `item_medicao_contrato`, `exclusao_parada_contrato` | Dado comercial da conta com o seu cliente final |
+| Causa externa da parada | `ordem_servico.causa_externa`, `causa_externa_marcada_por`, `causa_externa_marcada_em` | Decisão do sumário 3.6: nunca compartilhada no lançamento; a marcação feita pela subcontratada conectada fica na conta dela (seção 17.1, S30) |
+| Regras e disparos | `regra_automacao`, `disparo_regra`, `bloqueio_ativo` | Uma regra nunca grava dado em outra conta (sumário 3.7) |
+| Pacotes | `aplicacao_pacote` | Configuração da conta |
+
+O teste da seção 2.10.9 recebe valores sentinela nessas colunas e tabelas, nas três contas. Incluir um desses dados na conexão exige grupo novo no sumário, no documento 3 e em `campos_conexao.yaml`, com revisão de segurança.
+
 A assinatura do grupo `assinatura_cliente` chega ao cliente como linha de `assinatura_eletronica` com `papel = 'cliente'`, `pessoa_id` nulo e `conexao_empresa_id` preenchido (assinante externo identificado por nome e função); o `documento_hash` é o do registro assinado na conta da subcontratada, e o relatório em PDF (`GET /v1/ordens-servico/{id}/relatorio-pdf`) vai junto como anexo.
 
 #### 2.10.6 Ciclo de uma mensagem
@@ -1123,7 +1172,7 @@ Roda a cada build, junto com as seções 2.8 e 2.9.5, contra PostgreSQL real e o
 - **C** (cliente): fornecedores F1 (CNPJ de P1, conectado) e F2 (CNPJ de P2, sem conexão, com usuário prestador e link de uso único); ativos compartilhados e não compartilhados; OS para F1 e para F2.
 - **P1** (subcontratada conectada a C): cliente atendido C (conectado) e cliente X sem conta; técnicos com especialidades; catálogo de serviços próprio; um equipamento de X com a mesma TAG de um ativo de C (prova `tag_cliente`).
 - **P2** (subcontratada não conectada): cliente atendido com o mesmo CNPJ de C, sem conexão; equipamentos `de_cliente` próprios; em mãos, o código do convite emitido por C para F1.
-- **Valores sentinela:** cada coluna fora dos grupos ligados, nas três contas, recebe um valor único e reconhecível (ex.: `valor_reposicao = 987654.32`, `centro_custo = 'SENTINELA-C-0042'`, `custo_hora` dos técnicos de P1, preços com o grupo `valores` desligado, comentários e anexos com `compartilhar = false`).
+- **Valores sentinela:** cada coluna fora dos grupos ligados, nas três contas, recebe um valor único e reconhecível (ex.: `valor_reposicao = 987654.32`, `centro_custo = 'SENTINELA-C-0042'`, `custo_hora` dos técnicos de P1, preços com o grupo `valores` desligado, comentários e anexos com `compartilhar = false`, `campos_extras` da OS vinculada, `causa_externa`, ativo compartilhado `em_implantacao` com `data_entrada_operacao`, OS vinculada de etapa de projeto e ativo coberto por contrato com cliente).
 
 Cenário: C convida F1 e P1 aceita; C atribui OS a F1; P1 distribui, executa (apontamentos, componentes substituídos com número de série, serviços, fotos, assinatura do cliente, NR-12), conclui; C recusa a liberação uma vez e depois libera; P1 abre uma OS num ativo de C, que C aprova, e outra que C cancela; C cancela uma terceira OS que P1, offline, já iniciou; C retira um grupo opcional; a conexão é suspensa, reativada e encerrada.
 
@@ -1162,6 +1211,20 @@ Cenário: C convida F1 e P1 aceita; C atribui OS a F1; P1 distribui, executa (ap
 | Contagem de cobrança de C | Técnicos de P1 não contam |
 
 Um teste de propriedades complementa o cenário fixo: sequências aleatórias de operações nos dois lados, com entrega duplicada, atrasada e fora de ordem, conferindo no fim de cada sequência a convergência dos campos de cada dono e que nenhum sentinela saiu da conta de origem.
+
+### 2.11 Tabelas globais (fora do RLS por empresa)
+
+Tabela sem `empresa_id` só existe se estiver nesta lista, que é a mesma do arquivo versionado lido pelas consultas 2 e 8 do teste de catálogo (seção 2.8). Entrar na lista exige revisão de código e a aprovação de isolamento. Nenhuma delas guarda dado de negócio de uma empresa.
+
+| Tabela | Esquema | Conteúdo | Quem lê | Quem grava |
+|---|---|---|---|---|
+| `empresa` | `app` | O próprio tenant | Policies próprias por `id` (seção 2.3) | Serviço de contas |
+| `identidade`, `acesso_empresa` | `plataforma` | Login global e em quais empresas ele entra | Módulo de autenticação | Módulo de autenticação |
+| `grupo_campo_conexao`, `catalogo_campo_conexao` | `plataforma` | Lista fechada da conexão entre contas (seção 2.10.5) | `tenaz_app`, `tenaz_sinc` (só leitura) | Migração, gerada de `campos_conexao.yaml` |
+| `conexao_empresa` | `plataforma` | Relação entre duas empresas (seção 2.10) | Só `tenaz_sinc` e as funções seguras | Funções seguras |
+| `pacote_segmento` | `plataforma` | Catálogo de pacotes de segmento mantido pela Tenaz (seção 13.11, Fase 2) | `tenaz_app`, `tenaz_job` (só leitura, só pacotes publicados) | Migração, gerada dos arquivos versionados dos pacotes |
+
+Catálogos que a empresa edita (códigos de falha, tipos de documento, perfis, classes) não são globais: são copiados para a empresa com `empresa_id` (seção 14.2). O mesmo vale para tudo o que um pacote de segmento cria: ao ser aplicado, o pacote vira configuração comum da empresa, com `empresa_id` e RLS, e o catálogo global continua só leitura.
 
 ---
 
@@ -1301,6 +1364,8 @@ erDiagram
         text tag UK
         char criticidade
         text status_operacional
+        text fase_ciclo_vida
+        date data_entrada_operacao
         text propriedade
         uuid cliente_servico_id FK
         uuid conexao_empresa_id FK
@@ -1375,11 +1440,13 @@ erDiagram
     ativo ||--o{ programacao_plano : "programado em"
     gatilho_plano ||--o{ programacao_plano : "controla"
     plano_manutencao |o--o{ ordem_servico : "gera"
+    etapa_projeto |o--o{ ordem_servico : "OS de implantacao"
 
     solicitacao {
         uuid id PK
         text numero UK
         text status
+        text origem
         uuid ativo_id FK
         uuid ordem_servico_id FK
         uuid duplicada_de_id FK
@@ -1392,8 +1459,11 @@ erDiagram
         text prioridade
         text origem
         text descricao_servico
+        jsonb campos_extras
+        text causa_externa
         uuid ativo_id FK
         uuid plano_manutencao_id FK
+        uuid etapa_projeto_id FK
         uuid responsavel_id FK
         text executor_tipo
         uuid fornecedor_id FK
@@ -1479,6 +1549,8 @@ erDiagram
     ativo |o--o{ documento_vencimento : "documento de"
     pessoa |o--o{ documento_vencimento : "documento de"
     ativo ||--o{ bloqueio_ativo : "bloqueado por"
+    disparo_regra |o--o| bloqueio_ativo : "origem regra"
+    tipo_documento |o--o{ bloqueio_ativo : "levanta o bloqueio"
 
     checklist_modelo {
         uuid id PK
@@ -1546,7 +1618,11 @@ erDiagram
     bloqueio_ativo {
         uuid id PK
         uuid ativo_id FK
+        text origem
         text motivo
+        uuid disparo_regra_id FK
+        uuid tipo_documento_liberacao_id FK
+        uuid documento_liberacao_id FK
         timestamptz inicio
         timestamptz fim
     }
@@ -1836,6 +1912,204 @@ erDiagram
         uuid id_local PK
         uuid id_remoto
         bigint ultima_sequencia
+    }
+```
+
+### 3.9 Configuração por segmento (ADM, OS)
+
+`pacote_segmento` fica em `plataforma` (catálogo global, seção 2.11); as demais ficam em `app`, por empresa. O pacote não tem FK para o que cria: a aplicação registra os itens criados em `aplicacao_pacote`.
+
+```mermaid
+erDiagram
+    pacote_segmento ||--o{ aplicacao_pacote : "aplicado em"
+    usuario |o--o{ aplicacao_pacote : "aplica"
+    regra_automacao ||--o{ disparo_regra : "dispara"
+    tipo_documento |o--o{ regra_automacao : "condicao documento"
+    campo_extra_os |o--o{ regra_automacao : "condicao campo sim_nao"
+    checklist_item_modelo |o--o{ regra_automacao : "condicao item reprovado"
+    tipo_documento |o--o{ regra_automacao : "levanta o bloqueio"
+    ativo |o--o{ disparo_regra : "afetado"
+    disparo_regra |o--o| bloqueio_ativo : "bloqueia"
+    disparo_regra |o--o| solicitacao : "abre"
+    campo_extra_os ||--o{ ordem_servico : "valor em campos_extras"
+
+    pacote_segmento {
+        uuid id PK
+        text codigo UK
+        integer versao_pacote UK
+        text segmento
+        jsonb conteudo
+        text situacao
+    }
+    aplicacao_pacote {
+        uuid id PK
+        uuid pacote_segmento_id FK
+        text codigo_pacote
+        integer versao_pacote
+        jsonb itens_criados
+        jsonb itens_ignorados
+    }
+    campo_extra_os {
+        uuid id PK
+        text chave UK
+        text rotulo
+        text tipo
+        text_array tipos_os
+        uuid_array classes_ativo_ids
+        text momento_obrigatorio
+        boolean preenchido_pelo_prestador
+        text situacao
+    }
+    regra_automacao {
+        uuid id PK
+        text nome UK
+        text condicao
+        text efeito
+        uuid tipo_documento_id FK
+        uuid campo_extra_os_id FK
+        uuid tipo_documento_liberacao_id FK
+        uuid_array classes_ativo_ids
+        text situacao
+    }
+    disparo_regra {
+        uuid id PK
+        uuid regra_automacao_id FK
+        text fato_entidade UK
+        uuid fato_id UK
+        timestamptz fato_em
+        uuid ativo_id FK
+        text efeito
+        text resultado
+    }
+```
+
+### 3.10 Projetos e implantação (PRJ, Fase 2)
+
+```mermaid
+erDiagram
+    modelo_projeto ||--|{ modelo_etapa_projeto : "etapas"
+    modelo_etapa_projeto ||--o{ dependencia_etapa_modelo : "sucessora"
+    modelo_etapa_projeto ||--o{ dependencia_etapa_modelo : "predecessora"
+    procedimento |o--o{ modelo_etapa_projeto : "tarefas da OS"
+    modelo_projeto ||--o{ projeto : "versao usada"
+    projeto ||--|{ etapa_projeto : "executa"
+    modelo_etapa_projeto ||--o{ etapa_projeto : "copiada em"
+    projeto ||--o{ ativo_projeto : "implanta"
+    ativo ||--o{ ativo_projeto : "implantado em"
+    etapa_projeto |o--o{ ordem_servico : "OS de implantacao"
+    fornecedor |o--o{ etapa_projeto : "executa"
+    projeto ||--o{ lancamento_custo_projeto : "custo avulso"
+    fornecedor ||--o{ medicao_etapa_projeto : "medido"
+    medicao_etapa_projeto |o--o{ etapa_projeto : "etapa medida"
+    cliente_servico |o--o{ projeto : "cliente atendido"
+    contrato_cliente |o--o{ projeto : "contrato"
+
+    modelo_projeto {
+        uuid id PK
+        text codigo UK
+        integer versao_modelo UK
+        text situacao
+    }
+    modelo_etapa_projeto {
+        uuid id PK
+        uuid modelo_projeto_id FK
+        integer ordem UK
+        integer duracao_prevista_dias
+        numeric peso
+        boolean gera_os
+        boolean etapa_entrega
+        numeric valor_referencia
+    }
+    dependencia_etapa_modelo {
+        uuid etapa_id PK,FK
+        uuid predecessora_id PK,FK
+    }
+    projeto {
+        uuid id PK
+        text numero UK
+        uuid modelo_projeto_id FK
+        text status
+        date inicio_previsto
+        date fim_previsto
+    }
+    ativo_projeto {
+        uuid projeto_id PK,FK
+        uuid ativo_id PK,FK
+        boolean projeto_encerrado
+    }
+    etapa_projeto {
+        uuid id PK
+        uuid projeto_id FK
+        uuid modelo_etapa_projeto_id FK
+        text status
+        text executor_tipo
+        uuid fornecedor_id FK
+        numeric valor_etapa
+        uuid medicao_etapa_projeto_id FK
+    }
+```
+
+### 3.11 Contratos com clientes (CTR, Fase 2)
+
+```mermaid
+erDiagram
+    cliente_servico ||--o{ contrato_cliente : "contrata"
+    contrato_cliente ||--|{ item_contrato_cliente : "cobre"
+    ativo ||--o{ item_contrato_cliente : "coberto em"
+    contrato_cliente ||--|{ faixa_desconto_contrato : "faixas"
+    contrato_cliente ||--o{ medicao_contrato : "medido em"
+    medicao_contrato ||--|{ item_medicao_contrato : "por item"
+    item_contrato_cliente ||--o{ item_medicao_contrato : "apurado em"
+    faixa_desconto_contrato |o--o{ item_medicao_contrato : "faixa atingida"
+    ordem_servico ||--o{ exclusao_parada_contrato : "parada por causa externa"
+    contrato_cliente ||--o{ exclusao_parada_contrato : "decide"
+
+    contrato_cliente {
+        uuid id PK
+        text numero UK
+        uuid cliente_servico_id FK
+        text status
+        numeric meta_disponibilidade
+        text calendario_apuracao
+        text_array causas_externas_aceitas
+    }
+    item_contrato_cliente {
+        uuid id PK
+        uuid contrato_cliente_id FK
+        uuid ativo_id FK
+        date data_inclusao
+        date data_exclusao
+        numeric valor_mensal
+        text situacao
+    }
+    faixa_desconto_contrato {
+        uuid id PK
+        uuid contrato_cliente_id FK
+        numeric disponibilidade_de
+        numeric disponibilidade_ate
+        numeric desconto_percentual
+    }
+    medicao_contrato {
+        uuid id PK
+        uuid contrato_cliente_id FK
+        date periodo_inicio UK
+        text status
+        numeric valor_desconto
+    }
+    item_medicao_contrato {
+        uuid id PK
+        uuid medicao_contrato_id FK
+        uuid item_contrato_cliente_id FK
+        numeric horas_requeridas
+        numeric horas_paradas
+        numeric horas_excluidas
+        numeric disponibilidade
+    }
+    exclusao_parada_contrato {
+        uuid id PK
+        uuid ordem_servico_id FK
+        uuid contrato_cliente_id FK
+        text decisao_exclusao
     }
 ```
 
@@ -2214,9 +2488,11 @@ CREATE TRIGGER trg_usuario_perfil_externo BEFORE INSERT OR UPDATE ON app.usuario
 Base de cobrança (sumário 2.1), contada pelo job de cobrança, empresa por empresa, com o maior número diário do ciclo:
 
 - **Técnico cobrado:** usuário em situação `ativo` com o perfil `tecnico`, mais o usuário ativo com o perfil `prestador` (que executa OS). O link de uso único não tem usuário e não conta. O técnico de uma subcontratada com conta própria não é usuário do cliente e não conta no cliente; conta na conta da subcontratada (plano Serviços, sumário 2.2), onde `gestor` e `planejador` sem perfil `tecnico` não pagam.
-- **Veículo cobrado:** ativo do tipo `veiculo` com `propriedade <> 'de_cliente'`, `status_operacional <> 'inativo'` e `excluido_em IS NULL`. Equipamento ou veículo de cliente atendido, na conta da subcontratada, não é cobrado.
+- **Veículo cobrado:** ativo do tipo `veiculo` com `propriedade <> 'de_cliente'`, `status_operacional <> 'inativo'` e `excluido_em IS NULL`. Equipamento ou veículo de cliente atendido, na conta da subcontratada, não é cobrado. Veículo `em_implantacao` tem status `inativo` (`ck_ativo_fase_status`, seção 5.2) e, portanto, também não é cobrado até a entrada em operação.
 
 A liberação (encerramento) de OS é a permissão `os.encerrar`, presente por padrão nos perfis `gestor` e `planejador` e nunca em `prestador` nem `locatario`. As permissões seguem o formato `<módulo>.<ação>`; `pessoa.saude.ler` é a exceção já aceita. O destino de peça com defeito (conserto, sucata ou devolução) exige `est.decidir_destino`, padrão em `gestor`, `planejador` e `almoxarife` (seção 13.9). A leitura de dados de saúde é a permissão `pessoa.saude.ler`, que nenhum perfil padrão tem (`ck_perfil_saude`); o administrador a concede num perfil criado pela empresa. O helper `NaEmpresa` repassa essa permissão ao banco (`app.saude`), e as policies da seção 5.10 escondem os documentos sensíveis de quem não a tem.
+
+Permissões da configuração por segmento, de PRJ e de CTR (sumário 3.6), conferidas no Go como `os.encerrar`: `adm.gerenciar_regras` (criar, alterar e ativar `regra_automacao`), `adm.gerenciar_configuracao` (definições de `campo_extra_os` e aplicação de pacotes de segmento), `atv.colocar_em_operacao` e, na Fase 2, `prj.gerenciar` (modelos e projetos: criar, iniciar, suspender, retomar, concluir, cancelar), `prj.dispensar_etapa`, `prj.ajustar_medicao`, `ctr.gerenciar` (contratos e itens), `ctr.fechar_medicao` (fechar a medição e decidir as exclusões, `decisao_exclusao`) e `ctr.reabrir_medicao`. Padrão: `administrador` e `gestor`; `planejador` recebe também `atv.colocar_em_operacao` e `prj.gerenciar`. Nenhuma delas entra nos perfis `prestador` e `locatario`.
 
 Proposta: ao receber os perfis `tecnico`, `motorista`, `plh` ou `prestador`, o usuário é ligado a uma pessoa (o serviço cria a pessoa se ela não existir), para que CNH, ASO e capacitações tenham onde ficar. `usuario.pessoa_id` continua opcional no esquema.
 
@@ -2271,7 +2547,8 @@ CREATE TABLE app.contador_documento (
   CONSTRAINT pk_contador_documento PRIMARY KEY (empresa_id, tipo, ano),
   CONSTRAINT fk_contador_documento_empresa FOREIGN KEY (empresa_id) REFERENCES app.empresa (id),
   -- OS: ordem de serviço; SS: solicitação; OR: ordem de reparo; CL: contrato de locação;
-  -- PC e RM (pedido de compra, requisição de compra) entram na migração da fase 2
+  -- PC e RM (pedido de compra, requisição de compra), PJ (projeto) e CT (contrato com cliente)
+  -- entram nas migrações da fase 2, que recriam este CHECK (seção 8.4)
   CONSTRAINT ck_contador_documento_tipo CHECK (tipo IN ('OS', 'SS', 'OR', 'CL')),
   CONSTRAINT ck_contador_documento_numero CHECK (ultimo_numero BETWEEN 1 AND 999999)
 );
@@ -2373,6 +2650,10 @@ CREATE TABLE app.ativo (
   ativo_remoto_id         uuid,                     -- cópia sincronizada: id do ativo na conta do cliente (nunca sai na API)
   tag_cliente             text,                     -- de_cliente: TAG do equipamento no cliente, única por cliente atendido
   local_atendimento       jsonb,                    -- de_cliente: um dos enderecos_atendimento do cliente, copiado
+  -- fase de ciclo de vida (sumário 3.1 e 3.3, RF-ATV-013): em_implantacao deixa o ativo inativo
+  fase_ciclo_vida         text     NOT NULL DEFAULT 'em_operacao',
+  data_entrada_operacao   date,                     -- gravada por colocar_em_operacao, no fuso da unidade;
+                                                    -- nula no ativo já cadastrado em operação
   sujeito_nr12            boolean  NOT NULL DEFAULT false,
   codigo_qr               text     NOT NULL,        -- token aleatório impresso na etiqueta
   data_aquisicao          date,
@@ -2411,7 +2692,11 @@ CREATE TABLE app.ativo (
   CONSTRAINT ck_ativo_copia CHECK ((conexao_empresa_id IS NULL) = (ativo_remoto_id IS NULL)
                                    AND (conexao_empresa_id IS NULL OR propriedade = 'de_cliente')),
   CONSTRAINT ck_ativo_regime CHECK (horas_operacao_dia > 0 AND horas_operacao_dia <= 24
-                                    AND dias_operacao_semana BETWEEN 1 AND 7)
+                                    AND dias_operacao_semana BETWEEN 1 AND 7),
+  CONSTRAINT ck_ativo_fase CHECK (fase_ciclo_vida IN ('em_implantacao', 'em_operacao')),
+  -- em implantação, o ativo é inativo e ainda não tem data de entrada em operação (sumário 3.3)
+  CONSTRAINT ck_ativo_fase_status CHECK (fase_ciclo_vida <> 'em_implantacao'
+                                         OR (status_operacional = 'inativo' AND data_entrada_operacao IS NULL))
 );
 CREATE UNIQUE INDEX uq_ativo_tag ON app.ativo (empresa_id, lower(tag)) WHERE excluido_em IS NULL;
 CREATE UNIQUE INDEX uq_ativo_codigo_qr ON app.ativo (empresa_id, codigo_qr);
@@ -2429,8 +2714,53 @@ CREATE UNIQUE INDEX uq_ativo_tag_cliente ON app.ativo (empresa_id, cliente_servi
 -- uma cópia por ativo do cliente e conexão
 CREATE UNIQUE INDEX uq_ativo_copia ON app.ativo (empresa_id, conexao_empresa_id, ativo_remoto_id)
   WHERE conexao_empresa_id IS NOT NULL;
+-- tela "Em implantação" e filtro por fase (RF-ATV-013): poucos ativos por empresa, índice parcial pequeno
+CREATE INDEX ix_ativo_em_implantacao ON app.ativo (empresa_id, unidade_id)
+  WHERE fase_ciclo_vida = 'em_implantacao' AND excluido_em IS NULL;
 CALL app.preparar_tabela('app.ativo', p_escopo => 'proprio');   -- policy na seção 2.9.4
 -- fks para cliente_servico e conexao_empresa, trigger de dono e policies do sincronizador: seção 5.12
+
+-- A fase de ciclo de vida não volta (sumário 3.3): em_operacao -> em_implantacao é recusado.
+-- A passagem em_implantacao -> em_operacao exige data_entrada_operacao. Proposta.
+CREATE FUNCTION app.tg_ativo_fase() RETURNS trigger
+  LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF OLD.fase_ciclo_vida = 'em_operacao' AND NEW.fase_ciclo_vida = 'em_implantacao' THEN
+    RAISE EXCEPTION 'a fase do ativo % não volta para em_implantacao', OLD.tag USING ERRCODE = '23514';
+  END IF;
+  IF OLD.fase_ciclo_vida = 'em_implantacao' AND NEW.fase_ciclo_vida = 'em_operacao'
+     AND NEW.data_entrada_operacao IS NULL THEN
+    RAISE EXCEPTION 'colocar em operação exige data_entrada_operacao' USING ERRCODE = '23514';
+  END IF;
+  IF OLD.data_entrada_operacao IS NOT NULL AND NEW.data_entrada_operacao IS DISTINCT FROM OLD.data_entrada_operacao THEN
+    RAISE EXCEPTION 'data_entrada_operacao é gravada uma única vez' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END
+$$;
+CREATE TRIGGER trg_ativo_fase BEFORE UPDATE OF fase_ciclo_vida, data_entrada_operacao ON app.ativo
+  FOR EACH ROW EXECUTE FUNCTION app.tg_ativo_fase();
+```
+
+**Fase de ciclo de vida** (sumário 3.1 e 3.3, RF-ATV-013). O ativo pode nascer `em_implantacao` (cadastro manual, importação ou projeto, Fase 2); nesse caso nasce com `status_operacional = 'inativo'`, sai dos KPIs e da base de veículos cobrados, e o gerador de preventivas ignora seus planos. A interface mostra "Em implantação" a partir da fase, não do status. A ação `colocar_em_operacao` é um único `UPDATE`, atômico, que só vale para ativo ainda em implantação e sem OS `implantacao` em aberto (proposta do RF-ATV-013); em seguida, na mesma transação, o serviço ativa os planos a partir de `data_entrada_operacao`, recalcula o status (um `bloqueio_ativo` vigente o deixa `parado`, que prevalece) e grava o evento `ativo.colocado_em_operacao`. Quem colocou em operação fica na auditoria do `UPDATE`. Ativo `de_cliente` e `de_terceiro` também podem estar `em_implantacao`.
+
+```sql
+-- name: ColocarEmOperacao :one
+UPDATE app.ativo a
+SET fase_ciclo_vida = 'em_operacao', status_operacional = 'operando',
+    status_alterado_em = sqlc.arg(instante), data_entrada_operacao = sqlc.arg(data_entrada_operacao)
+WHERE a.empresa_id = sqlc.arg(empresa_id) AND a.id = sqlc.arg(id) AND a.versao = sqlc.arg(versao)
+  AND a.fase_ciclo_vida = 'em_implantacao'
+  AND NOT EXISTS (SELECT 1 FROM app.ordem_servico o
+                  WHERE o.empresa_id = a.empresa_id AND o.ativo_id = a.id
+                    AND o.tipo = 'implantacao' AND o.status NOT IN ('encerrada', 'cancelada'))
+RETURNING a.id, a.versao, a.data_entrada_operacao;
+-- Nenhuma linha: versão divergente, ativo já em operação ou OS de implantação em aberto (a API responde 409).
+-- A subconsulta usa ix_os_ativo (empresa_id, ativo_id, ...).
+```
+
+```sql
 
 -- Dados específicos de veículo e implemento (1:1 com ativo)
 CREATE TABLE app.ativo_veiculo (
@@ -2630,7 +2960,7 @@ CREATE TABLE app.solicitacao (
   ativo_parado             boolean  NOT NULL DEFAULT false,
   status                   text     NOT NULL DEFAULT 'nova',
   origem                   text     NOT NULL DEFAULT 'web',
-  solicitante_id           uuid     NOT NULL,
+  solicitante_id           uuid,                     -- nulo só na solicitação aberta por regra (origem regra)
   aberta_em                timestamptz NOT NULL,     -- instante no dispositivo
   data_reconhecimento      timestamptz,              -- gravado uma vez, ao abrir a triagem (status em_triagem)
   triada_por               uuid,
@@ -2654,9 +2984,12 @@ CREATE TABLE app.solicitacao (
   CONSTRAINT fk_solicitacao_reaberta FOREIGN KEY (empresa_id, reaberta_de_id) REFERENCES app.solicitacao (empresa_id, id),
   CONSTRAINT ck_solicitacao_status CHECK (status IN ('nova', 'em_triagem', 'aprovada', 'recusada', 'duplicada')),
   CONSTRAINT ck_solicitacao_prioridade CHECK (prioridade_sugerida IN ('baixa', 'media', 'alta', 'urgente')),
-  -- portal_locatario: aberta pelo usuário locatário no portal web (sumário 3.6)
+  -- portal_locatario: aberta pelo usuário locatário no portal web; regra: aberta pelo efeito
+  -- abrir_solicitacao de uma regra configurável (sumário 3.6, RF-ADM-016)
   CONSTRAINT ck_solicitacao_origem CHECK (origem IN ('web', 'app', 'qr_code', 'checklist', 'telematica', 'api',
-    'importacao', 'portal_locatario')),
+    'importacao', 'portal_locatario', 'regra')),
+  -- só a regra abre solicitação sem usuário solicitante; o disparo fica em disparo_regra.solicitacao_id (proposta)
+  CONSTRAINT ck_solicitacao_solicitante CHECK (solicitante_id IS NOT NULL OR origem = 'regra'),
   CONSTRAINT ck_solicitacao_alvo CHECK (ativo_id IS NOT NULL OR localizacao_id IS NOT NULL),
   CONSTRAINT ck_solicitacao_sequencial CHECK (sequencial BETWEEN 1 AND 999999),
   CONSTRAINT ck_solicitacao_aprovada CHECK (status <> 'aprovada' OR ordem_servico_id IS NOT NULL),
@@ -2710,7 +3043,7 @@ CREATE TRIGGER trg_solicitacao_transicao BEFORE INSERT OR UPDATE ON app.solicita
 | `em_triagem` | `aprovada` (gera ou vincula OS), `recusada`, `duplicada` |
 | `aprovada`, `recusada`, `duplicada` | nenhuma |
 
-Conforme o sumário 3.6, `nova` → `recusada` é o caminho da desistência (motivo `desistencia`); a recusa pela triagem passa por `em_triagem`. O Go aplica essa distinção; o trigger aceita as duas. `duplicada` é final: uma marcação errada se corrige com "reabrir como nova", que cria outra solicitação `nova` com os dados da duplicada e `reaberta_de_id` apontando para ela. A solicitação aberta pelo locatário no portal web tem `origem = 'portal_locatario'`, e a policy de escopo exige essa origem na inserção do locatário (seção 2.9.4).
+Conforme o sumário 3.6, `nova` → `recusada` é o caminho da desistência (motivo `desistencia`); a recusa pela triagem passa por `em_triagem`. O Go aplica essa distinção; o trigger aceita as duas. `duplicada` é final: uma marcação errada se corrige com "reabrir como nova", que cria outra solicitação `nova` com os dados da duplicada e `reaberta_de_id` apontando para ela. A solicitação aberta pelo locatário no portal web tem `origem = 'portal_locatario'`, e a policy de escopo exige essa origem na inserção do locatário (seção 2.9.4). A solicitação aberta por uma regra configurável tem `origem = 'regra'`, nasce `nova`, segue a triagem normal e não tem usuário solicitante: a tela mostra a regra, lida de `disparo_regra` (seção 5.13).
 
 Uma solicitação aprovada aponta para a OS que a atende. Várias solicitações (a original e as duplicadas aprovadas) podem apontar para a mesma OS. A OS não guarda `solicitacao_id`, para evitar referência circular.
 
@@ -2803,6 +3136,12 @@ CREATE TABLE app.ordem_servico (
   ativo_parado          boolean  NOT NULL DEFAULT false,
   parada_inicio         timestamptz,
   parada_fim            timestamptz,
+  -- causa externa da parada (sumário 3.6, RF-OS-001, RF-CTR-003): não muda MTTR nem disponibilidade técnica
+  causa_externa         text,
+  causa_externa_marcada_por uuid,                   -- proposta: quem marcou (usuário interno ou prestador)
+  causa_externa_marcada_em  timestamptz,            -- proposta
+  -- campos extras definidos pela empresa (campo_extra_os, seção 5.13); validados no Go contra as definições
+  campos_extras         jsonb    NOT NULL DEFAULT '{}',
   -- medidor no momento da OS
   medidor_id            uuid,
   leitura_valor         numeric(14,2),
@@ -2841,15 +3180,24 @@ CREATE TABLE app.ordem_servico (
     REFERENCES app.codigo_falha (empresa_id, id, tipo),
   CONSTRAINT fk_os_atividade FOREIGN KEY (empresa_id, atividade_id, atividade_tipo)
     REFERENCES app.codigo_falha (empresa_id, id, tipo),
+  CONSTRAINT fk_os_causa_marcada_por FOREIGN KEY (empresa_id, causa_externa_marcada_por) REFERENCES app.usuario (empresa_id, id),
+  -- implantacao: instala um ativo ou executa uma etapa de projeto; fora dos KPIs de manutenção (sumário 3.1)
   CONSTRAINT ck_os_tipo CHECK (tipo IN ('preventiva', 'preditiva', 'corretiva_planejada',
-    'corretiva_emergencial', 'inspecao_legal', 'melhoria')),
+    'corretiva_emergencial', 'inspecao_legal', 'melhoria', 'implantacao')),
+  -- OS de implantação nunca é gerada por plano (RF-OS-002)
+  CONSTRAINT ck_os_implantacao_plano CHECK (tipo <> 'implantacao' OR plano_manutencao_id IS NULL),
+  CONSTRAINT ck_os_causa_externa CHECK (causa_externa IN ('vandalismo', 'acidente_terceiro', 'falta_energia',
+    'obra_terceiro', 'solicitacao_cliente', 'caso_fortuito')),
+  CONSTRAINT ck_os_causa_marcada CHECK (causa_externa IS NULL OR causa_externa_marcada_em IS NOT NULL),
+  CONSTRAINT ck_os_campos_extras CHECK (jsonb_typeof(campos_extras) = 'object'),
   CONSTRAINT ck_os_status CHECK (status IN ('aberta', 'planejada', 'programada', 'em_execucao',
     'pausada', 'concluida', 'encerrada', 'cancelada')),
   CONSTRAINT ck_os_prioridade CHECK (prioridade IN ('baixa', 'media', 'alta', 'urgente')),
   -- prestador: no cliente, aberta pela subcontratada conectada; cliente_conectado: na subcontratada, criada
-  -- a partir da OS do cliente conectado (seção 2.10); vistoria_locacao: avaria da vistoria (seção 13.10)
+  -- a partir da OS do cliente conectado (seção 2.10); vistoria_locacao: avaria da vistoria (seção 13.10);
+  -- projeto: gerada por uma etapa de projeto (seção 13.12). Nenhum efeito de regra abre OS (sumário 3.6)
   CONSTRAINT ck_os_origem CHECK (origem IN ('manual', 'solicitacao', 'plano', 'checklist', 'telematica',
-    'rascunho_ia', 'vistoria_locacao', 'prestador', 'cliente_conectado')),
+    'rascunho_ia', 'vistoria_locacao', 'prestador', 'cliente_conectado', 'projeto')),
   CONSTRAINT ck_os_motivo_pausa CHECK (motivo_pausa IN ('aguardando_peca', 'aguardando_aprovacao',
     'aguardando_terceiro', 'fim_turno', 'outro')),
   CONSTRAINT ck_os_alvo CHECK (ativo_id IS NOT NULL OR localizacao_id IS NOT NULL),
@@ -2891,6 +3239,9 @@ CREATE INDEX ix_os_encerrada ON app.ordem_servico (empresa_id, data_encerramento
 CREATE UNIQUE INDEX uq_os_plano_aberta ON app.ordem_servico (empresa_id, plano_manutencao_id, ativo_id)
   WHERE plano_manutencao_id IS NOT NULL AND status NOT IN ('concluida', 'encerrada', 'cancelada');
 CREATE INDEX ix_os_busca ON app.ordem_servico USING gin (empresa_id, titulo gin_trgm_ops);
+-- filtro e exportação de OS por campo extra (RF-OS-021): WHERE empresa_id = $1 AND campos_extras @> '{"rompeu_lacre": true}';
+-- jsonb_ops (e não jsonb_path_ops) porque o trigger de campo_extra_os também pergunta "a chave existe?" (operador ?)
+CREATE INDEX ix_os_campos_extras ON app.ordem_servico USING gin (empresa_id, campos_extras);
 CREATE INDEX ix_os_sync ON app.ordem_servico (empresa_id, alterado_xid);
 CALL app.preparar_tabela('app.ordem_servico', p_escopo => 'proprio');   -- policy na seção 2.9.4
 -- fk para fornecedor: seção 5.8; para contrato_locacao: seção 13.10
@@ -2925,7 +3276,10 @@ Regras de dados aplicadas pelo mesmo trigger:
 - `data_inicio` é gravada na primeira entrada em `em_execucao` e não muda nas retomadas.
 - `concluida` → `em_execucao` (liberação recusada) limpa `data_conclusao`, que será gravada de novo na próxima conclusão. MTTR e disponibilidade usam `data_inicio`, `data_conclusao` e os registros de parada, nunca `data_encerramento` (sumário 3.3), então uma liberação tardia não infla o MTTR.
 - `corretiva_emergencial` nasce com prioridade `urgente`. A prioridade padrão das demais vem da criticidade do ativo (A → `alta`, B → `media`, C → `baixa`), aplicada pelo Go.
-- `origem` registra de onde a OS nasceu (`manual`, `solicitacao`, `plano`, `checklist`, `telematica`, `rascunho_ia`, `vistoria_locacao`, `prestador`, e `cliente_conectado` na OS que a subcontratada recebe do cliente conectado). O canal (web, app, API, importação) não é origem: fica em `evento_auditoria.origem`. OS importada de outro sistema tem `origem = 'manual'` e `numero_legado`.
+- `origem` registra de onde a OS nasceu (`manual`, `solicitacao`, `plano`, `checklist`, `telematica`, `rascunho_ia`, `vistoria_locacao`, `prestador`, `cliente_conectado` na OS que a subcontratada recebe do cliente conectado e `projeto` na OS gerada por uma etapa de projeto). Não há origem `regra` na OS: nenhum efeito de regra abre OS, a regra abre solicitação (sumário 3.6). O canal (web, app, API, importação) não é origem: fica em `evento_auditoria.origem`. OS importada de outro sistema tem `origem = 'manual'` e `numero_legado`.
+- **OS de implantação** (sumário 3.1, RF-OS-002): `tipo = 'implantacao'` segue o mesmo ciclo de vida, nunca é gerada por plano (`ck_os_implantacao_plano`) e só é aberta em ativo `em_implantacao` ou ligada a uma etapa de projeto (`etapa_projeto_id`, Fase 2, seção 13.12), regra conferida no Go porque depende de outra tabela. Exceção (proposta): na conta da subcontratada, a OS com `origem = 'cliente_conectado'` aceita o tipo vindo do cliente em qualquer fase da cópia do ativo, porque a fase não atravessa a conexão (seção 2.10.5). Fica fora dos KPIs de manutenção e seu custo é custo de implantação (seção 12.4).
+- **Campos extras** (RF-OS-021): `campos_extras` é um objeto `{chave: valor}` com as chaves de `campo_extra_os`. O Go confere o tipo de cada valor e a obrigatoriedade na abertura e na conclusão, inclusive nos comandos do app offline (seção 11.4); o banco garante só que é um objeto. Inativar uma definição não apaga valores. Os campos extras não entram em fórmula de indicador e não atravessam a conexão entre contas.
+- **Causa externa** (sumário 3.6): opcional, da lista canônica (`ck_os_causa_externa`), marcada na abertura ou na execução, inclusive pelo prestador da OS. Não muda MTTR, MTBF nem disponibilidade técnica: só a medição do contrato com cliente desconta a parada, se a causa for aceita no contrato e a exclusão for aprovada (`decisao_exclusao` em `exclusao_parada_contrato`, seção 13.13). A decisão fica fora da OS porque costuma acontecer no fechamento do mês, quando a OS já está `encerrada` e imutável.
 
 ```sql
 -- name: AssumirOrdemServico :one
@@ -3275,8 +3629,9 @@ CREATE TABLE app.assinatura_eletronica (
   CONSTRAINT pk_assinatura_eletronica PRIMARY KEY (empresa_id, id),
   CONSTRAINT fk_assinatura_usuario FOREIGN KEY (empresa_id, usuario_id) REFERENCES app.usuario (empresa_id, id),
   CONSTRAINT fk_assinatura_pessoa FOREIGN KEY (empresa_id, pessoa_id) REFERENCES app.pessoa (empresa_id, id),
+  -- projeto: termo de entrega do projeto de implantação (RF-PRJ-007, fase 2)
   CONSTRAINT ck_assinatura_entidade CHECK (entidade IN ('ordem_servico', 'checklist_execucao', 'registro_nr12',
-    'inspecao_nr13', 'bloqueio_energia', 'vistoria_locacao')),
+    'inspecao_nr13', 'bloqueio_energia', 'vistoria_locacao', 'projeto')),
   CONSTRAINT ck_assinatura_papel CHECK (papel IN ('executante', 'responsavel', 'liberacao', 'cliente', 'plh',
     'prestador', 'locatario', 'locador')),
   CONSTRAINT ck_assinatura_assinante CHECK (num_nonnulls(usuario_id, pessoa_id, link_execucao_id) >= 1),
@@ -3296,6 +3651,7 @@ CREATE FUNCTION app.status_ativo_calculado(p_empresa uuid, p_ativo uuid) RETURNS
   LANGUAGE sql STABLE
 AS $$
   SELECT CASE
+    WHEN a.fase_ciclo_vida = 'em_implantacao' THEN 'inativo'      -- em implantação (sumário 3.3, RF-ATV-013)
     WHEN a.status_operacional = 'inativo' THEN 'inativo'          -- baixa, venda ou reserva: só por ação explícita
     -- parado prevalece: falha que parou o ativo, emergencial em curso, NR-12 inapto ou bloqueio de conformidade
     WHEN EXISTS (SELECT 1 FROM app.ordem_servico o
@@ -3305,11 +3661,11 @@ AS $$
       OR EXISTS (SELECT 1 FROM app.bloqueio_ativo b
                  WHERE b.empresa_id = a.empresa_id AND b.ativo_id = a.id AND b.fim IS NULL AND b.excluido_em IS NULL)
       THEN 'parado'
-    -- retirado de operação de forma programada
+    -- retirado de operação de forma programada; implantacao: reinstalação de ativo já em operação (proposta)
     WHEN EXISTS (SELECT 1 FROM app.ordem_servico o
                  WHERE o.empresa_id = a.empresa_id AND o.ativo_id = a.id
                    AND o.status IN ('em_execucao', 'pausada')
-                   AND o.tipo IN ('preventiva', 'preditiva', 'inspecao_legal', 'corretiva_planejada'))
+                   AND o.tipo IN ('preventiva', 'preditiva', 'inspecao_legal', 'corretiva_planejada', 'implantacao'))
       THEN 'em_manutencao'
     ELSE 'operando'
   END
@@ -3319,7 +3675,8 @@ $$;
 ```
 
 - A OS só deixa de prender o ativo no **encerramento**: uma OS `concluida` com `ativo_parado` ainda mantém o ativo `parado` até a liberação, como pede o sumário. Os KPIs de tempo não dependem disso: usam `data_inicio`, `data_conclusao` e `parada_inicio`/`parada_fim`.
-- O parecer NR-12 `inapto` cria um `bloqueio_ativo` com motivo `nr12_inapto` (seção 5.10), que só é liberado por nova OS com parecer `apto` ou `apto_com_restricao`.
+- O parecer NR-12 `inapto` cria um `bloqueio_ativo` com motivo `nr12_inapto` e origem `conformidade` (seção 5.10), que só é liberado por nova OS com parecer `apto` ou `apto_com_restricao`. Uma regra configurável com efeito `bloquear_ativo` ou `bloquear_ativo_ate_documento` cria um `bloqueio_ativo` com origem `regra` (seção 5.13), que também deixa o ativo `parado`.
+- Ativo `em_implantacao` é sempre `inativo`, qualquer que seja a OS (`ck_ativo_fase_status`). A OS `implantacao` num ativo já em operação (reinstalação, RF-ATV-013) o deixa `em_manutencao` durante a execução, ou `parado` com "o ativo parou?" (proposta: o RF-ATV-006 não lista o tipo `implantacao`).
 - Ativo cedido em locação continua `operando`; muda só o local efetivo (seção 13.10).
 
 ### 5.6 PRE — Planos de manutenção
@@ -4154,8 +4511,14 @@ CREATE TABLE app.bloqueio_ativo (
   ativo_id           uuid        NOT NULL,
   motivo             text        NOT NULL,
   descricao          text,
-  entidade           text,                     -- origem do bloqueio (registro_nr12, documento_vencimento, inspecao_nr13)
+  -- origem (sumário 3.6): manual (pessoa com a permissão de bloqueio), conformidade (NR-12, NR-13,
+  -- documento vencido) ou regra (efeito de uma regra configurável, seção 5.13)
+  origem             text        NOT NULL DEFAULT 'manual',
+  entidade           text,                     -- fato de conformidade (registro_nr12, documento_vencimento, inspecao_nr13)
   entidade_id        uuid,
+  disparo_regra_id   uuid,                     -- origem regra: o disparo que criou o bloqueio (fk na seção 5.13)
+  tipo_documento_liberacao_id uuid,            -- efeito bloquear_ativo_ate_documento: tipo de documento que levanta
+  documento_liberacao_id      uuid,            -- documento cujo registro levantou o bloqueio sozinho
   inicio             timestamptz NOT NULL,
   fim                timestamptz,              -- nulo = bloqueio vigente
   aplicado_por       uuid,                     -- nulo quando aplicado por job
@@ -4168,12 +4531,30 @@ CREATE TABLE app.bloqueio_ativo (
   CONSTRAINT fk_bloqueio_ativo_ativo FOREIGN KEY (empresa_id, ativo_id) REFERENCES app.ativo (empresa_id, id),
   CONSTRAINT fk_bloqueio_ativo_aplicado FOREIGN KEY (empresa_id, aplicado_por) REFERENCES app.usuario (empresa_id, id),
   CONSTRAINT fk_bloqueio_ativo_liberado FOREIGN KEY (empresa_id, liberado_por) REFERENCES app.usuario (empresa_id, id),
-  CONSTRAINT ck_bloqueio_ativo_motivo CHECK (motivo IN ('nr12_inapto', 'nr13_vencida', 'documento_vencido', 'manual')),
+  -- motivo 'regra' (proposta): bloqueio criado por regra configurável; o texto da regra vai em descricao
+  CONSTRAINT ck_bloqueio_ativo_motivo CHECK (motivo IN ('nr12_inapto', 'nr13_vencida', 'documento_vencido', 'manual', 'regra')),
+  CONSTRAINT ck_bloqueio_ativo_origem CHECK (origem IN ('manual', 'conformidade', 'regra')),
+  -- origem e motivo andam juntos; só o bloqueio de regra tem disparo e tipo de documento de liberação
+  CONSTRAINT ck_bloqueio_ativo_origem_motivo CHECK (
+       (origem = 'manual'       AND motivo = 'manual')
+    OR (origem = 'conformidade' AND motivo IN ('nr12_inapto', 'nr13_vencida', 'documento_vencido'))
+    OR (origem = 'regra'        AND motivo = 'regra')),
+  CONSTRAINT ck_bloqueio_ativo_regra CHECK ((origem = 'regra') = (disparo_regra_id IS NOT NULL)
+                                            AND (tipo_documento_liberacao_id IS NULL OR origem = 'regra')),
+  CONSTRAINT ck_bloqueio_ativo_documento CHECK (documento_liberacao_id IS NULL
+                                                OR (tipo_documento_liberacao_id IS NOT NULL AND fim IS NOT NULL)),
   CONSTRAINT ck_bloqueio_ativo_fim CHECK (fim IS NULL OR (fim >= inicio AND motivo_liberacao IS NOT NULL))
 );
--- no máximo um bloqueio vigente por ativo e origem
-CREATE UNIQUE INDEX uq_bloqueio_ativo_vigente ON app.bloqueio_ativo (empresa_id, ativo_id, motivo, entidade_id)
+-- no máximo um bloqueio vigente por ativo e origem; na origem regra, um por disparo
+CREATE UNIQUE INDEX uq_bloqueio_ativo_vigente ON app.bloqueio_ativo
+  (empresa_id, ativo_id, motivo, coalesce(entidade_id, disparo_regra_id))
   NULLS NOT DISTINCT WHERE fim IS NULL AND excluido_em IS NULL;
+-- LevantarBloqueiosPorDocumento (abaixo): bloqueios vigentes do ativo que esperam um tipo de documento
+CREATE INDEX ix_bloqueio_ativo_documento ON app.bloqueio_ativo (empresa_id, ativo_id, tipo_documento_liberacao_id)
+  WHERE fim IS NULL AND tipo_documento_liberacao_id IS NOT NULL AND excluido_em IS NULL;
+-- "bloqueios ainda abertos desta regra" ao inativá-la (RF-ADM-016) e disparo -> bloqueio
+CREATE INDEX ix_bloqueio_ativo_disparo ON app.bloqueio_ativo (empresa_id, disparo_regra_id)
+  WHERE disparo_regra_id IS NOT NULL;
 CREATE INDEX ix_bloqueio_ativo_sync ON app.bloqueio_ativo (empresa_id, alterado_xid);
 CALL app.preparar_tabela('app.bloqueio_ativo');
 
@@ -4248,6 +4629,12 @@ CREATE INDEX ix_documento_pessoa ON app.documento_vencimento (empresa_id, pessoa
 CREATE INDEX ix_documento_sync ON app.documento_vencimento (empresa_id, alterado_xid);
 CALL app.preparar_tabela('app.documento_vencimento');
 
+-- Liberação do bloqueio de regra por documento (as tabelas citadas já existem neste ponto)
+ALTER TABLE app.bloqueio_ativo ADD CONSTRAINT fk_bloqueio_ativo_tipo_liberacao
+  FOREIGN KEY (empresa_id, tipo_documento_liberacao_id) REFERENCES app.tipo_documento (empresa_id, id);
+ALTER TABLE app.bloqueio_ativo ADD CONSTRAINT fk_bloqueio_ativo_documento_liberacao
+  FOREIGN KEY (empresa_id, documento_liberacao_id) REFERENCES app.documento_vencimento (empresa_id, id);
+
 -- Dados de saúde (LGPD, dado sensível): sem a permissão pessoa.saude.ler, o documento não aparece.
 -- Restritiva: soma-se ao isolamento por empresa e ao escopo externo.
 CREATE POLICY saude ON app.documento_vencimento AS RESTRICTIVE
@@ -4281,6 +4668,24 @@ O job diário de alertas gera uma `notificacao` por documento e antecedência (D
 Documentos pessoais, CNH, ASO e capacitações ligam-se a `pessoa`. A CNH do motorista e o ASO do técnico são linhas de `documento_vencimento` com `alvo = 'pessoa'`; a pessoa pode não ter login (condutor eventual, técnico de fornecedor).
 
 **Apto para despacho e Atenção** (sumário 3.3) não são status gravados. "Apto para despacho" é uma verificação separada: o veículo não pode ter documento vigente vencido de tipo `impede_despacho` nem `bloqueio_ativo` vigente. Um veículo `operando` pode estar impedido de despacho, e a API expõe isso ao TMS. "Atenção" é calculada sobre `operando` na consulta da tela: plano vencendo (`programacao_plano.situacao = 'proximo'` ou `'vencido'`), documento a vencer ou leitura pendente de revisão.
+
+**Origem do bloqueio e liberação por documento** (sumário 3.6, RF-ATV-006, RF-ADM-016). `bloqueio_ativo.origem` diz quem criou o bloqueio: `manual` (pessoa com a permissão de bloqueio), `conformidade` (parecer NR-12 `inapto`, NR-13 vencida, documento vencido) ou `regra` (efeitos `bloquear_ativo` e `bloquear_ativo_ate_documento`, seção 5.13). O bloqueio de origem `regra` aponta para o `disparo_regra` que o criou. Com `bloquear_ativo`, só é levantado por quem tem a permissão de bloqueio, com motivo. Com `bloquear_ativo_ate_documento`, guarda em `tipo_documento_liberacao_id` o tipo de documento exigido e é levantado sozinho, na mesma transação em que um documento desse tipo é registrado no ativo com emissão posterior ao fato que disparou a regra. Como `documento_vencimento.emitido_em` é uma data, "posterior" é comparado por dia, no fuso da unidade: vale o documento emitido no dia do fato ou depois (proposta, seção 17.1, S29). Os tipos de documento (inclusive a verificação metrológica, RF-CON-005) não bloqueiam nada por si: o efeito vem sempre de uma regra.
+
+```sql
+-- name: LevantarBloqueiosPorDocumento :many
+-- Na transação que registra (ou renova) um documento de ativo. Usa ix_bloqueio_ativo_documento.
+UPDATE app.bloqueio_ativo b
+SET fim = sqlc.arg(instante), motivo_liberacao = 'documento_registrado',
+    documento_liberacao_id = sqlc.arg(documento_id)
+FROM app.disparo_regra d
+WHERE b.empresa_id = sqlc.arg(empresa_id) AND b.ativo_id = sqlc.arg(ativo_id)
+  AND b.tipo_documento_liberacao_id = sqlc.arg(tipo_documento_id)
+  AND b.origem = 'regra' AND b.fim IS NULL AND b.excluido_em IS NULL
+  AND d.empresa_id = b.empresa_id AND d.id = b.disparo_regra_id
+  AND sqlc.arg(emitido_em)::date >= (d.fato_em AT TIME ZONE sqlc.arg(fuso_unidade)::text)::date
+RETURNING b.id, b.disparo_regra_id;
+-- Em seguida, na mesma transação, o serviço recalcula o status do ativo (app.status_ativo_calculado).
+```
 
 ### 5.11 Notificações e eventos de saída
 
@@ -4338,8 +4743,11 @@ As tabelas `evento_auditoria`, `selo_auditoria`, `anexo`, `dispositivo`, `comand
 
 MVP, plano Serviços (sumário 2.2). A conta da subcontratada é uma `empresa` com `srv_habilitado`. Ela usa as tabelas do restante do esquema (pessoa, usuário com perfil `tecnico`, ativo, OS, apontamento, material, anexo, assinatura, app de campo) e acrescenta as abaixo. A conexão entre contas e a sincronização estão descritas na seção 2.10; aqui fica o DDL.
 
+`cliente_servico` existe nas contas com SRV (a subcontratada e seus clientes atendidos) e, a partir da Fase 2, nas contas com CTR (sumário 3.1): é a parte do `contrato_cliente` (seção 13.13), por exemplo a prefeitura de um contrato de fiscalização eletrônica. A tabela é a mesma nos dois casos e continua só interna (policy padrão `escopo_externo`, nenhum acesso de prestador, locatário ou link). O serviço de cadastro só aceita `cliente_servico` em empresa com `srv_habilitado` ou com plano que inclua o CTR (Profissional ou Enterprise, sumário 2.1); a regra fica no Go, como a habilitação dos demais módulos. Na conta só com CTR, `cliente_servico.conexao_empresa_id` fica nulo: a conexão entre contas continua sendo só a do SRV.
+
 ```sql
--- Cliente atendido pela subcontratada: empresa ou pessoa para quem ela presta serviço
+-- Cliente atendido: empresa, órgão público ou pessoa para quem a conta presta serviço
+-- (contas com SRV e, na fase 2, contas com CTR; sumário 3.1)
 CREATE TABLE app.cliente_servico (
   empresa_id              uuid        NOT NULL,
   id                      uuid        NOT NULL DEFAULT app.uuid_v7(),
@@ -4367,7 +4775,7 @@ CREATE TABLE app.cliente_servico (
 CREATE UNIQUE INDEX uq_cliente_servico_documento ON app.cliente_servico (empresa_id, documento) WHERE excluido_em IS NULL;
 CREATE INDEX ix_cliente_servico_busca ON app.cliente_servico USING gin (empresa_id, nome gin_trgm_ops);
 CREATE INDEX ix_cliente_servico_sync ON app.cliente_servico (empresa_id, alterado_xid);
-CALL app.preparar_tabela('app.cliente_servico');                -- só interno
+CALL app.preparar_tabela('app.cliente_servico');                -- só interno, também nas contas com CTR
 -- conexao_empresa_id: gravado pelo serviço de aceite; trigger trg_cliente_servico_conexao mais abaixo
 
 -- Equipamento de cliente: ativo com propriedade 'de_cliente'
@@ -4847,6 +5255,200 @@ Regras de dados do SRV:
 - **Ativos compartilhados.** O cliente escolhe na conexão ativos, classes ou localizações (`ativo_compartilhado`); o conjunto resolvido (`vw_ativo_compartilhado`) é copiado no aceite e mantido pela sincronização. Na fase 2, entra também a cobertura do contrato de prestação. O ativo de uma OS atribuída ao fornecedor conectado é compartilhado junto com a OS.
 - **Sem cliente na Tenaz.** A subcontratada usa tudo acima sem conexão: `cliente_servico.conexao_empresa_id` nulo, ativos sem `conexao_empresa_id`, nenhuma mensagem em `envio_conexao`.
 
+### 5.13 Configuração por segmento: campos extras da OS e regras configuráveis
+
+MVP, todos os planos (sumário 3.7). A empresa configura blocos que o sistema já conhece, sempre de catálogos fechados: estados, fórmulas de indicador, regras do app offline, isolamento e a lista de campos da conexão **não** são configuráveis. Condição ou efeito novo entra por requisito e por migração (o `CHECK` abaixo), nunca por configuração. Fase de ciclo de vida do ativo e tipo de OS `implantacao` estão nas seções 5.2 e 5.5; pacotes de segmento, na seção 13.11 (Fase 2).
+
+```sql
+-- Definição de campo extra da OS (RF-OS-021). Os valores ficam em ordem_servico.campos_extras,
+-- gravados com a chave. Aparece por tipo de OS e classe de ativo; vazio = todos.
+CREATE TABLE app.campo_extra_os (
+  empresa_id           uuid     NOT NULL,
+  id                   uuid     NOT NULL DEFAULT app.uuid_v7(),
+  chave                text     NOT NULL,      -- minúsculas, sem acento; nunca muda (os valores a usam)
+  rotulo               text     NOT NULL,
+  tipo                 text     NOT NULL,
+  opcoes               text[],                 -- tipo lista
+  unidade_medida       text,                   -- tipo numero
+  tipos_os             text[]   NOT NULL DEFAULT '{}',
+  classes_ativo_ids    uuid[]   NOT NULL DEFAULT '{}',   -- array de ids, sem fk, como em servico_fornecedor (D14)
+  momento_obrigatorio  text     NOT NULL DEFAULT 'nenhum',  -- proposta de nome: momento da obrigatoriedade
+  preenchido_pelo_prestador boolean NOT NULL DEFAULT false,  -- proposta (sumário 3.6): lido e preenchido por prestador e link
+  texto_ajuda          text,
+  ordem                integer  NOT NULL DEFAULT 0,
+  situacao             text     NOT NULL DEFAULT 'ativo',
+  versao bigint NOT NULL DEFAULT 1, alterado_xid xid8 NOT NULL DEFAULT pg_current_xact_id(),
+  criado_em timestamptz NOT NULL DEFAULT now(), criado_por uuid,
+  atualizado_em timestamptz NOT NULL DEFAULT now(), atualizado_por uuid, excluido_em timestamptz,
+  CONSTRAINT pk_campo_extra_os PRIMARY KEY (empresa_id, id),
+  -- única na empresa, inclusive entre definições inativas ou excluídas: valores antigos continuam com a chave
+  CONSTRAINT uq_campo_extra_os_chave UNIQUE (empresa_id, chave),
+  CONSTRAINT uq_campo_extra_os_tipo UNIQUE (empresa_id, id, tipo),   -- alvo de fk de regra_automacao
+  CONSTRAINT ck_campo_extra_os_chave CHECK (chave ~ '^[a-z][a-z0-9_]{0,39}$'),
+  CONSTRAINT ck_campo_extra_os_tipo CHECK (tipo IN ('texto', 'numero', 'data', 'lista', 'sim_nao')),
+  CONSTRAINT ck_campo_extra_os_opcoes CHECK ((tipo = 'lista') = (coalesce(cardinality(opcoes), 0) >= 1)),
+  CONSTRAINT ck_campo_extra_os_unidade CHECK (unidade_medida IS NULL OR tipo = 'numero'),
+  CONSTRAINT ck_campo_extra_os_tipos_os CHECK (tipos_os <@ ARRAY['preventiva', 'preditiva', 'corretiva_planejada',
+    'corretiva_emergencial', 'inspecao_legal', 'melhoria', 'implantacao']),
+  CONSTRAINT ck_campo_extra_os_momento CHECK (momento_obrigatorio IN ('nenhum', 'abertura', 'conclusao')),
+  CONSTRAINT ck_campo_extra_os_situacao CHECK (situacao IN ('ativo', 'inativo'))
+);
+CREATE INDEX ix_campo_extra_os_sync ON app.campo_extra_os (empresa_id, alterado_xid);   -- cache de configuração do app
+CALL app.preparar_tabela('app.campo_extra_os', p_escopo => 'proprio');   -- policy na seção 2.9.4
+
+-- A chave nunca muda; o tipo só muda enquanto nenhuma OS tiver valor gravado (RF-OS-021). Usa ix_os_campos_extras.
+CREATE FUNCTION app.tg_campo_extra_os_imutavel() RETURNS trigger
+  LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NEW.chave IS DISTINCT FROM OLD.chave THEN
+    RAISE EXCEPTION 'a chave do campo extra não muda' USING ERRCODE = '23514';
+  END IF;
+  IF NEW.tipo IS DISTINCT FROM OLD.tipo AND EXISTS (
+       SELECT 1 FROM app.ordem_servico o
+       WHERE o.empresa_id = OLD.empresa_id AND o.campos_extras ? OLD.chave) THEN
+    RAISE EXCEPTION 'o tipo do campo % não muda depois de haver valor gravado', OLD.chave USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END
+$$;
+CREATE TRIGGER trg_campo_extra_os_imutavel BEFORE UPDATE OF chave, tipo ON app.campo_extra_os
+  FOR EACH ROW EXECUTE FUNCTION app.tg_campo_extra_os_imutavel();
+
+-- Regra configurável: condição -> efeito, de catálogos fechados (sumário 3.7, RF-ADM-016)
+CREATE TABLE app.regra_automacao (
+  empresa_id                   uuid     NOT NULL,
+  id                           uuid     NOT NULL DEFAULT app.uuid_v7(),
+  nome                         text     NOT NULL,     -- chave natural usada pelo pacote de segmento (RF-ADM-017)
+  descricao                    text,
+  condicao                     text     NOT NULL,
+  efeito                       text     NOT NULL,
+  -- parâmetros da condição: colunas com fk onde há referência; o resto em parametros_condicao
+  tipo_documento_id            uuid,                  -- documento_vencido, documento_a_vencer
+  dias_antecedencia            integer,               -- documento_a_vencer
+  campo_extra_os_id            uuid,                  -- os_concluida_com_campo (campo sim_nao)
+  campo_extra_tipo             text     NOT NULL DEFAULT 'sim_nao' CHECK (campo_extra_tipo = 'sim_nao'),
+  checklist_item_modelo_id     uuid,                  -- item_checklist_reprovado (nulo = qualquer item reprovado)
+  parametros_condicao          jsonb    NOT NULL DEFAULT '{}',  -- leitura_fora_faixa: {tipo_medidor, minimo, maximo}
+  -- filtro (vazio = todos)
+  classes_ativo_ids            uuid[]   NOT NULL DEFAULT '{}',
+  unidades_ids                 uuid[]   NOT NULL DEFAULT '{}',
+  criticidades                 text[]   NOT NULL DEFAULT '{}',
+  -- parâmetros do efeito
+  tipo_documento_liberacao_id  uuid,                  -- bloquear_ativo_ate_documento: tipo que levanta o bloqueio
+  motivo_bloqueio              text,                  -- bloquear_ativo e bloquear_ativo_ate_documento
+  prioridade_solicitacao       text,                  -- abrir_solicitacao
+  destinatarios                jsonb    NOT NULL DEFAULT '[]',  -- notificar: [{perfil | usuario_id, canal}]
+  situacao                     text     NOT NULL DEFAULT 'inativa',
+  ativada_em                   timestamptz,
+  ativada_por                  uuid,
+  versao bigint NOT NULL DEFAULT 1, alterado_xid xid8 NOT NULL DEFAULT pg_current_xact_id(),
+  criado_em timestamptz NOT NULL DEFAULT now(), criado_por uuid,
+  atualizado_em timestamptz NOT NULL DEFAULT now(), atualizado_por uuid, excluido_em timestamptz,
+  CONSTRAINT pk_regra_automacao PRIMARY KEY (empresa_id, id),
+  CONSTRAINT fk_regra_tipo_documento FOREIGN KEY (empresa_id, tipo_documento_id) REFERENCES app.tipo_documento (empresa_id, id),
+  -- a fk inclui o tipo: só campo sim_nao serve de condição
+  CONSTRAINT fk_regra_campo_extra FOREIGN KEY (empresa_id, campo_extra_os_id, campo_extra_tipo)
+    REFERENCES app.campo_extra_os (empresa_id, id, tipo),
+  CONSTRAINT fk_regra_item_checklist FOREIGN KEY (empresa_id, checklist_item_modelo_id)
+    REFERENCES app.checklist_item_modelo (empresa_id, id),
+  CONSTRAINT fk_regra_tipo_liberacao FOREIGN KEY (empresa_id, tipo_documento_liberacao_id)
+    REFERENCES app.tipo_documento (empresa_id, id),
+  CONSTRAINT fk_regra_ativada_por FOREIGN KEY (empresa_id, ativada_por) REFERENCES app.usuario (empresa_id, id),
+  -- catálogos fechados do MVP; a fase 2 recria os dois CHECK com capacitacao_vencida,
+  -- etapa_projeto_atrasada e impedir_atribuicao (padrão "novo valor de estado", seção 14.3)
+  CONSTRAINT ck_regra_condicao CHECK (condicao IN ('documento_vencido', 'documento_a_vencer',
+    'os_concluida_com_campo', 'item_checklist_reprovado', 'leitura_fora_faixa')),
+  CONSTRAINT ck_regra_efeito CHECK (efeito IN ('notificar', 'abrir_solicitacao', 'bloquear_ativo',
+    'bloquear_ativo_ate_documento')),
+  CONSTRAINT ck_regra_documento CHECK ((condicao IN ('documento_vencido', 'documento_a_vencer')) = (tipo_documento_id IS NOT NULL)),
+  CONSTRAINT ck_regra_antecedencia CHECK ((condicao = 'documento_a_vencer') = (dias_antecedencia IS NOT NULL)
+                                          AND coalesce(dias_antecedencia, 1) BETWEEN 1 AND 365),
+  CONSTRAINT ck_regra_campo CHECK ((condicao = 'os_concluida_com_campo') = (campo_extra_os_id IS NOT NULL)),
+  CONSTRAINT ck_regra_item CHECK (checklist_item_modelo_id IS NULL OR condicao = 'item_checklist_reprovado'),
+  CONSTRAINT ck_regra_liberacao CHECK ((efeito = 'bloquear_ativo_ate_documento') = (tipo_documento_liberacao_id IS NOT NULL)),
+  CONSTRAINT ck_regra_prioridade CHECK ((efeito = 'abrir_solicitacao') = (prioridade_solicitacao IS NOT NULL)
+    AND prioridade_solicitacao IN ('baixa', 'media', 'alta', 'urgente')),
+  -- proposta do RF-ADM-016: documento a vencer não abre solicitação (seria uma por dia)
+  CONSTRAINT ck_regra_combinacao CHECK (NOT (condicao = 'documento_a_vencer' AND efeito = 'abrir_solicitacao')),
+  CONSTRAINT ck_regra_criticidades CHECK (criticidades <@ ARRAY['A', 'B', 'C']),
+  CONSTRAINT ck_regra_situacao CHECK (situacao IN ('ativa', 'inativa')),
+  CONSTRAINT ck_regra_ativa CHECK (situacao <> 'ativa' OR ativada_em IS NOT NULL)
+);
+CREATE UNIQUE INDEX uq_regra_automacao_nome ON app.regra_automacao (empresa_id, lower(nome)) WHERE excluido_em IS NULL;
+-- ListarRegrasAtivas: a cada fato (documento vence, OS conclui, checklist enviado, leitura registrada),
+-- o serviço busca as regras ativas daquela condição
+CREATE INDEX ix_regra_automacao_condicao ON app.regra_automacao (empresa_id, condicao)
+  WHERE situacao = 'ativa' AND excluido_em IS NULL;
+CALL app.preparar_tabela('app.regra_automacao');   -- só interno
+
+-- Disparo: cada vez que uma regra aplicou (ou deixou de aplicar) seu efeito a um fato
+CREATE TABLE app.disparo_regra (
+  empresa_id           uuid        NOT NULL,
+  id                   uuid        NOT NULL DEFAULT app.uuid_v7(),
+  regra_automacao_id   uuid        NOT NULL,
+  condicao             text        NOT NULL,   -- cópia da regra no momento do disparo
+  efeito               text        NOT NULL,
+  fato_entidade        text        NOT NULL,   -- o fato que disparou (associação polimórfica, como anexo)
+  fato_id              uuid        NOT NULL,
+  fato_em              timestamptz NOT NULL,   -- instante do fato: vencimento, conclusão, envio, leitura
+  ativo_id             uuid,
+  resultado            text        NOT NULL,   -- proposta: aplicado; sem_efeito (ativo fora do filtro, já bloqueado)
+  solicitacao_id       uuid,                   -- efeito abrir_solicitacao
+  disparado_em         timestamptz NOT NULL DEFAULT now(),
+  versao bigint NOT NULL DEFAULT 1, alterado_xid xid8 NOT NULL DEFAULT pg_current_xact_id(),
+  criado_em timestamptz NOT NULL DEFAULT now(), criado_por uuid,
+  atualizado_em timestamptz NOT NULL DEFAULT now(), atualizado_por uuid, excluido_em timestamptz,
+  CONSTRAINT pk_disparo_regra PRIMARY KEY (empresa_id, id),
+  -- idempotência: a rotina diária e a avaliação no fato nunca repetem o efeito para o mesmo fato
+  CONSTRAINT uq_disparo_regra_fato UNIQUE (empresa_id, regra_automacao_id, fato_entidade, fato_id),
+  CONSTRAINT fk_disparo_regra_regra FOREIGN KEY (empresa_id, regra_automacao_id) REFERENCES app.regra_automacao (empresa_id, id),
+  CONSTRAINT fk_disparo_regra_ativo FOREIGN KEY (empresa_id, ativo_id) REFERENCES app.ativo (empresa_id, id),
+  CONSTRAINT fk_disparo_regra_solicitacao FOREIGN KEY (empresa_id, solicitacao_id) REFERENCES app.solicitacao (empresa_id, id),
+  -- capacitacao e etapa_projeto entram com as condições da fase 2
+  CONSTRAINT ck_disparo_regra_fato CHECK (fato_entidade IN ('documento_vencimento', 'ordem_servico',
+    'checklist_execucao', 'leitura_medidor')),
+  CONSTRAINT ck_disparo_regra_resultado CHECK (resultado IN ('aplicado', 'sem_efeito')),
+  CONSTRAINT ck_disparo_regra_solicitacao CHECK (solicitacao_id IS NULL OR efeito = 'abrir_solicitacao')
+);
+-- histórico de disparos por regra e por ativo (RF-ADM-016)
+CREATE INDEX ix_disparo_regra_regra ON app.disparo_regra (empresa_id, regra_automacao_id, disparado_em DESC);
+CREATE INDEX ix_disparo_regra_ativo ON app.disparo_regra (empresa_id, ativo_id, disparado_em DESC) WHERE ativo_id IS NOT NULL;
+-- tela da solicitação aberta por regra: "aberta pela regra X"
+CREATE INDEX ix_disparo_regra_solicitacao ON app.disparo_regra (empresa_id, solicitacao_id) WHERE solicitacao_id IS NOT NULL;
+CALL app.preparar_tabela('app.disparo_regra', p_auditar => false);   -- o disparo já é o registro do fato; só interno
+
+ALTER TABLE app.bloqueio_ativo ADD CONSTRAINT fk_bloqueio_ativo_disparo
+  FOREIGN KEY (empresa_id, disparo_regra_id) REFERENCES app.disparo_regra (empresa_id, id);
+```
+
+Avaliação de uma regra, numa transação, no fato que a dispara ou na rotina diária (job `tenaz_job`, empresa por empresa):
+
+```sql
+-- name: RegistrarDisparoRegra :one
+-- Reserva o fato para a regra. Nenhuma linha: o fato já disparou esta regra e o efeito não é repetido.
+INSERT INTO app.disparo_regra (empresa_id, id, regra_automacao_id, condicao, efeito, fato_entidade, fato_id,
+                               fato_em, ativo_id, resultado)
+VALUES (sqlc.arg(empresa_id), sqlc.arg(id), sqlc.arg(regra_automacao_id), sqlc.arg(condicao), sqlc.arg(efeito),
+        sqlc.arg(fato_entidade), sqlc.arg(fato_id), sqlc.arg(fato_em), sqlc.narg(ativo_id), sqlc.arg(resultado))
+ON CONFLICT (empresa_id, regra_automacao_id, fato_entidade, fato_id) DO NOTHING
+RETURNING id;
+-- Depois, na mesma transação: cria o bloqueio_ativo (origem 'regra', disparo_regra_id) ou a solicitacao
+-- (origem 'regra') e grava solicitacao_id no disparo; notificar usa notificacao com chave de deduplicação
+-- 'disparo:' || id. O efeito roda em SAVEPOINT: se falhar, o disparo vira 'sem_efeito' com o motivo no log.
+```
+
+Regras de dados:
+
+- **Catálogos fechados.** Condição e efeito são `CHECK` (`ck_regra_condicao`, `ck_regra_efeito`) e as combinações permitidas também (`ck_regra_documento`, `ck_regra_liberacao`, `ck_regra_combinacao`). Acrescentar um valor exige requisito no documento 1 e migração (risco R7).
+- **Permissões.** Regras exigem `adm.gerenciar_regras`; definições de campo extra, `adm.gerenciar_configuracao` (seção 5.1).
+- **Limites.** No máximo 50 regras `ativa` por empresa e 30 campos extras ativos por combinação de tipo de OS e classe (propostas de RF-ADM-016 e RF-OS-021), conferidos no Go na ativação.
+- **O que a regra nunca faz** (sumário 3.7): mudar o estado de uma OS, alterar fórmula de indicador, gravar dado em outra conta. Os efeitos só criam `bloqueio_ativo`, `solicitacao`, `notificacao` e o próprio `disparo_regra`; nenhuma dessas tabelas tem privilégio para o `tenaz_sinc`. Na conexão entre contas, o efeito de um bloqueio não atravessa como dado: a cópia do ativo na subcontratada tem o status calculado pelas OS dela (seção 5.12; divergência com o RF-ADM-016 na seção 17.1, S31).
+- **Inativar a regra** não levanta os bloqueios que ela criou; a lista para decisão sai de `bloqueio_ativo` por `disparo_regra_id` (`ix_bloqueio_ativo_disparo`).
+- **Padrões continuam.** Alertas de vencimento (seção 5.10) e item reprovado de checklist gerando solicitação (seção 5.7) valem sem regra; a regra acrescenta efeitos.
+- **Auditoria.** `regra_automacao` e `campo_extra_os` são auditadas pelo `trg_auditoria`. Os efeitos são auditados como qualquer escrita, com `ator_tipo = 'sistema'` quando gravados pelo job e o id do disparo em `request_id` (proposta), o que liga a trilha ao `disparo_regra`.
+- **App offline.** `campo_extra_os` desce no cache de configuração (`ix_campo_extra_os_sync`), e o app valida a obrigatoriedade antes de enfileirar `ordem_servico.concluir` (seção 11.4). As regras não descem ao app: são avaliadas no servidor, quando o comando chega.
+
 ---
 
 ## 6. Hierarquia de ativos e localizações
@@ -5123,7 +5725,7 @@ WHERE parent_table = 'app.leitura_medidor';
 
 ### 8.1 Requisito
 
-`OS-AAAA-NNNNNN` (ordem de serviço), `SS-AAAA-NNNNNN` (solicitação), `OR-AAAA-NNNNNN` (ordem de reparo) e `CL-AAAA-NNNNNN` (contrato de locação), sequenciais **por empresa**, reiniciando a cada ano, sem lacunas indevidas. Na fase 2 entram `PC` (pedido de compra) e `RM` (requisição de compra), com a mesma regra. Uma `SEQUENCE` não serve: é global, não volta em `ROLLBACK` (cria lacuna a cada falha) e uma sequência por empresa e ano exigiria DDL em tempo de execução.
+`OS-AAAA-NNNNNN` (ordem de serviço), `SS-AAAA-NNNNNN` (solicitação), `OR-AAAA-NNNNNN` (ordem de reparo) e `CL-AAAA-NNNNNN` (contrato de locação), sequenciais **por empresa**, reiniciando a cada ano, sem lacunas indevidas. Na fase 2 entram `PC` (pedido de compra), `RM` (requisição de compra), `PJ-AAAA-NNNNNN` (projeto, sumário 3.4) e `CT-AAAA-NNNNNN` (contrato com cliente, sumário 3.4), com a mesma regra. Uma `SEQUENCE` não serve: é global, não volta em `ROLLBACK` (cria lacuna a cada falha) e uma sequência por empresa e ano exigiria DDL em tempo de execução.
 
 ### 8.2 Solução: contador transacional com upsert
 
@@ -5173,6 +5775,13 @@ Regras de uso:
 - **Offline:** o app não numera. A OS ou solicitação criada offline tem só o UUID e aparece como "Nova (aguardando sincronização)". O número é atribuído quando o comando chega ao servidor.
 - **Importação:** OS históricas guardam o número do sistema anterior em `numero_legado`. A numeração da Tenaz começa em 1 no ano da implantação.
 - **Ordem de reparo e contrato de locação** usam o mesmo `app.proximo_numero`, com os tipos `OR` e `CL`; as colunas `ano`, `sequencial` e `numero` gerado seguem o padrão da OS (seções 13.9 e 13.10). Rascunho de contrato de locação já recebe número: cancelamento não é lacuna.
+- **Projeto e contrato com cliente** (fase 2) usam o mesmo mecanismo, com os tipos `PJ` e `CT` e as mesmas colunas (seções 13.12 e 13.13). Rascunho também recebe número, e o ano é o da criação no fuso da unidade. A migração da fase 2 recria o `CHECK` do contador sem travar a tabela (seção 14.3):
+
+```sql
+ALTER TABLE app.contador_documento DROP CONSTRAINT ck_contador_documento_tipo,
+  ADD CONSTRAINT ck_contador_documento_tipo CHECK (tipo IN ('OS', 'SS', 'OR', 'CL', 'PC', 'RM', 'PJ', 'CT')) NOT VALID;
+ALTER TABLE app.contador_documento VALIDATE CONSTRAINT ck_contador_documento_tipo;
+```
 - **Limite:** 999.999 documentos por tipo, empresa e ano (`ck_contador_documento_numero`). Uma empresa que se aproxime disso exige mudança de formato no sumário executivo.
 
 ---
@@ -5193,6 +5802,8 @@ Regras de uso:
 | Sincronização entre contas conectadas (SRV) | `ator_tipo = 'sincronizacao_conexao'`, `conexao_empresa_id` e `request_id` igual ao `mensagem_id`, nas duas contas; um evento `acao = 'sincronizacao'` por grupo entregue ou recebido (seção 2.10.8) |
 | Visualização de dado de saúde (ASO, toxicológico) | `acao = 'visualizacao_sensivel'`, gravado pelo serviço para quem tem `pessoa.saude.ler` |
 | Revisão de leitura, alteração de alto volume | Gravado pelo serviço, no nível do fato |
+| Disparo de regra configurável | O próprio `disparo_regra` (sem `trg_auditoria`); os efeitos (bloqueio, solicitação) pelo `trg_auditoria`, com `ator_tipo = 'sistema'` no job e o id do disparo em `request_id` (seção 5.13) |
+| Entrada em operação do ativo | `trg_auditoria` do `UPDATE` de `colocar_em_operacao`: quem, quando, `fase_ciclo_vida` e `data_entrada_operacao` antes e depois |
 
 Cada evento guarda quem, o quê, quando, antes, depois, IP, dispositivo, origem e o identificador da requisição, como pede a meta de auditoria do estudo de mercado.
 
@@ -5415,7 +6026,9 @@ CREATE TABLE app.anexo (
     'registro_nr12', 'assinatura_eletronica', 'fornecedor', 'pneu', 'abastecimento', 'multa', 'sinistro',
     'nota_fiscal_entrada', 'inspecao_nr13', 'capacitacao', 'ponto_bloqueio', 'documento_ia', 'pessoa',
     'orcamento_fornecedor', 'contrato_prestacao', 'ordem_reparo', 'peca_serializada', 'movimentacao_estoque',
-    'locatario', 'contrato_locacao', 'vistoria_locacao', 'cliente_servico', 'comentario')),
+    'locatario', 'contrato_locacao', 'vistoria_locacao', 'cliente_servico', 'comentario',
+    -- fase 2: termo de entrega e documentos do projeto, contrato com cliente e memória da medição
+    'projeto', 'etapa_projeto', 'contrato_cliente', 'medicao_contrato')),
   CONSTRAINT ck_anexo_categoria CHECK (categoria IN ('foto', 'documento', 'manual', 'laudo', 'certificado',
     'nota_fiscal', 'rubrica', 'outro')),
   CONSTRAINT ck_anexo_status CHECK (status IN ('pendente_upload', 'em_verificacao', 'disponivel', 'rejeitado', 'removido')),
@@ -5504,7 +6117,7 @@ SELECT pg_snapshot_xmin(pg_current_snapshot())::text AS novo_cursor;
 
 -- name: DeltaOrdemServico :many
 SELECT id, numero, status, ativo_id, responsavel_id, titulo, descricao, prioridade,
-       programada_inicio, versao, alterado_xid, excluido_em
+       programada_inicio, campos_extras, causa_externa, versao, alterado_xid, excluido_em
 FROM app.ordem_servico
 WHERE empresa_id = sqlc.arg(empresa_id)
   AND alterado_xid >= sqlc.arg(cursor)::xid8
@@ -5548,7 +6161,7 @@ CALL app.preparar_tabela('app.dispositivo', p_escopo => 'proprio');
 
 ### 11.4 Subida com comandos idempotentes
 
-O app não envia "a linha nova da OS"; envia intenções: `ordem_servico.reconhecer`, `ordem_servico.assumir`, `ordem_servico.iniciar`, `ordem_servico.pausar`, `ordem_servico.concluir`, `apontamento.registrar`, `leitura_medidor.registrar`, `checklist.concluir`, `solicitacao.criar`, `movimentacao_estoque.registrar`, `vistoria_locacao.registrar`, `anexo.registrar`. A mesma tabela atende o cabeçalho `Idempotency-Key` da API pública.
+O app não envia "a linha nova da OS"; envia intenções: `ordem_servico.reconhecer`, `ordem_servico.assumir`, `ordem_servico.iniciar`, `ordem_servico.pausar`, `ordem_servico.concluir`, `apontamento.registrar`, `leitura_medidor.registrar`, `checklist.concluir`, `solicitacao.criar`, `movimentacao_estoque.registrar`, `vistoria_locacao.registrar`, `anexo.registrar`. A mesma tabela atende o cabeçalho `Idempotency-Key` da API pública. Os valores de campos extras e a causa externa viajam na carga dos comandos da OS (abertura, edição e `ordem_servico.concluir`); o app confere a obrigatoriedade pelas definições de `campo_extra_os` antes de enfileirar, e o servidor confere de novo. No escopo `prestador`, a descida de `ordem_servico` passa pela mesma projeção da API: só as chaves de campos com `preenchido_pelo_prestador` (seção 2.9.4).
 
 ```sql
 CREATE TABLE app.comando_sync (
@@ -5645,7 +6258,8 @@ Tombstones com mais de 30 dias são apagados por job diário. Um dispositivo cuj
 | Fatos de inserção (apontamento, leitura, foto, resposta de checklist, assinatura, transição) | Não conflitam: o `id` vem do dispositivo e a inserção é idempotente |
 | Transição de estado da OS | Validada no servidor pela matriz da seção 5.5. Transição impossível (concluir OS cancelada no escritório) vira comando rejeitado, com motivo |
 | Campos descritivos da OS e da solicitação (descrição, solução, observação) | **Proposta:** último a escrever vence, campo a campo, pelo instante do dispositivo corrigido pelo desvio de relógio. O servidor guarda o instante de cada campo em `carimbo_campos` |
-| Cadastros (ativo, plano, modelo de checklist, item) | No MVP, o app só lê. Edição exige conexão |
+| Campos extras da OS (`campos_extras`) | **Proposta:** como os campos descritivos, chave a chave: cada chave tem o seu instante em `carimbo_campos` (`"campos_extras.<chave>"`), e o último a escrever vence |
+| Cadastros (ativo, plano, modelo de checklist, item, definições de campo extra, regras) | No MVP, o app só lê. Edição exige conexão |
 
 ```sql
 ALTER TABLE app.ordem_servico ADD COLUMN carimbo_campos jsonb NOT NULL DEFAULT '{}';
@@ -5691,6 +6305,7 @@ CREATE TABLE app.kpi_ativo_dia (
   custo_material           numeric(14,2) NOT NULL DEFAULT 0,
   custo_terceiros          numeric(14,2) NOT NULL DEFAULT 0,
   custo_outros_responsaveis numeric(14,2) NOT NULL DEFAULT 0, -- OS com responsavel_custo <> 'empresa' (fora de custo/RAV)
+  custo_implantacao        numeric(14,2) NOT NULL DEFAULT 0,  -- proposta: OS tipo implantacao (fora do custo de manutenção)
   uso_km                   numeric(14,2),
   uso_horas                numeric(14,2),
   calculado_em             timestamptz   NOT NULL DEFAULT now(),
@@ -5751,6 +6366,10 @@ Regras de cálculo ligadas ao sumário 3.3:
 - Como o regime de operação não diz em que horas do dia o ativo opera, a parada de cada dia é ponderada pela fração operacional (`horas_operacao_dia / 24`) antes de entrar em `horas_parado`.
 - `custo_mao_obra`, `custo_material` e `custo_terceiros` somam só as OS com `responsavel_custo = 'empresa'`. As demais (locatário, locador, garantia, fornecedor) vão para `custo_outros_responsaveis`, aparecem separadas na tela e não entram em custo/RAV.
 - OS só de localização (sem ativo) não entram nos KPIs por ativo.
+- **OS de implantação** (sumário 3.1, RF-OS-002) não entram em `horas_parado`, `horas_reparo`, `horas_espera`, `falhas`, `reparos_concluidos`, `os_concluidas`, `hh_planejadas`, `hh_total` nem nos custos de manutenção: o custo vai para `custo_implantacao`, mostrado à parte e somado ao custo realizado do projeto (Fase 2, seção 13.12). O backlog e o cumprimento de preventiva também as ignoram.
+- **Ativo em implantação** fica fora do denominador: o tempo requerido conta só a partir de `data_entrada_operacao` (consulta abaixo), e o ativo `em_implantacao` não entra.
+- **Causa externa** (`ordem_servico.causa_externa`) não muda nenhum KPI técnico; só a medição do contrato com cliente desconta a parada (seção 13.13).
+- **Campos extras** não entram em fórmula de indicador.
 
 Os indicadores derivam das somas, no momento da consulta:
 
@@ -5759,12 +6378,16 @@ Os indicadores derivam das somas, no momento da consulta:
 -- Tempo requerido = dias do período × (dias_operacao_semana / 7) × horas_operacao_dia,
 -- o regime de operação do ativo (sumário 3.1). Sem regime cadastrado, vale 24×7.
 -- Calendário operacional por ativo e dia fica para a fase 3.
+-- O período de cada ativo começa no maior entre o início pedido e a data de entrada em operação (RF-ATV-013).
 WITH req AS (
   SELECT a.id AS ativo_id,
-         sqlc.arg(dias_periodo)::int * coalesce(a.dias_operacao_semana, 7) / 7.0
+         greatest(sqlc.arg(fim)::date - greatest(sqlc.arg(inicio)::date,
+                                                 coalesce(a.data_entrada_operacao, sqlc.arg(inicio)::date)) + 1, 0)
+           * coalesce(a.dias_operacao_semana, 7) / 7.0
            * coalesce(a.horas_operacao_dia, 24) AS horas_requeridas
   FROM app.ativo a
   WHERE a.empresa_id = sqlc.arg(empresa_id) AND a.excluido_em IS NULL
+    AND a.fase_ciclo_vida = 'em_operacao'
 )
 SELECT k.ativo_id,
        (r.horas_requeridas - sum(k.horas_parado)) / nullif(sum(k.falhas), 0)            AS mtbf_horas,
@@ -5790,6 +6413,7 @@ GROUP BY k.ativo_id, r.horas_requeridas;
 | % planejada | `kpi_ativo_dia.hh_planejadas / hh_total` |
 | Custo / RAV | Custos anuais + `ativo.valor_reposicao` |
 | First-time fix | `ordem_servico.os_origem_id` (retrabalho) |
+| Custo de implantação (separado do de manutenção) | `kpi_ativo_dia.custo_implantacao` |
 
 ### 12.5 Réplica de leitura
 
@@ -7129,7 +7753,689 @@ ORDER BY c.numero, o.data_encerramento;
 
 As horas e os km excedentes saem de `leitura_medidor` dos medidores do item (`medidor_horas_id`, `medidor_km_id`): uso no período = valor acumulado no fim − valor acumulado no início (com `leitura_entrega_*` e `leitura_devolucao_*` nas pontas), menos `franquia_horas` ou `franquia_km` do período, vezes `valor_excedente_hora` ou `valor_excedente_km`. As duas franquias podem coexistir no mesmo contrato. Os custos de OS com `responsavel_custo = 'locatario'` saem do custo da empresa nos KPIs (seção 12.4).
 
-### 13.11 Fase 3
+### 13.11 Pacotes de segmento (ADM)
+
+Fase 2, plano Essencial (RF-ADM-017). O pacote é um conjunto pronto de configuração mantido pela Tenaz. Aplicá-lo à conta **só cria o que falta**, como configuração comum da empresa (com `empresa_id` e RLS), e nunca altera nem apaga o que a empresa já tem ou editou.
+
+```sql
+-- Catálogo global mantido pela Tenaz (sumário 3.2): sem empresa_id, fora do RLS por empresa e na lista
+-- explícita de tabelas globais (seção 2.11). Publicado por migração a partir dos arquivos versionados dos
+-- pacotes (proposta: pacotes/<codigo>.yaml, como campos_conexao.yaml). Só leitura para as contas.
+CREATE TABLE plataforma.pacote_segmento (
+  id                uuid        NOT NULL DEFAULT app.uuid_v7(),
+  codigo            text        NOT NULL,      -- fiscalizacao_eletronica, transportadora, industria, comercio,
+                                               -- locadora, prestador_servicos (pacotes iniciais, proposta do sumário 3.7)
+  versao_pacote     integer     NOT NULL,      -- proposta de nome: "versao" é a coluna padrão de controle otimista
+  nome              text        NOT NULL,
+  segmento          text        NOT NULL,
+  descricao         text,
+  -- itens por tipo, cada um com a sua chave natural: classes de ativo (com campos extras e medidores), campos
+  -- extras da OS, procedimentos, planos padrão, modelos de checklist, tipos de documento, regras, modelos de
+  -- projeto, códigos de falha sugeridos e módulos recomendados. Nenhum dado de empresa.
+  conteudo          jsonb       NOT NULL,
+  modulos_exigidos  text[]      NOT NULL DEFAULT '{}',   -- itens desses módulos são ignorados sem o plano
+  situacao          text        NOT NULL DEFAULT 'rascunho',
+  publicado_em      timestamptz,
+  criado_em         timestamptz NOT NULL DEFAULT now(),
+  atualizado_em     timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT pk_pacote_segmento PRIMARY KEY (id),
+  CONSTRAINT uq_pacote_segmento_versao UNIQUE (codigo, versao_pacote),
+  CONSTRAINT ck_pacote_segmento_codigo CHECK (codigo ~ '^[a-z][a-z0-9_]{2,39}$'),
+  CONSTRAINT ck_pacote_segmento_versao CHECK (versao_pacote >= 1),
+  CONSTRAINT ck_pacote_segmento_conteudo CHECK (jsonb_typeof(conteudo) = 'object'),
+  -- mesmos valores de situação do modelo de checklist (proposta)
+  CONSTRAINT ck_pacote_segmento_situacao CHECK (situacao IN ('rascunho', 'publicado', 'arquivado')),
+  CONSTRAINT ck_pacote_segmento_publicado CHECK (situacao = 'rascunho' OR publicado_em IS NOT NULL)
+);
+-- Aqui o RLS não separa empresas (a tabela não tem dado de empresa): esconde o rascunho da Tenaz.
+-- A escrita fica fechada pela ausência de privilégio; só o migrador publica.
+ALTER TABLE plataforma.pacote_segmento ENABLE ROW LEVEL SECURITY;
+ALTER TABLE plataforma.pacote_segmento FORCE ROW LEVEL SECURITY;
+CREATE POLICY pacote_publicado ON plataforma.pacote_segmento
+  FOR SELECT TO tenaz_app, tenaz_job USING (situacao <> 'rascunho');
+REVOKE ALL ON plataforma.pacote_segmento FROM PUBLIC;
+GRANT SELECT ON plataforma.pacote_segmento TO tenaz_app, tenaz_job;   -- nenhum INSERT, UPDATE ou DELETE
+
+-- Aplicação de um pacote à conta (RF-ADM-017): o que foi criado e o que foi ignorado
+CREATE TABLE app.aplicacao_pacote (
+  empresa_id           uuid        NOT NULL,
+  id                   uuid        NOT NULL DEFAULT app.uuid_v7(),
+  pacote_segmento_id   uuid        NOT NULL,
+  codigo_pacote        text        NOT NULL,     -- cópia: o histórico não depende do catálogo
+  versao_pacote        integer     NOT NULL,
+  aplicado_em          timestamptz NOT NULL DEFAULT now(),
+  aplicado_por         uuid,
+  momento              text        NOT NULL DEFAULT 'administracao',   -- proposta: primeiros_passos ou administracao
+  itens_criados        jsonb       NOT NULL DEFAULT '[]',   -- [{tipo_item, chave_natural, entidade, entidade_id}]
+  itens_ignorados      jsonb       NOT NULL DEFAULT '[]',   -- [{tipo_item, chave_natural, motivo}]; motivo:
+                                                            -- ja_existe ou modulo_nao_contratado (proposta)
+  /* colunas padrão */
+  CONSTRAINT pk_aplicacao_pacote PRIMARY KEY (empresa_id, id),
+  -- fk simples para o catálogo global: o alvo não tem empresa_id nem dado de empresa (como usuario -> identidade)
+  CONSTRAINT fk_aplicacao_pacote_pacote FOREIGN KEY (pacote_segmento_id) REFERENCES plataforma.pacote_segmento (id),
+  CONSTRAINT fk_aplicacao_pacote_usuario FOREIGN KEY (empresa_id, aplicado_por) REFERENCES app.usuario (empresa_id, id),
+  CONSTRAINT ck_aplicacao_pacote_momento CHECK (momento IN ('primeiros_passos', 'administracao'))
+);
+-- "versões deste pacote já aplicadas na conta", para mostrar o que a versão nova acrescenta
+CREATE INDEX ix_aplicacao_pacote_codigo ON app.aplicacao_pacote (empresa_id, codigo_pacote, aplicado_em DESC);
+CALL app.preparar_tabela('app.aplicacao_pacote');   -- só interno
+```
+
+Regras da aplicação:
+
+- **Uma transação por pacote**, pela permissão `adm.gerenciar_configuracao`, como `tenaz_app` no contexto da empresa (`NaEmpresa`): lê o pacote publicado, e para cada item procura a chave natural na tabela de destino (`classe_ativo.codigo`, `campo_extra_os.chave`, `tipo_documento.codigo`, `regra_automacao.nome`, `modelo_projeto.codigo`, `procedimento.codigo`, `checklist_modelo.codigo`, `codigo_falha` por tipo e código). Existe: o item vai para `itens_ignorados` com `ja_existe`. Não existe: é criado e vai para `itens_criados`. Os índices únicos de cada tabela são a última barreira contra duplicidade numa aplicação concorrente.
+- **Nada é sobrescrito.** Aplicar uma versão nova do mesmo pacote só cria o que falta; o que a empresa editou fica como está.
+- **Módulos não contratados:** itens de módulos fora do plano da conta (por exemplo, modelos de projeto sem o PRJ) não são criados e aparecem como `modulo_nao_contratado`.
+- **Regras nascem `inativa`** (padrão de `regra_automacao.situacao`, proposta do RF-ADM-017); as do pacote `fiscalizacao_eletronica` dependem de **P9** e só são ativadas pela empresa.
+- **Sem vínculo depois de aplicado.** O que o pacote cria não tem FK para o pacote; retirar ou arquivar o pacote não muda a conta.
+- **Conteúdo conferido no CI:** o conteúdo de cada arquivo de pacote é carregado numa empresa de teste e precisa passar por todos os `CHECK` das tabelas de destino (proposta).
+
+### 13.12 Projetos e implantação (PRJ)
+
+Fase 2, plano Profissional (RF-PRJ-001 a RF-PRJ-007). O projeto não executa trabalho: organiza OS `implantacao` por etapa, com dependências, exigências, prazo, avanço e custo. Estados do sumário 3.3.
+
+```sql
+-- Modelo de projeto: roteiro reutilizável, versionado como o modelo de checklist (RF-PRJ-001)
+CREATE TABLE app.modelo_projeto (
+  empresa_id          uuid    NOT NULL,
+  id                  uuid    NOT NULL DEFAULT app.uuid_v7(),
+  codigo              text    NOT NULL,          -- igual em todas as versões; chave natural do pacote de segmento
+  versao_modelo       integer NOT NULL DEFAULT 1,
+  nome                text    NOT NULL,
+  descricao           text,
+  classes_ativo_ids   uuid[]  NOT NULL DEFAULT '{}',   -- classes a que se aplica (vazio = todas)
+  situacao            text    NOT NULL DEFAULT 'rascunho',
+  publicado_em        timestamptz,
+  /* colunas padrão */
+  CONSTRAINT pk_modelo_projeto PRIMARY KEY (empresa_id, id),
+  CONSTRAINT uq_modelo_projeto_versao UNIQUE (empresa_id, codigo, versao_modelo),
+  -- mesmos valores do modelo de checklist (proposta): "inativar" é arquivar
+  CONSTRAINT ck_modelo_projeto_situacao CHECK (situacao IN ('rascunho', 'publicado', 'arquivado')),
+  CONSTRAINT ck_modelo_projeto_publicado CHECK (situacao = 'rascunho' OR publicado_em IS NOT NULL)
+);
+CALL app.preparar_tabela('app.modelo_projeto');   -- só interno
+
+-- Etapa do modelo e o que ela exige para ser concluída
+CREATE TABLE app.modelo_etapa_projeto (
+  empresa_id                 uuid          NOT NULL,
+  id                         uuid          NOT NULL DEFAULT app.uuid_v7(),
+  modelo_projeto_id          uuid          NOT NULL,
+  ordem                      integer       NOT NULL,
+  nome                       text          NOT NULL,
+  descricao                  text,
+  duracao_prevista_dias      integer       NOT NULL DEFAULT 1,
+  peso                       numeric(7,2)  NOT NULL DEFAULT 1,      -- peso no avanço físico
+  executor_padrao            text          NOT NULL DEFAULT 'interno',
+  gera_os                    boolean       NOT NULL DEFAULT false,
+  procedimento_id            uuid,                                  -- tarefas da OS implantacao
+  repete_por_ativo           boolean       NOT NULL DEFAULT false,  -- proposta do RF-PRJ-004: uma OS por ativo
+  tipos_documento_exigidos   uuid[]        NOT NULL DEFAULT '{}',   -- tipo_documento.id (alvo ativo)
+  campos_exigidos            text[]        NOT NULL DEFAULT '{}',   -- campo_extra_os.chave, preenchidos na OS da etapa
+  valor_referencia           numeric(14,2),                         -- pagamento do prestador (RF-PRJ-006)
+  etapa_entrega              boolean       NOT NULL DEFAULT false,  -- a última: coloca os ativos em operação (RF-PRJ-007)
+  /* colunas padrão */
+  CONSTRAINT pk_modelo_etapa_projeto PRIMARY KEY (empresa_id, id),
+  CONSTRAINT uq_modelo_etapa_modelo UNIQUE (empresa_id, modelo_projeto_id, id),   -- alvo das fks de dependência
+  CONSTRAINT uq_modelo_etapa_ordem UNIQUE (empresa_id, modelo_projeto_id, ordem),
+  CONSTRAINT fk_modelo_etapa_modelo FOREIGN KEY (empresa_id, modelo_projeto_id)
+    REFERENCES app.modelo_projeto (empresa_id, id) ON DELETE CASCADE,
+  CONSTRAINT fk_modelo_etapa_procedimento FOREIGN KEY (empresa_id, procedimento_id) REFERENCES app.procedimento (empresa_id, id),
+  CONSTRAINT ck_modelo_etapa_executor CHECK (executor_padrao IN ('interno', 'fornecedor')),
+  CONSTRAINT ck_modelo_etapa_duracao CHECK (duracao_prevista_dias >= 0),
+  CONSTRAINT ck_modelo_etapa_peso CHECK (peso >= 0),
+  CONSTRAINT ck_modelo_etapa_valor CHECK (valor_referencia IS NULL OR valor_referencia >= 0),
+  -- procedimento, repetição por ativo e campos exigidos só existem em etapa que gera OS (proposta)
+  CONSTRAINT ck_modelo_etapa_os CHECK (gera_os OR (procedimento_id IS NULL AND NOT repete_por_ativo
+                                                   AND cardinality(campos_exigidos) = 0))
+);
+-- no máximo uma etapa de entrega por modelo (RF-PRJ-001)
+CREATE UNIQUE INDEX uq_modelo_etapa_entrega ON app.modelo_etapa_projeto (empresa_id, modelo_projeto_id)
+  WHERE etapa_entrega AND excluido_em IS NULL;
+CALL app.preparar_tabela('app.modelo_etapa_projeto');
+
+-- Predecessoras de cada etapa do modelo (proposta de nome). As duas pontas são do mesmo modelo: as fks levam o modelo.
+CREATE TABLE app.dependencia_etapa_modelo (
+  empresa_id          uuid NOT NULL,
+  modelo_projeto_id   uuid NOT NULL,
+  etapa_id            uuid NOT NULL,      -- a sucessora
+  predecessora_id     uuid NOT NULL,
+  /* colunas padrão */
+  CONSTRAINT pk_dependencia_etapa_modelo PRIMARY KEY (empresa_id, etapa_id, predecessora_id),
+  CONSTRAINT fk_dependencia_etapa FOREIGN KEY (empresa_id, modelo_projeto_id, etapa_id)
+    REFERENCES app.modelo_etapa_projeto (empresa_id, modelo_projeto_id, id) ON DELETE CASCADE,
+  CONSTRAINT fk_dependencia_predecessora FOREIGN KEY (empresa_id, modelo_projeto_id, predecessora_id)
+    REFERENCES app.modelo_etapa_projeto (empresa_id, modelo_projeto_id, id) ON DELETE CASCADE,
+  CONSTRAINT ck_dependencia_si CHECK (etapa_id <> predecessora_id)
+);
+CALL app.preparar_tabela('app.dependencia_etapa_modelo', true, 'etapa_id');
+-- Ciclos: o serviço recusa publicar modelo com ciclo (busca em profundidade, no máximo 40 etapas, RF-PRJ-001).
+-- Modelo publicado não é editado: editar cria a versão seguinte, então as dependências de um projeto não mudam.
+
+-- Projeto de implantação: PJ-AAAA-NNNNNN (RF-PRJ-002)
+CREATE TABLE app.projeto (
+  empresa_id            uuid          NOT NULL,
+  id                    uuid          NOT NULL DEFAULT app.uuid_v7(),
+  ano                   smallint      NOT NULL,
+  sequencial            integer       NOT NULL,      -- contador_documento tipo 'PJ'
+  numero                text          GENERATED ALWAYS AS
+                          ('PJ-' || ano::text || '-' || lpad(sequencial::text, 6, '0')) STORED,
+  modelo_projeto_id     uuid          NOT NULL,      -- a linha da versão usada: mudar o modelo não altera o projeto
+  nome                  text          NOT NULL,
+  descricao             text,
+  unidade_id            uuid          NOT NULL,
+  localizacao_id        uuid,
+  cliente_servico_id    uuid,                        -- opcional (RF-CTR-001)
+  contrato_cliente_id   uuid,                        -- opcional; fk na seção 13.13
+  responsavel_id        uuid,
+  status                text          NOT NULL DEFAULT 'rascunho',
+  inicio_previsto       date,
+  fim_previsto          date,
+  iniciado_em           timestamptz,
+  concluido_em          timestamptz,
+  suspenso_em           timestamptz,                 -- última suspensão; o histórico fica na auditoria
+  motivo_suspensao      text,
+  cancelado_em          timestamptz,
+  motivo_cancelamento   text,
+  /* colunas padrão */
+  CONSTRAINT pk_projeto PRIMARY KEY (empresa_id, id),
+  CONSTRAINT uq_projeto_numero UNIQUE (empresa_id, ano, sequencial),
+  CONSTRAINT fk_projeto_modelo FOREIGN KEY (empresa_id, modelo_projeto_id) REFERENCES app.modelo_projeto (empresa_id, id),
+  CONSTRAINT fk_projeto_unidade FOREIGN KEY (empresa_id, unidade_id) REFERENCES app.unidade (empresa_id, id),
+  CONSTRAINT fk_projeto_localizacao FOREIGN KEY (empresa_id, unidade_id, localizacao_id)
+    REFERENCES app.localizacao (empresa_id, unidade_id, id),
+  CONSTRAINT fk_projeto_cliente FOREIGN KEY (empresa_id, cliente_servico_id) REFERENCES app.cliente_servico (empresa_id, id),
+  CONSTRAINT fk_projeto_responsavel FOREIGN KEY (empresa_id, responsavel_id) REFERENCES app.usuario (empresa_id, id),
+  CONSTRAINT ck_projeto_status CHECK (status IN ('rascunho', 'em_andamento', 'suspenso', 'concluido', 'cancelado')),
+  CONSTRAINT ck_projeto_sequencial CHECK (sequencial BETWEEN 1 AND 999999),
+  CONSTRAINT ck_projeto_datas CHECK (fim_previsto IS NULL OR inicio_previsto IS NULL OR fim_previsto >= inicio_previsto),
+  CONSTRAINT ck_projeto_iniciado CHECK (status IN ('rascunho', 'cancelado')
+                                        OR (iniciado_em IS NOT NULL AND responsavel_id IS NOT NULL)),
+  CONSTRAINT ck_projeto_suspenso CHECK (status <> 'suspenso' OR (suspenso_em IS NOT NULL AND motivo_suspensao IS NOT NULL)),
+  CONSTRAINT ck_projeto_concluido CHECK (status <> 'concluido' OR concluido_em IS NOT NULL),
+  CONSTRAINT ck_projeto_cancelado CHECK (status <> 'cancelado' OR (cancelado_em IS NOT NULL AND motivo_cancelamento IS NOT NULL))
+);
+-- carteira de projetos por situação e prazo (RF-PRJ-005)
+CREATE INDEX ix_projeto_status ON app.projeto (empresa_id, status, fim_previsto);
+CREATE INDEX ix_projeto_cliente ON app.projeto (empresa_id, cliente_servico_id) WHERE cliente_servico_id IS NOT NULL;
+CALL app.preparar_tabela('app.projeto');   -- só interno
+-- trigger trg_projeto_transicao: matriz abaixo; projeto concluido ou cancelado não é editado
+
+-- Ativos implantados pelo projeto (proposta de nome)
+CREATE TABLE app.ativo_projeto (
+  empresa_id          uuid    NOT NULL,
+  projeto_id          uuid    NOT NULL,
+  ativo_id            uuid    NOT NULL,
+  projeto_encerrado   boolean NOT NULL DEFAULT false,   -- proposta: projeto concluido ou cancelado, gravado na transição
+  /* colunas padrão */
+  CONSTRAINT pk_ativo_projeto PRIMARY KEY (empresa_id, projeto_id, ativo_id),
+  CONSTRAINT fk_ativo_projeto_projeto FOREIGN KEY (empresa_id, projeto_id) REFERENCES app.projeto (empresa_id, id),
+  CONSTRAINT fk_ativo_projeto_ativo FOREIGN KEY (empresa_id, ativo_id) REFERENCES app.ativo (empresa_id, id)
+);
+-- proposta do RF-PRJ-002: um ativo em no máximo um projeto não encerrado
+CREATE UNIQUE INDEX uq_ativo_projeto_aberto ON app.ativo_projeto (empresa_id, ativo_id)
+  WHERE NOT projeto_encerrado AND excluido_em IS NULL;
+-- "projeto de origem" do ativo (RF-ATV-013) e histórico de projetos do ativo
+CREATE INDEX ix_ativo_projeto_ativo ON app.ativo_projeto (empresa_id, ativo_id);
+CALL app.preparar_tabela('app.ativo_projeto', true, 'ativo_id');
+
+-- Etapa do projeto, copiada da etapa do modelo (RF-PRJ-003)
+CREATE TABLE app.etapa_projeto (
+  empresa_id                 uuid          NOT NULL,
+  id                         uuid          NOT NULL DEFAULT app.uuid_v7(),
+  projeto_id                 uuid          NOT NULL,
+  modelo_etapa_projeto_id    uuid          NOT NULL,   -- da versão do modelo usada: dá as dependências
+  ordem                      integer       NOT NULL,   -- cópia do modelo
+  nome                       text          NOT NULL,   -- cópia do modelo
+  peso                       numeric(7,2)  NOT NULL,   -- cópia do modelo
+  status                     text          NOT NULL DEFAULT 'pendente',
+  executor_tipo              text          NOT NULL DEFAULT 'interno',
+  fornecedor_id              uuid,
+  responsavel_id             uuid,
+  inicio_previsto            date,
+  fim_previsto               date,
+  disponivel_em                timestamptz,
+  iniciada_em                timestamptz,
+  concluida_em               timestamptz,
+  dispensada_em              timestamptz,
+  motivo_dispensa            text,
+  orcamento_previsto         numeric(14,2),
+  valor_etapa                numeric(14,2),            -- do modelo ou do contrato de prestação (RF-PRJ-006)
+  medicao_etapa_projeto_id   uuid,                     -- proposta do RF-PRJ-006: uma etapa entra numa única medição
+  valor_medido               numeric(14,2),            -- valor da etapa na medição
+  motivo_ajuste_medicao      text,                     -- obrigatório quando valor_medido difere de valor_etapa
+  /* colunas padrão */
+  CONSTRAINT pk_etapa_projeto PRIMARY KEY (empresa_id, id),
+  CONSTRAINT uq_etapa_projeto_projeto UNIQUE (empresa_id, projeto_id, id),   -- alvo de fk de lancamento_custo_projeto
+  CONSTRAINT uq_etapa_projeto_modelo UNIQUE (empresa_id, projeto_id, modelo_etapa_projeto_id),
+  CONSTRAINT fk_etapa_projeto_projeto FOREIGN KEY (empresa_id, projeto_id) REFERENCES app.projeto (empresa_id, id),
+  CONSTRAINT fk_etapa_projeto_modelo FOREIGN KEY (empresa_id, modelo_etapa_projeto_id)
+    REFERENCES app.modelo_etapa_projeto (empresa_id, id),
+  CONSTRAINT fk_etapa_projeto_fornecedor FOREIGN KEY (empresa_id, fornecedor_id) REFERENCES app.fornecedor (empresa_id, id),
+  CONSTRAINT fk_etapa_projeto_responsavel FOREIGN KEY (empresa_id, responsavel_id) REFERENCES app.usuario (empresa_id, id),
+  CONSTRAINT ck_etapa_projeto_status CHECK (status IN ('pendente', 'disponivel', 'em_andamento', 'concluida', 'dispensada')),
+  CONSTRAINT ck_etapa_projeto_executor CHECK (executor_tipo IN ('interno', 'fornecedor')
+                                              AND (executor_tipo = 'fornecedor') = (fornecedor_id IS NOT NULL)),
+  CONSTRAINT ck_etapa_projeto_disponivel CHECK (status IN ('pendente', 'dispensada') OR disponivel_em IS NOT NULL),
+  CONSTRAINT ck_etapa_projeto_concluida CHECK (status <> 'concluida' OR concluida_em IS NOT NULL),
+  CONSTRAINT ck_etapa_projeto_dispensada CHECK (status <> 'dispensada' OR (dispensada_em IS NOT NULL AND motivo_dispensa IS NOT NULL)),
+  CONSTRAINT ck_etapa_projeto_valores CHECK (coalesce(orcamento_previsto, 0) >= 0 AND coalesce(valor_etapa, 0) >= 0
+                                             AND coalesce(valor_medido, 0) >= 0),
+  -- só etapa concluída é medida (a dispensada nunca); ajuste de valor exige motivo
+  CONSTRAINT ck_etapa_projeto_medicao CHECK (medicao_etapa_projeto_id IS NULL
+    OR (status = 'concluida' AND valor_medido IS NOT NULL
+        AND (valor_medido = coalesce(valor_etapa, 0) OR motivo_ajuste_medicao IS NOT NULL)))
+);
+CREATE INDEX ix_etapa_projeto_projeto ON app.etapa_projeto (empresa_id, projeto_id, status);
+-- etapas atrasadas (condição calculada, RF-PRJ-003) e condição etapa_projeto_atrasada da rotina diária
+CREATE INDEX ix_etapa_projeto_atraso ON app.etapa_projeto (empresa_id, fim_previsto)
+  WHERE status IN ('pendente', 'disponivel', 'em_andamento') AND excluido_em IS NULL;
+-- medição de etapas: concluídas por fornecedor e período (RF-PRJ-006)
+CREATE INDEX ix_etapa_projeto_fornecedor ON app.etapa_projeto (empresa_id, fornecedor_id, concluida_em)
+  WHERE status = 'concluida';
+CALL app.preparar_tabela('app.etapa_projeto');   -- só interno
+CREATE TRIGGER trg_etapa_projeto_papel BEFORE INSERT OR UPDATE OF fornecedor_id ON app.etapa_projeto
+  FOR EACH ROW EXECUTE FUNCTION app.tg_exige_papel('fornecedor_id', 'subcontratada', 'assistencia_tecnica', 'oficina');
+-- trigger trg_etapa_projeto_transicao: matriz abaixo, com a conferência das predecessoras na ida para disponivel
+
+-- Medição de etapas para pagamento do prestador (proposta de nome; RF-PRJ-006). A Tenaz não paga: o ERP paga.
+CREATE TABLE app.medicao_etapa_projeto (
+  empresa_id        uuid          NOT NULL,
+  id                uuid          NOT NULL DEFAULT app.uuid_v7(),
+  fornecedor_id     uuid          NOT NULL,
+  periodo_inicio    date          NOT NULL,
+  periodo_fim       date          NOT NULL,
+  total             numeric(14,2) NOT NULL DEFAULT 0,   -- soma de etapa_projeto.valor_medido, gravada ao gerar
+  enviada_em        timestamptz,                         -- marcada como enviada ao ERP (proposta do RF-PRJ-006)
+  /* colunas padrão */
+  CONSTRAINT pk_medicao_etapa_projeto PRIMARY KEY (empresa_id, id),
+  CONSTRAINT uq_medicao_etapa_fornecedor UNIQUE (empresa_id, id, fornecedor_id),   -- etapa medida é do mesmo fornecedor
+  CONSTRAINT fk_medicao_etapa_fornecedor FOREIGN KEY (empresa_id, fornecedor_id) REFERENCES app.fornecedor (empresa_id, id),
+  CONSTRAINT ck_medicao_etapa_periodo CHECK (periodo_fim >= periodo_inicio),
+  CONSTRAINT ck_medicao_etapa_total CHECK (total >= 0)
+);
+CREATE INDEX ix_medicao_etapa_fornecedor ON app.medicao_etapa_projeto (empresa_id, fornecedor_id, periodo_inicio DESC);
+CALL app.preparar_tabela('app.medicao_etapa_projeto');   -- só interno
+
+ALTER TABLE app.etapa_projeto ADD CONSTRAINT fk_etapa_projeto_medicao
+  FOREIGN KEY (empresa_id, medicao_etapa_projeto_id, fornecedor_id)
+  REFERENCES app.medicao_etapa_projeto (empresa_id, id, fornecedor_id);
+
+-- Lançamento avulso de custo do projeto (proposta de nome; RF-PRJ-005): licença, guindaste, taxa de ligação
+CREATE TABLE app.lancamento_custo_projeto (
+  empresa_id            uuid          NOT NULL,
+  id                    uuid          NOT NULL DEFAULT app.uuid_v7(),
+  projeto_id            uuid          NOT NULL,
+  etapa_projeto_id      uuid,                          -- nulo: custo do projeto inteiro
+  descricao             text          NOT NULL,
+  valor                 numeric(14,2) NOT NULL,
+  data_lancamento       date          NOT NULL,
+  documento_referencia  text,                          -- nota, recibo, pedido no ERP
+  /* colunas padrão */
+  CONSTRAINT pk_lancamento_custo_projeto PRIMARY KEY (empresa_id, id),
+  CONSTRAINT fk_lancamento_projeto FOREIGN KEY (empresa_id, projeto_id) REFERENCES app.projeto (empresa_id, id),
+  -- a etapa é do mesmo projeto
+  CONSTRAINT fk_lancamento_etapa FOREIGN KEY (empresa_id, projeto_id, etapa_projeto_id)
+    REFERENCES app.etapa_projeto (empresa_id, projeto_id, id),
+  CONSTRAINT ck_lancamento_valor CHECK (valor >= 0)
+);
+CREATE INDEX ix_lancamento_projeto ON app.lancamento_custo_projeto (empresa_id, projeto_id, etapa_projeto_id);
+CALL app.preparar_tabela('app.lancamento_custo_projeto');   -- só interno
+
+-- OS de implantação da etapa (RF-PRJ-004). Coluna anulável e fk NOT VALID: compatível com o código do MVP.
+ALTER TABLE app.ordem_servico ADD COLUMN etapa_projeto_id uuid;
+ALTER TABLE app.ordem_servico ADD CONSTRAINT fk_os_etapa_projeto
+  FOREIGN KEY (empresa_id, etapa_projeto_id) REFERENCES app.etapa_projeto (empresa_id, id) NOT VALID;
+-- origem projeto sempre tem etapa, e a etapa só gera OS de implantação
+ALTER TABLE app.ordem_servico ADD CONSTRAINT ck_os_etapa_projeto
+  CHECK ((etapa_projeto_id IS NOT NULL) = (origem = 'projeto')
+         AND (etapa_projeto_id IS NULL OR tipo = 'implantacao')) NOT VALID;
+ALTER TABLE app.ordem_servico VALIDATE CONSTRAINT fk_os_etapa_projeto;
+ALTER TABLE app.ordem_servico VALIDATE CONSTRAINT ck_os_etapa_projeto;
+-- em arquivo NO TRANSACTION (seção 14.3): OS da etapa, conclusão da etapa e custo realizado
+CREATE INDEX CONCURRENTLY ix_os_etapa_projeto ON app.ordem_servico (empresa_id, etapa_projeto_id)
+  WHERE etapa_projeto_id IS NOT NULL;
+
+-- Termo de entrega e documentos do projeto: anexo e assinatura_eletronica com entidade 'projeto' (seções 5.5 e 10)
+```
+
+Transições do projeto (sumário 3.3), com trigger `trg_projeto_transicao`. Todas as ações exigem `prj.gerenciar`:
+
+| De | Para | Condição | Evento |
+|---|---|---|---|
+| `rascunho` | `em_andamento` (ação `iniciar`) | Pelo menos um ativo (`ativo_projeto`) ou uma localização; responsável. Torna `disponivel` as etapas sem predecessoras | `projeto.iniciado` |
+| `em_andamento` | `suspenso` (ação `suspender`) | Motivo. Pausa os prazos das etapas, não as OS | |
+| `suspenso` | `em_andamento` (ação `retomar`) | Os prazos das etapas não concluídas avançam pelos dias de suspensão | |
+| `em_andamento` | `concluido` (ação `concluir`) | Todas as etapas `concluida` ou `dispensada` | `projeto.concluido` |
+| `rascunho`, `em_andamento`, `suspenso` | `cancelado` (ação `cancelar`) | Motivo; nenhuma OS da etapa em `em_execucao` (pausar antes) | `projeto.cancelado` |
+| `concluido`, `cancelado` | nenhuma | Registro imutável | |
+
+Transições da etapa (sumário 3.3), com trigger `trg_etapa_projeto_transicao`:
+
+| De | Para | Condição |
+|---|---|---|
+| `pendente` | `disponivel` | Projeto `em_andamento` e todas as predecessoras `concluida` ou `dispensada` (conferido no trigger pela consulta abaixo) |
+| `pendente`, `disponivel` | `dispensada` | Motivo e a permissão `prj.dispensar_etapa`; a etapa de entrega não é dispensada (proposta do RF-PRJ-007) |
+| `disponivel` | `em_andamento` | Primeira OS da etapa vai para `em_execucao`, ou ação manual em etapa sem OS |
+| `em_andamento` | `concluida` | OS da etapa `encerrada` ou `cancelada`, ao menos uma `encerrada` quando a etapa gera OS; documentos e campos exigidos registrados (conferidos no Go) |
+| `concluida`, `dispensada` | nenhuma | |
+
+```sql
+-- name: EtapasDisponibilizaveis :many
+-- Depois de concluir ou dispensar uma etapa: as sucessoras pendentes cujas predecessoras terminaram.
+-- Usa ix_etapa_projeto_projeto, pk_dependencia_etapa_modelo e uq_etapa_projeto_modelo.
+SELECT e.id
+FROM app.etapa_projeto e
+WHERE e.empresa_id = sqlc.arg(empresa_id) AND e.projeto_id = sqlc.arg(projeto_id) AND e.status = 'pendente'
+  AND NOT EXISTS (
+    SELECT 1 FROM app.dependencia_etapa_modelo d
+    JOIN app.etapa_projeto p ON p.empresa_id = d.empresa_id AND p.projeto_id = e.projeto_id
+                            AND p.modelo_etapa_projeto_id = d.predecessora_id
+    WHERE d.empresa_id = e.empresa_id AND d.etapa_id = e.modelo_etapa_projeto_id
+      AND p.status NOT IN ('concluida', 'dispensada'));
+
+-- name: CustoRealizadoEtapas :many
+-- Custo realizado por etapa (RF-PRJ-005): OS de implantação encerradas mais lançamentos avulsos.
+SELECT e.id, e.ordem, e.nome, e.orcamento_previsto,
+       coalesce((SELECT sum(o.custo_total) FROM app.ordem_servico o
+                 WHERE o.empresa_id = e.empresa_id AND o.etapa_projeto_id = e.id AND o.status = 'encerrada'), 0)
+     + coalesce((SELECT sum(l.valor) FROM app.lancamento_custo_projeto l
+                 WHERE l.empresa_id = e.empresa_id AND l.projeto_id = e.projeto_id
+                   AND l.etapa_projeto_id = e.id AND l.excluido_em IS NULL), 0) AS custo_realizado
+FROM app.etapa_projeto e
+WHERE e.empresa_id = sqlc.arg(empresa_id) AND e.projeto_id = sqlc.arg(projeto_id) AND e.excluido_em IS NULL
+ORDER BY e.ordem;
+```
+
+Regras do PRJ:
+
+- **Criação.** Criar o projeto copia as etapas da versão do modelo para `etapa_projeto` (nome, ordem, peso, valor) e calcula as datas previstas pela duração e pelas dependências. As dependências não são copiadas: vêm de `dependencia_etapa_modelo` da versão usada, que não muda.
+- **OS da etapa.** A etapa que gera OS cria OS com `tipo = 'implantacao'`, `origem = 'projeto'` e `etapa_projeto_id` (`ck_os_etapa_projeto`); com `repete_por_ativo`, uma OS por ativo de `ativo_projeto`. Atribuída a fornecedor conectado, a OS vai à subcontratada como qualquer OS do cliente; o projeto, a etapa e `etapa_projeto_id` não atravessam (seção 2.10.5).
+- **Exigências.** Documento exigido vale quando um `documento_vencimento` do tipo está no ativo com `emitido_em` no dia de `iniciada_em` da etapa ou depois (proposta do RF-PRJ-003, com a mesma comparação por dia da seção 5.10). Campo exigido vale quando a chave está preenchida em `campos_extras` de uma OS `encerrada` da etapa.
+- **Avanço físico** = soma de `peso` das etapas `concluida` e `dispensada` ÷ soma de `peso`, calculado na consulta. A etapa dispensada conta no avanço e não conta no custo.
+- **Entrega.** Concluir o projeto executa `colocar_em_operacao` (seção 5.2) em cada ativo de `ativo_projeto` ainda `em_implantacao`, na mesma transação, ativa os planos, grava `projeto_encerrado = true` nas linhas de `ativo_projeto` e, com contrato com cliente, inclui os ativos como `item_contrato_cliente` a partir de `data_entrada_operacao` (proposta do RF-PRJ-007). Cancelar não apaga ativos: o serviço pede o destino de cada um e registra a decisão na auditoria.
+- **Custo.** O custo das OS de implantação é custo de implantação (`kpi_ativo_dia.custo_implantacao`, seção 12.4), nunca de manutenção.
+
+### 13.13 Contratos com clientes (CTR)
+
+Fase 2, plano Profissional (RF-CTR-001 a RF-CTR-005). A parte do contrato é um `cliente_servico` (seção 5.12). A medição usa as OS e os registros de parada (`parada_inicio`, `parada_fim`) sem mudar o cálculo técnico da disponibilidade (seção 12): é uma apuração contratual, gravada à parte. Estados do sumário 3.3.
+
+```sql
+-- Contrato com cliente: CT-AAAA-NNNNNN (RF-CTR-001)
+CREATE TABLE app.contrato_cliente (
+  empresa_id                 uuid          NOT NULL,
+  id                         uuid          NOT NULL DEFAULT app.uuid_v7(),
+  ano                        smallint      NOT NULL,
+  sequencial                 integer       NOT NULL,      -- contador_documento tipo 'CT'
+  numero                     text          GENERATED ALWAYS AS
+                               ('CT-' || ano::text || '-' || lpad(sequencial::text, 6, '0')) STORED,
+  cliente_servico_id         uuid          NOT NULL,
+  numero_contrato_cliente    text,                        -- ex.: processo licitatório (proposta do RF-CTR-001)
+  descricao                  text,                        -- objeto do contrato
+  unidades_ids               uuid[]        NOT NULL DEFAULT '{}',
+  status                     text          NOT NULL DEFAULT 'rascunho',
+  vigencia_inicio            date          NOT NULL,
+  vigencia_fim               date,
+  renovacao_automatica       boolean       NOT NULL DEFAULT false,   -- proposta: a "renovação" do RF-CTR-001
+  meta_disponibilidade       numeric(5,2),                -- % do contrato; o item pode ter a sua
+  calendario_apuracao        text          NOT NULL DEFAULT 'continuo_24x7',
+  calendario                 jsonb,                       -- calendario_contrato: {dias: [{dia_semana, inicio, fim}], feriados}
+  prazos_prioridade          jsonb         NOT NULL DEFAULT '{}',   -- {"urgente": {"atendimento_horas": 4, "solucao_horas": 24}}
+  causas_externas_aceitas    text[]        NOT NULL DEFAULT '{}',   -- subconjunto da lista canônica de causa_externa
+  exige_evidencia_causa      boolean       NOT NULL DEFAULT true,   -- proposta do RF-CTR-003
+  valor_mensal_referencia    numeric(14,2),
+  ativado_em                 timestamptz,
+  encerrado_em               timestamptz,
+  motivo_encerramento        text,
+  cancelado_em               timestamptz,
+  motivo_cancelamento        text,
+  /* colunas padrão */
+  CONSTRAINT pk_contrato_cliente PRIMARY KEY (empresa_id, id),
+  CONSTRAINT uq_contrato_cliente_numero UNIQUE (empresa_id, ano, sequencial),
+  CONSTRAINT uq_contrato_cliente_cliente UNIQUE (empresa_id, id, cliente_servico_id),   -- alvo de fk de projeto
+  CONSTRAINT fk_contrato_cliente_cliente FOREIGN KEY (empresa_id, cliente_servico_id)
+    REFERENCES app.cliente_servico (empresa_id, id),
+  CONSTRAINT ck_contrato_cliente_status CHECK (status IN ('rascunho', 'vigente', 'encerrado', 'cancelado')),
+  CONSTRAINT ck_contrato_cliente_sequencial CHECK (sequencial BETWEEN 1 AND 999999),
+  CONSTRAINT ck_contrato_cliente_vigencia CHECK (vigencia_fim IS NULL OR vigencia_fim >= vigencia_inicio),
+  CONSTRAINT ck_contrato_cliente_meta CHECK (meta_disponibilidade BETWEEN 0 AND 100),
+  -- continuo_24x7 ou o calendário do contrato (proposta de nome do segundo valor)
+  CONSTRAINT ck_contrato_cliente_calendario CHECK (calendario_apuracao IN ('continuo_24x7', 'calendario_contrato')
+    AND (calendario_apuracao = 'calendario_contrato') = (calendario IS NOT NULL)),
+  CONSTRAINT ck_contrato_cliente_causas CHECK (causas_externas_aceitas <@ ARRAY['vandalismo', 'acidente_terceiro',
+    'falta_energia', 'obra_terceiro', 'solicitacao_cliente', 'caso_fortuito']),
+  CONSTRAINT ck_contrato_cliente_valor CHECK (coalesce(valor_mensal_referencia, 0) >= 0),
+  CONSTRAINT ck_contrato_cliente_vigente CHECK (status NOT IN ('vigente', 'encerrado')
+                                                OR (ativado_em IS NOT NULL AND meta_disponibilidade IS NOT NULL)),
+  CONSTRAINT ck_contrato_cliente_encerrado CHECK (status <> 'encerrado' OR encerrado_em IS NOT NULL),
+  CONSTRAINT ck_contrato_cliente_cancelado CHECK (status <> 'cancelado'
+                                                  OR (cancelado_em IS NOT NULL AND motivo_cancelamento IS NOT NULL))
+);
+CREATE INDEX ix_contrato_cliente_cliente ON app.contrato_cliente (empresa_id, cliente_servico_id, status);
+-- alertas D-60, D-30 e D-7 antes do fim da vigência (proposta do RF-CTR-001), job diário
+CREATE INDEX ix_contrato_cliente_vigencia ON app.contrato_cliente (empresa_id, vigencia_fim) WHERE status = 'vigente';
+CALL app.preparar_tabela('app.contrato_cliente');   -- só interno
+-- trigger trg_contrato_cliente_transicao: matriz abaixo; contrato encerrado ou cancelado não é editado
+
+-- O contrato do projeto é do mesmo cliente atendido do projeto
+ALTER TABLE app.projeto ADD CONSTRAINT fk_projeto_contrato_cliente
+  FOREIGN KEY (empresa_id, contrato_cliente_id, cliente_servico_id)
+  REFERENCES app.contrato_cliente (empresa_id, id, cliente_servico_id) NOT VALID;
+ALTER TABLE app.projeto VALIDATE CONSTRAINT fk_projeto_contrato_cliente;
+
+-- Ativos cobertos (RF-CTR-002)
+CREATE TABLE app.item_contrato_cliente (
+  empresa_id              uuid          NOT NULL,
+  id                      uuid          NOT NULL DEFAULT app.uuid_v7(),
+  contrato_cliente_id     uuid          NOT NULL,
+  ativo_id                uuid          NOT NULL,
+  situacao                text          NOT NULL DEFAULT 'previsto',
+  data_inclusao           date          NOT NULL,
+  data_exclusao           date,                       -- o item conta até o dia anterior
+  periodo                 daterange     GENERATED ALWAYS AS (daterange(data_inclusao, data_exclusao, '[)')) STORED,
+  meta_disponibilidade    numeric(5,2),               -- sobrepõe a do contrato
+  valor_mensal            numeric(14,2),
+  /* colunas padrão */
+  CONSTRAINT pk_item_contrato_cliente PRIMARY KEY (empresa_id, id),
+  CONSTRAINT uq_item_contrato_cliente_contrato UNIQUE (empresa_id, id, contrato_cliente_id),   -- alvo de item_medicao_contrato
+  CONSTRAINT fk_item_contrato_cliente_contrato FOREIGN KEY (empresa_id, contrato_cliente_id)
+    REFERENCES app.contrato_cliente (empresa_id, id),
+  CONSTRAINT fk_item_contrato_cliente_ativo FOREIGN KEY (empresa_id, ativo_id) REFERENCES app.ativo (empresa_id, id),
+  -- previsto: contrato em rascunho; incluido: coberto; excluido: saiu por aditivo ou no encerramento (proposta)
+  CONSTRAINT ck_item_contrato_cliente_situacao CHECK (situacao IN ('previsto', 'incluido', 'excluido')),
+  CONSTRAINT ck_item_contrato_cliente_excluido CHECK (situacao <> 'excluido' OR data_exclusao IS NOT NULL),
+  CONSTRAINT ck_item_contrato_cliente_datas CHECK (data_exclusao IS NULL OR data_exclusao >= data_inclusao),
+  CONSTRAINT ck_item_contrato_cliente_meta CHECK (meta_disponibilidade BETWEEN 0 AND 100),
+  CONSTRAINT ck_item_contrato_cliente_valor CHECK (coalesce(valor_mensal, 0) >= 0),
+  -- um ativo em no máximo um contrato com cliente no mesmo período (RF-CTR-002); o índice gist também
+  -- atende "o ativo da OS está coberto?" (prazos de atendimento e painel)
+  CONSTRAINT ex_item_contrato_cliente_periodo EXCLUDE USING gist
+    (empresa_id WITH =, ativo_id WITH =, periodo WITH &&)
+    WHERE (situacao IN ('incluido', 'excluido') AND excluido_em IS NULL)
+);
+CREATE INDEX ix_item_contrato_cliente_contrato ON app.item_contrato_cliente (empresa_id, contrato_cliente_id, situacao);
+CALL app.preparar_tabela('app.item_contrato_cliente');   -- só interno
+
+-- Faixas de desconto por disponibilidade (RF-CTR-001)
+CREATE TABLE app.faixa_desconto_contrato (
+  empresa_id              uuid          NOT NULL,
+  id                      uuid          NOT NULL DEFAULT app.uuid_v7(),
+  contrato_cliente_id     uuid          NOT NULL,
+  disponibilidade_de      numeric(5,2)  NOT NULL,     -- inclusive (proposta)
+  disponibilidade_ate     numeric(5,2)  NOT NULL,     -- exclusive (proposta)
+  faixa                   numrange      GENERATED ALWAYS AS
+                            (numrange(disponibilidade_de, disponibilidade_ate, '[)')) STORED,
+  desconto_percentual     numeric(5,2)  NOT NULL,     -- % do valor do item
+  /* colunas padrão */
+  CONSTRAINT pk_faixa_desconto_contrato PRIMARY KEY (empresa_id, id),
+  CONSTRAINT uq_faixa_desconto_contrato UNIQUE (empresa_id, id, contrato_cliente_id),   -- alvo de item_medicao_contrato
+  CONSTRAINT fk_faixa_desconto_contrato FOREIGN KEY (empresa_id, contrato_cliente_id)
+    REFERENCES app.contrato_cliente (empresa_id, id),
+  CONSTRAINT ck_faixa_desconto_limites CHECK (disponibilidade_de >= 0 AND disponibilidade_ate <= 100
+                                              AND disponibilidade_de < disponibilidade_ate),
+  CONSTRAINT ck_faixa_desconto_percentual CHECK (desconto_percentual BETWEEN 0 AND 100),
+  -- faixas sem sobreposição; a contiguidade, da meta para baixo, é conferida no Go ao ativar
+  CONSTRAINT ex_faixa_desconto_sobreposicao EXCLUDE USING gist
+    (empresa_id WITH =, contrato_cliente_id WITH =, faixa WITH &&) WHERE (excluido_em IS NULL)
+);
+CALL app.preparar_tabela('app.faixa_desconto_contrato');   -- só interno
+
+-- Medição mensal (RF-CTR-004): em_apuracao -> fechada; reabrir exige motivo e ctr.reabrir_medicao
+CREATE TABLE app.medicao_contrato (
+  empresa_id              uuid          NOT NULL,
+  id                      uuid          NOT NULL DEFAULT app.uuid_v7(),
+  contrato_cliente_id     uuid          NOT NULL,
+  periodo_inicio          date          NOT NULL,     -- primeiro dia do período
+  periodo_fim             date          NOT NULL,     -- último dia do período
+  status                  text          NOT NULL DEFAULT 'em_apuracao',
+  horas_requeridas        numeric(12,2) NOT NULL DEFAULT 0,   -- totais do contrato: soma dos itens
+  horas_paradas           numeric(12,2) NOT NULL DEFAULT 0,
+  horas_excluidas         numeric(12,2) NOT NULL DEFAULT 0,
+  disponibilidade         numeric(5,2),
+  valor_bruto             numeric(14,2) NOT NULL DEFAULT 0,
+  valor_desconto          numeric(14,2) NOT NULL DEFAULT 0,
+  valor_liquido           numeric(14,2) GENERATED ALWAYS AS (valor_bruto - valor_desconto) STORED,
+  memoria_calculo         jsonb         NOT NULL DEFAULT '{}',   -- parâmetros, calendário e fórmula usados (RF-IND-002)
+  fechada_em              timestamptz,
+  fechada_por             uuid,
+  reaberta_em             timestamptz,                -- última reabertura; o histórico fica na auditoria
+  motivo_reabertura       text,
+  enviada_em              timestamptz,                -- marcada como enviada ao cliente ou ao ERP (proposta)
+  /* colunas padrão */
+  CONSTRAINT pk_medicao_contrato PRIMARY KEY (empresa_id, id),
+  CONSTRAINT uq_medicao_contrato_periodo UNIQUE (empresa_id, contrato_cliente_id, periodo_inicio),
+  CONSTRAINT uq_medicao_contrato_contrato UNIQUE (empresa_id, id, contrato_cliente_id),   -- alvo de item_medicao_contrato
+  CONSTRAINT fk_medicao_contrato_contrato FOREIGN KEY (empresa_id, contrato_cliente_id)
+    REFERENCES app.contrato_cliente (empresa_id, id),
+  CONSTRAINT fk_medicao_contrato_fechada_por FOREIGN KEY (empresa_id, fechada_por) REFERENCES app.usuario (empresa_id, id),
+  CONSTRAINT ck_medicao_contrato_status CHECK (status IN ('em_apuracao', 'fechada')),
+  CONSTRAINT ck_medicao_contrato_periodo CHECK (periodo_fim >= periodo_inicio),
+  CONSTRAINT ck_medicao_contrato_fechada CHECK (status <> 'fechada' OR (fechada_em IS NOT NULL AND fechada_por IS NOT NULL)),
+  CONSTRAINT ck_medicao_contrato_reaberta CHECK (reaberta_em IS NULL OR motivo_reabertura IS NOT NULL),
+  CONSTRAINT ck_medicao_contrato_horas CHECK (horas_excluidas BETWEEN 0 AND horas_paradas
+                                              AND horas_paradas <= horas_requeridas),
+  CONSTRAINT ck_medicao_contrato_valores CHECK (valor_bruto >= 0 AND valor_desconto BETWEEN 0 AND valor_bruto)
+);
+-- medições em apuração: abertura automática no primeiro dia do mês seguinte e painel do contrato
+CREATE INDEX ix_medicao_contrato_aberta ON app.medicao_contrato (empresa_id, periodo_inicio) WHERE status = 'em_apuracao';
+CALL app.preparar_tabela('app.medicao_contrato');   -- só interno
+-- trigger trg_medicao_contrato_transicao: em_apuracao -> fechada; fechada -> em_apuracao só com reaberta_em
+-- e motivo_reabertura novos; medição fechada não muda em nenhuma outra coluna
+
+-- Linha da medição por item coberto (proposta de nome; RF-CTR-004)
+CREATE TABLE app.item_medicao_contrato (
+  empresa_id                   uuid          NOT NULL,
+  id                           uuid          NOT NULL DEFAULT app.uuid_v7(),
+  medicao_contrato_id          uuid          NOT NULL,
+  contrato_cliente_id          uuid          NOT NULL,   -- cópia: as fks compostas amarram item, medição e faixa ao mesmo contrato
+  item_contrato_cliente_id     uuid          NOT NULL,
+  ativo_id                     uuid          NOT NULL,   -- cópia do item, para consultas por ativo
+  horas_requeridas             numeric(10,2) NOT NULL,   -- pelo calendário, da inclusão ou da entrada em operação
+  horas_paradas                numeric(10,2) NOT NULL DEFAULT 0,   -- paradas das OS do item dentro do calendário
+  horas_excluidas              numeric(10,2) NOT NULL DEFAULT 0,   -- causa externa aceita e exclusão aprovada
+  disponibilidade              numeric(5,2),             -- (requeridas - paradas + excluídas) / requeridas
+  meta_disponibilidade         numeric(5,2)  NOT NULL,   -- do item ou do contrato, copiada
+  faixa_desconto_contrato_id   uuid,                     -- faixa atingida; nula = sem desconto
+  desconto_percentual          numeric(5,2)  NOT NULL DEFAULT 0,
+  valor_item                   numeric(14,2) NOT NULL DEFAULT 0,   -- valor mensal proporcional ao período coberto
+  valor_desconto               numeric(14,2) NOT NULL DEFAULT 0,
+  memoria_calculo              jsonb         NOT NULL DEFAULT '{}',   -- OS e paradas consideradas, minuto a minuto
+  /* colunas padrão */
+  CONSTRAINT pk_item_medicao_contrato PRIMARY KEY (empresa_id, id),
+  CONSTRAINT uq_item_medicao_item UNIQUE (empresa_id, medicao_contrato_id, item_contrato_cliente_id),
+  CONSTRAINT fk_item_medicao_medicao FOREIGN KEY (empresa_id, medicao_contrato_id, contrato_cliente_id)
+    REFERENCES app.medicao_contrato (empresa_id, id, contrato_cliente_id),
+  CONSTRAINT fk_item_medicao_item FOREIGN KEY (empresa_id, item_contrato_cliente_id, contrato_cliente_id)
+    REFERENCES app.item_contrato_cliente (empresa_id, id, contrato_cliente_id),
+  CONSTRAINT fk_item_medicao_faixa FOREIGN KEY (empresa_id, faixa_desconto_contrato_id, contrato_cliente_id)
+    REFERENCES app.faixa_desconto_contrato (empresa_id, id, contrato_cliente_id),
+  CONSTRAINT fk_item_medicao_ativo FOREIGN KEY (empresa_id, ativo_id) REFERENCES app.ativo (empresa_id, id),
+  CONSTRAINT ck_item_medicao_horas CHECK (horas_requeridas >= 0 AND horas_excluidas BETWEEN 0 AND horas_paradas
+                                          AND horas_paradas <= horas_requeridas),
+  CONSTRAINT ck_item_medicao_percentuais CHECK (disponibilidade BETWEEN 0 AND 100 AND meta_disponibilidade BETWEEN 0 AND 100
+                                                AND desconto_percentual BETWEEN 0 AND 100),
+  CONSTRAINT ck_item_medicao_valores CHECK (valor_item >= 0 AND valor_desconto BETWEEN 0 AND valor_item)
+);
+CALL app.preparar_tabela('app.item_medicao_contrato');   -- só interno
+-- trigger trg_medicao_fechada (proposta): como tg_os_filho_bloqueado, recusa INSERT, UPDATE e DELETE
+-- quando a medição mãe está fechada
+
+-- Decisão sobre excluir da medição a parada de uma OS com causa externa (tabela: proposta de nome;
+-- coluna e valores: decisao_exclusao do sumário 3.6; RF-CTR-003). Fica fora da OS porque a decisão vem no
+-- fechamento do mês, quando a OS já está encerrada e imutável. A apuração cria a linha 'pendente' para
+-- cada parada com causa aceita no contrato; quem tem ctr.fechar_medicao aprova ou recusa.
+CREATE TABLE app.exclusao_parada_contrato (
+  empresa_id              uuid        NOT NULL,
+  id                      uuid        NOT NULL DEFAULT app.uuid_v7(),
+  ordem_servico_id        uuid        NOT NULL,
+  contrato_cliente_id     uuid        NOT NULL,
+  causa_externa           text        NOT NULL,   -- cópia da OS no momento da apuração
+  decisao_exclusao        text        NOT NULL DEFAULT 'pendente',
+  decidida_por            uuid,
+  decidida_em             timestamptz,
+  motivo                  text,
+  /* colunas padrão */
+  CONSTRAINT pk_exclusao_parada_contrato PRIMARY KEY (empresa_id, id),
+  -- uma decisão por OS e contrato: vale para todas as medições que a parada atravessa
+  CONSTRAINT uq_exclusao_parada_os UNIQUE (empresa_id, contrato_cliente_id, ordem_servico_id),
+  CONSTRAINT fk_exclusao_parada_os FOREIGN KEY (empresa_id, ordem_servico_id) REFERENCES app.ordem_servico (empresa_id, id),
+  CONSTRAINT fk_exclusao_parada_contrato FOREIGN KEY (empresa_id, contrato_cliente_id)
+    REFERENCES app.contrato_cliente (empresa_id, id),
+  CONSTRAINT fk_exclusao_parada_usuario FOREIGN KEY (empresa_id, decidida_por) REFERENCES app.usuario (empresa_id, id),
+  CONSTRAINT ck_exclusao_parada_causa CHECK (causa_externa IN ('vandalismo', 'acidente_terceiro', 'falta_energia',
+    'obra_terceiro', 'solicitacao_cliente', 'caso_fortuito')),
+  CONSTRAINT ck_exclusao_parada_decisao CHECK (decisao_exclusao IN ('pendente', 'aprovada', 'recusada')),
+  CONSTRAINT ck_exclusao_parada_decidida CHECK (decisao_exclusao = 'pendente'
+                                                OR (decidida_por IS NOT NULL AND decidida_em IS NOT NULL)),
+  CONSTRAINT ck_exclusao_parada_motivo CHECK (decisao_exclusao <> 'recusada' OR motivo IS NOT NULL)
+);
+-- painel e fechamento: decisões pendentes do contrato (RF-CTR-004, RF-CTR-005)
+CREATE INDEX ix_exclusao_parada_pendente ON app.exclusao_parada_contrato (empresa_id, contrato_cliente_id)
+  WHERE decisao_exclusao = 'pendente' AND excluido_em IS NULL;
+CALL app.preparar_tabela('app.exclusao_parada_contrato');   -- só interno
+
+-- em arquivo NO TRANSACTION: paradas com causa externa dos ativos cobertos (painel, medição e consulta abaixo)
+CREATE INDEX CONCURRENTLY ix_os_causa_externa ON app.ordem_servico (empresa_id, ativo_id, parada_inicio)
+  WHERE causa_externa IS NOT NULL;
+```
+
+Transições do contrato (sumário 3.3, como o contrato de locação), com trigger `trg_contrato_cliente_transicao`. As ações e a edição de itens e faixas exigem `ctr.gerenciar`:
+
+| De | Para | Condição | Evento |
+|---|---|---|---|
+| `rascunho` | `vigente` (ação `ativar`) | Pelo menos um item, meta, calendário e faixas sem sobreposição; os itens `previsto` passam a `incluido` | `contrato_cliente.ativado` |
+| `rascunho` | `cancelado` (ação `cancelar`) | Motivo. Só o rascunho é cancelado | |
+| `vigente` | `encerrado` (ação `encerrar`) | Os itens `incluido` passam a `excluido` com `data_exclusao` | `contrato_cliente.encerrado` |
+| `encerrado`, `cancelado` | nenhuma | Registro imutável | |
+
+```sql
+-- name: ParadasCausaExternaSemDecisao :many
+-- Apuração da medição (RF-CTR-004): paradas com causa externa aceita no contrato, nos ativos cobertos,
+-- que cruzam o período e ainda não têm linha em exclusao_parada_contrato. Cada uma recebe a linha
+-- 'pendente' na mesma transação. Usa ix_item_contrato_cliente_contrato, ix_os_causa_externa e uq_exclusao_parada_os.
+SELECT o.id, o.numero, o.ativo_id, o.causa_externa, o.parada_inicio, o.parada_fim
+FROM app.contrato_cliente c
+JOIN app.item_contrato_cliente i ON i.empresa_id = c.empresa_id AND i.contrato_cliente_id = c.id
+JOIN app.ordem_servico o ON o.empresa_id = i.empresa_id AND o.ativo_id = i.ativo_id
+WHERE c.empresa_id = sqlc.arg(empresa_id) AND c.id = sqlc.arg(contrato_cliente_id)
+  AND i.situacao IN ('incluido', 'excluido') AND i.excluido_em IS NULL
+  AND o.causa_externa IS NOT NULL AND o.causa_externa = ANY (c.causas_externas_aceitas)
+  AND o.parada_inicio < sqlc.arg(fim_periodo)::timestamptz
+  AND coalesce(o.parada_fim, 'infinity') > sqlc.arg(inicio_periodo)::timestamptz
+  AND NOT EXISTS (SELECT 1 FROM app.exclusao_parada_contrato e
+                  WHERE e.empresa_id = o.empresa_id AND e.contrato_cliente_id = c.id
+                    AND e.ordem_servico_id = o.id AND e.excluido_em IS NULL);
+```
+
+Regras do CTR:
+
+- **Período do item.** O item conta na medição entre `data_inclusao` (ou `ativo.data_entrada_operacao`, o que for depois) e `data_exclusao` (RF-CTR-002). Ativo `em_implantacao` pode ser incluído com início na entrada em operação; ativo `inativo` por outro motivo, não.
+- **Medição.** Aberta pelo job no primeiro dia do mês seguinte (proposta do RF-CTR-004), uma por contrato e período (`uq_medicao_contrato_periodo`). As horas requeridas vêm do calendário de apuração; as horas paradas, de `parada_inicio` e `parada_fim` das OS do item, cortadas no período e no calendário. Disponibilidade contratual do item = (horas requeridas − horas paradas não excluídas) ÷ horas requeridas; a fórmula completa e as paradas que cruzam o período ficam no documento 4. A faixa atingida e o desconto saem de `faixa_desconto_contrato`.
+- **Causa externa.** Só a parada com causa aceita no contrato e `decisao_exclusao = 'aprovada'` em `exclusao_parada_contrato` entra em `horas_excluidas`. Fechar a medição (permissão `ctr.fechar_medicao`) exige que nenhuma decisão do contrato esteja `pendente` (`ix_exclusao_parada_pendente`) depois de rodar a consulta acima; com `exige_evidencia_causa`, aprovar exige ao menos um anexo da OS (proposta do RF-CTR-003). MTTR, MTBF e disponibilidade técnica (`kpi_ativo_dia`) não mudam.
+- **Fechamento.** Medição `fechada` não é editada, nem seus itens (`trg_medicao_fechada`). Mudança posterior em OS não altera a medição fechada; na reabertura, o recálculo mostra a divergência (proposta do RF-CTR-004). Fechar gera `medicao_contrato.fechada`. A Tenaz não fatura: o valor com desconto vai para o ERP.
+- **Prazos de atendimento e de solução.** `prazos_prioridade` vale para as OS dos ativos cobertos; o job de SLA (o mesmo de TER) compara `data_reconhecimento` e `data_conclusao` com os prazos e publica `contrato_cliente.sla_violado`.
+- **Isolamento.** Todas as tabelas do CTR são só internas. O acesso do cliente final ao painel depende de **P10**; até lá, a medição sai em PDF e XLSX. Um acesso do cliente final exigiria um escopo novo, e os escopos (`interno`, `prestador`, `locatario`, `link`) são fechados no sumário 3.6.
+
+### 13.14 Fase 3
 
 | Tabela | Conteúdo |
 |---|---|
@@ -7175,6 +8481,7 @@ SET statement_timeout = '60s';
 - Os privilégios por coluna do `tenaz_sinc` e o catálogo `plataforma.catalogo_campo_conexao` são gerados de `campos_conexao.yaml`; o CI falha se a migração e o arquivo divergirem (seção 2.10.9).
 - `Down` existe para desenvolvimento local. Em produção, o caminho é sempre para a frente.
 - Dados de catálogo por empresa (perfis padrão, códigos de falha, tipos de documento, regras NR-13) não são semeados por migração: são criados pelo serviço de criação de empresa, a partir de modelos versionados no código.
+- O catálogo global de pacotes de segmento (`plataforma.pacote_segmento`, seção 13.11) é a exceção: é publicado por migração a partir dos arquivos versionados dos pacotes, como `campos_conexao.yaml`. Aplicar um pacote a uma empresa não é migração: é o serviço, na transação da empresa.
 - Backfill de grande volume não roda na migração: roda como job, empresa por empresa, em lotes de 1.000 linhas com pausa.
 
 ### 14.3 Migração sem downtime
@@ -7328,10 +8635,35 @@ Visão em alto nível. Procedimentos, responsáveis e testes estão no documento
 | — | Link de uso único | Token no fragmento; `ativar` com token no corpo e sessão curta; rotas `atual` | Seção 5.8 |
 | — | Conta da subcontratada e conexão entre contas (sumário 2.2 e 3.5, risco R5) | Módulo SRV no MVP | Seções 2.10, 3.8 e 5.12 |
 
+**Resolvidas pelo sumário 0.5** (seções 3.1 a 3.7, configuração por segmento) e aplicadas nesta versão:
+
+| # | Decisão do sumário 0.5 | Onde está neste documento |
+|---|---|---|
+| — | Fase de ciclo de vida `em_implantacao` e `em_operacao`; `em_implantacao` implica `inativo`; a fase não volta | `ativo.fase_ciclo_vida`, `data_entrada_operacao`, `ck_ativo_fase_status`, `trg_ativo_fase`, `ColocarEmOperacao` (5.2); `app.status_ativo_calculado` (5.5) |
+| — | Origem do bloqueio `manual`, `conformidade`, `regra`; liberação automática pelo documento exigido | `bloqueio_ativo.origem`, `disparo_regra_id`, `tipo_documento_liberacao_id`, `LevantarBloqueiosPorDocumento` (5.10) |
+| — | Tipo de OS `implantacao`; origens da OS com `projeto` (e `cliente_conectado`); a OS não tem origem `regra` | `ck_os_tipo`, `ck_os_implantacao_plano`, `ck_os_origem` (5.5); `ck_os_etapa_projeto` (13.12) |
+| — | Campos extras da OS e causa externa da parada | `ordem_servico.campos_extras`, `causa_externa` (5.5); `campo_extra_os` (5.13) |
+| — | Decisão da exclusão da parada em `decisao_exclusao` (`pendente`, `aprovada`, `recusada`) | `exclusao_parada_contrato.decisao_exclusao` (13.13) |
+| — | Solicitação com origem `regra` | `ck_solicitacao_origem`, `ck_solicitacao_solicitante` (5.4) |
+| — | Estado da etapa `disponivel`, e não "liberada" | `ck_etapa_projeto_status`, `disponivel_em` (13.12) |
+| — | Campos extras, causa externa, etapa de projeto da OS e fase de ciclo de vida nunca compartilhados na conexão | Seção 2.10.5 |
+| — | Marcação "preenchido pelo prestador" (proposta) define o que `prestador` e `link` veem do campo extra | `campo_extra_os.preenchido_pelo_prestador` e policy `escopo_externo` (2.9.4, 5.13) |
+| — | Permissões `adm.gerenciar_regras`, `adm.gerenciar_configuracao`, `atv.colocar_em_operacao`, `prj.gerenciar`, `prj.dispensar_etapa`, `prj.ajustar_medicao`, `ctr.gerenciar`, `ctr.fechar_medicao`, `ctr.reabrir_medicao` | Seção 5.1 |
+| — | Numeração `PJ` e `CT`; `pacote_segmento` como catálogo global só leitura; `cliente_servico` também nas contas com CTR | Seções 8, 2.11 e 13.11, 5.12 |
+
 **Ainda em aberto:**
 
 | # | Ponto | Onde no sumário | Tratamento neste documento |
 |---|---|---|---|
+| S27 | Nomes sem correspondência no sumário: tabelas `dependencia_etapa_modelo`, `ativo_projeto`, `lancamento_custo_projeto`, `medicao_etapa_projeto`, `item_medicao_contrato`, `exclusao_parada_contrato`; colunas `campo_extra_os.preenchido_pelo_prestador`, `campo_extra_os.momento_obrigatorio`, `pacote_segmento.versao_pacote`, `ativo_projeto.projeto_encerrado`, `etapa_projeto.disponivel_em`, `ordem_servico.causa_externa_marcada_por` e `_em`; valores `bloqueio_ativo.motivo = 'regra'`, `disparo_regra.resultado` (`aplicado`, `sem_efeito`), `contrato_cliente.calendario_apuracao = 'calendario_contrato'`, `item_contrato_cliente.situacao` (`previsto`, `incluido`, `excluido`), situação de `pacote_segmento` e `modelo_projeto` (`rascunho`, `publicado`, `arquivado`), `aplicacao_pacote.momento` | 3.2 e 3.3 | **Proposta**, marcada no DDL. Incluir no sumário |
+| S28 | OS `implantacao` recebida pela subcontratada conectada (`origem = 'cliente_conectado'`): a cópia do ativo nasce `em_operacao` (a fase não atravessa) e não tem etapa, o que violaria a validação do RF-OS-002 | 3.6 | **Proposta:** a OS de origem `cliente_conectado` aceita o tipo vindo do cliente em qualquer fase (5.5). Confirmar no documento 1 |
+| S29 | "Emissão posterior ao fato" na liberação do bloqueio: `documento_vencimento.emitido_em` é data, o fato é instante | 3.6 | **Proposta:** comparação por dia, no fuso da unidade, aceitando o mesmo dia (5.10) |
+| S30 | Causa externa marcada pela subcontratada **conectada**: fica na conta dela, porque a causa externa nunca atravessa; o cliente (dono do contrato) não a recebe | 3.6 | O RF-CTR-003 ("pelo prestador") vale hoje só para o usuário `prestador` sem conta própria. Decidir se a causa ganha grupo próprio na conexão |
+| S31 | O RF-ADM-016 diz que o efeito de uma regra (ativo `parado`) chega à outra conta "pelo campo de status já compartilhado"; neste documento `status_operacional` não está em nenhum dos 15 grupos e o status da cópia é calculado pelas OS da subcontratada (5.12) | 3.5 e 3.6 | Sem mudança de esquema. Corrigir o RF-ADM-016 ou criar o campo no grupo `ativo_identificacao` |
+| S32 | O RF-ATV-006 não lista o tipo `implantacao` entre as OS que deixam o ativo `em_manutencao`, mas o RF-ATV-013 prevê reinstalação com o ativo `em_manutencao` | 3.3 | **Proposta:** `implantacao` em ativo já em operação conta como `em_manutencao` (5.5) |
+| S33 | O sumário fixa `decisao_exclusao` e seus valores, mas não a tabela. A decisão não cabe na OS: costuma vir no fechamento do mês, com a OS já `encerrada` e imutável | 3.6 | **Proposta:** tabela `exclusao_parada_contrato`, uma linha por OS e contrato, criada `pendente` pela apuração (13.13) |
+| S34 | Solicitação aberta por regra não tem usuário solicitante, e `solicitante_id` era obrigatório | 3.6 | **Proposta:** `solicitante_id` anulável só com `origem = 'regra'` (`ck_solicitacao_solicitante`, 5.4) |
+| S35 | Limites das faixas de desconto ("de % até %"): inclusivo ou exclusivo | — (RF-CTR-001) | **Proposta:** `[disponibilidade_de, disponibilidade_ate)` (13.13). Confirmar no documento 4 |
 | S7 | Local da cópia de recuperação de desastre (pendência P7) | 1.4, 5 e 6 | Sem mudança de esquema; o RTO de região depende da decisão |
 | S12 | CFOPs e tratamento fiscal de remessa, retorno, conserto e locação (pendência P8) | 6 | O banco guarda só `nfe_numero` e `nfe_chave` |
 | S13 | "Usuário de prestador que executa OS" conta como técnico: todo usuário ativo com perfil `prestador` ou só o que teve atividade no ciclo | 2.1 | **Proposta:** todo usuário ativo com perfil `prestador`. Confirmar |
@@ -7369,6 +8701,12 @@ Visão em alto nível. Procedimentos, responsáveis e testes estão no documento
 | D18 | `vinculo_os` com uma linha em cada conta, e não registro na plataforma | 2.10.2 |
 | D19 | Ids das cópias gerados no destino, com correspondência em `espelho_conexao`; nenhum id da outra conta na API | 2.10.6 |
 | D20 | Peça em trânsito controlada por `saldo_estoque.quantidade_em_transito` e `CHECK`, sem saldo separado | 13.9 |
+| D21 | Valores de campo extra em `ordem_servico.campos_extras` (`jsonb` com GIN `(empresa_id, campos_extras)`), e não em tabela de valores por linha | 5.5, 5.13 |
+| D22 | Idempotência das regras por `uq_disparo_regra_fato` (regra, entidade e id do fato) com `INSERT ... ON CONFLICT DO NOTHING` | 5.13 |
+| D23 | `pacote_segmento` em `plataforma`, com conteúdo em `jsonb` e RLS só para esconder o rascunho; aplicação cria configuração comum por empresa, sem vínculo com o pacote | 2.11, 13.11 |
+| D24 | Predecessoras só no modelo (`dependencia_etapa_modelo`); o projeto usa as da versão do modelo, que não muda depois de publicada | 13.12 |
+| D25 | Decisão da exclusão de parada fora da OS (`exclusao_parada_contrato`), por causa da imutabilidade da OS encerrada | 13.13 |
+| D26 | Faixas de desconto e itens cobertos sem sobreposição por `EXCLUDE USING gist` com `numrange` e `daterange` | 13.13 |
 
 ---
 
@@ -7379,4 +8717,5 @@ Visão em alto nível. Procedimentos, responsáveis e testes estão no documento
 | 0.1 | 12/11/2026 | Primeira versão: isolamento multiempresa, DDL do MVP, mecanismos de auditoria, numeração, medidores, sincronização, KPIs, fases 2 e 3, migrações, volume e crescimento |
 | 0.3 | 12/11/2026 | Alinhamento ao sumário executivo 0.4: módulo SRV (`cliente_servico`, `ativo` `de_cliente` com `tag_cliente`, `especialidade_tecnico`, `pessoa_especialidade`, `descricao_servico`, `servico_os`, `tipo_material` e números de série no material, `comentario`); conexão entre contas (`plataforma.conexao_empresa` com os 15 grupos de `campos_compartilhados`, `ativo_compartilhado`, `vinculo_os` em cada conta, `envio_conexao`, `recebimento_conexao`, `espelho_conexao`, papel `tenaz_sinc`, policy `conexao_sinc`, sincronização e teste com três contas, R5); `os.encerrar`, `est.decidir_destino`, ação `assumir`, origens da OS e da solicitação, `reaberta_de_id`, franquias de horas e km, encerramento e sublocação na locação, papéis `posto_combustivel` e `seguradora`, peça em trânsito não consumível, link de uso único com token no fragmento; seção 17.1 atualizada |
 | 0.2 | 12/11/2026 | Alinhamento ao sumário executivo 0.3: entidade `pessoa`; perfis novos; marcos `data_*`, transições e reconhecimento da OS; transições da solicitação; status do ativo e `bloqueio_ativo`; campos de propriedade e regime de operação do ativo; origem `iot`; numeração `OR` e `CL`; nomes das entidades auxiliares da seção 3.2 do sumário; módulo TER (fornecedor com papéis, catálogo, link de uso único, contratos, avaliação, orçamento); estoque em terceiros, peças serializadas e ordem de reparo; módulo LOC; isolamento do prestador e do locatário (R4); dados de saúde; KPIs pelo regime de operação |
+| 0.4 | 12/11/2026 | Alinhamento ao sumário executivo 0.5 (configuração por segmento): `ativo.fase_ciclo_vida` e `data_entrada_operacao`, `trg_ativo_fase` e `colocar_em_operacao`; `bloqueio_ativo.origem` com liberação por documento; OS tipo `implantacao`, origem `projeto` (sem origem `regra`), `campos_extras` e `causa_externa`; solicitação com origem `regra`; tabelas `campo_extra_os` (com `preenchido_pelo_prestador`), `regra_automacao` e `disparo_regra` (5.13); Fase 2: `plataforma.pacote_segmento` e `aplicacao_pacote` (13.11), PRJ com etapa `disponivel` (13.12), CTR com `decisao_exclusao` (13.13); numeração `PJ` e `CT`; permissões da configuração, de PRJ e de CTR; `cliente_servico` nas contas com CTR; lista de tabelas globais (2.11); campos que nunca atravessam a conexão (2.10.5); escopo externo das tabelas novas (2.9.4); diagramas 3.9 a 3.11; KPIs sem OS de implantação; seção 17.1 com S27 a S35 e decisões D21 a D26 |
 

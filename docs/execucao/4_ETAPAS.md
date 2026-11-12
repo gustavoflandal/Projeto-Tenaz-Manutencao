@@ -1,8 +1,10 @@
 # Etapas de Execução — Tenaz
 
-**Versão:** 0.1 · **Data:** 12/11/2026 · **Status:** Em elaboração
+**Versão:** 0.2 · **Data:** 12/11/2026 · **Status:** Em elaboração
 **Produto:** Tenaz · Gestão de Manutenção e Frota
-Alinhado ao roadmap 0.3 e ao sumário executivo 0.4.
+Alinhado ao roadmap 0.4 e ao sumário executivo 0.5.
+
+**Mudanças da versão 0.1:** o sumário 0.5 acrescentou ao MVP a configuração por segmento. Os três requisitos novos foram acrescentados às entregas das etapas, conforme o [roadmap](../6_ROADMAP.md), seção 4: RF-ATV-013 em E02, E04, E06 e E08; RF-OS-021 em E04, E05 e E09; RF-ADM-016 em E06 e E09. O MVP passa a 129 requisitos e a Fase 2 a 75, com a trilha E (projetos, contratos com clientes e pacotes de segmento). O encaixe não muda o número de etapas; o prazo (13 ou 14 sprints, com ou sem reforço do time) é decisão do dono do produto, no roadmap, seção 2.2.
 
 As etapas E00 a E12 correspondem uma a uma às sprints S0 a S12 do MVP no [roadmap](../6_ROADMAP.md), seção 4. O escopo é o mesmo; o que muda é a forma de executar, descrita em [1_MODELO_EXECUCAO.md](1_MODELO_EXECUCAO.md).
 
@@ -74,7 +76,7 @@ Cada etapa abaixo traz:
 
 | | |
 |---|---|
-| **Entrega** | RF-ATV-001, RF-ATV-002, RF-ATV-003, RF-ATV-005, RF-ATV-006, RF-ATV-007, RF-ATV-008; RF-INT-003 para localizações e ativos; RF-MOB-002 (cache de ativos), RF-MOB-004; RF-SRV-004 (clientes atendidos), RF-SRV-002 (especialidades de técnico) |
+| **Entrega** | RF-ATV-001, RF-ATV-002, RF-ATV-003, RF-ATV-005, RF-ATV-006, RF-ATV-007, RF-ATV-008; RF-INT-003 para localizações e ativos; RF-MOB-002 (cache de ativos), RF-MOB-004; RF-SRV-004 (clientes atendidos), RF-SRV-002 (especialidades de técnico); RF-ATV-013 parcial (fase de ciclo de vida, ativo `em_implantacao` com status `inativo`, cadastro e importação em implantação, filtro por fase) |
 | **Agentes** | `tenaz-dominio-manutencao` (hierarquia, criticidade, status), `tenaz-banco-dados`, `tenaz-isolamento`, `tenaz-backend-go`, `tenaz-api-contrato`, `tenaz-design-sistema`, `tenaz-frontend-web`, `tenaz-mobile-offline`, `tenaz-qa-automacao` |
 | **Portão de saída** | Árvore de localizações e de ativos com até 6 níveis, sem ciclo; status operacional do ativo conforme a regra do [sumário](../0_SUMARIO_EXECUTIVO.md), seção 3.3, com `parado` prevalecendo sobre `em_manutencao`; importação de 2.000 ativos por planilha; QR code resolvendo para o ativo |
 | **Evidência** | Lista de ativos, ficha do ativo, árvore de localizações, importação por planilha, leitura de QR no app |
@@ -94,7 +96,7 @@ Cada etapa abaixo traz:
 
 | | |
 |---|---|
-| **Entrega** | RF-SOL-001 a RF-SOL-005; RF-OS-001 a RF-OS-005, RF-OS-016, RF-OS-017; RF-ADM-012; RF-MOB-006 e solicitação offline (RF-MOB-003). Fundação da conexão, sem requisito funcional: ADR-009 fechado, entidade de conexão no esquema da plataforma, papel de banco do sincronizador, fila de saída nos dois lados, idempotência, **suíte de três contas rodando no CI** |
+| **Entrega** | RF-SOL-001 a RF-SOL-005; RF-OS-001 a RF-OS-005, RF-OS-016, RF-OS-017; RF-ADM-012; RF-MOB-006 e solicitação offline (RF-MOB-003). Fundação da conexão, sem requisito funcional: ADR-009 fechado, entidade de conexão no esquema da plataforma, papel de banco do sincronizador, fila de saída nos dois lados, idempotência, **suíte de três contas rodando no CI**. Configuração por segmento: origens `projeto` e `regra` e `causa_externa` na OS (RF-OS-001); RF-OS-021 parcial (definições de `campo_extra_os`, valores, obrigatoriedade na abertura, web, API e app offline); RF-ATV-013 parcial (tipo `implantacao`, ação `colocar_em_operacao`, também em lote) |
 | **Agentes** | `tenaz-arquiteto` (fecha ADR-009), `tenaz-dominio-manutencao` (estados e marcos de tempo), `tenaz-conexao-contas`, `tenaz-isolamento`, `tenaz-banco-dados`, `tenaz-backend-go`, `tenaz-api-contrato`, `tenaz-frontend-web`, `tenaz-mobile-offline`, `tenaz-qa-automacao` |
 | **Portão de saída** | Máquina de estados da OS idêntica no servidor e no app pelos casos compartilhados; `data_reconhecimento` gravado uma única vez; transições proibidas recusadas com erro de código estável; suíte de três contas verde (ainda sem fluxo de OS entre contas); primeira versão do app nas lojas em teste fechado |
 | **Evidência** | Portal de solicitação, triagem, ficha da OS, OS aberta no app em modo avião |
@@ -104,7 +106,7 @@ Cada etapa abaixo traz:
 
 | | |
 |---|---|
-| **Entrega** | RF-OS-006, RF-OS-007 (com a ação de assumir), RF-OS-008, RF-OS-009, RF-OS-011, RF-OS-015, RF-OS-018; execução de OS offline (RF-MOB-003), RF-MOB-005; RF-SRV-006 (catálogo próprio), RF-SRV-007 (abertura com equipamento, técnico e serviço a realizar) |
+| **Entrega** | RF-OS-006, RF-OS-007 (com a ação de assumir), RF-OS-008, RF-OS-009, RF-OS-011, RF-OS-015, RF-OS-018; execução de OS offline (RF-MOB-003), RF-MOB-005; RF-SRV-006 (catálogo próprio), RF-SRV-007 (abertura com equipamento, técnico e serviço a realizar); RF-OS-021 parcial (obrigatoriedade na conclusão, validada no app offline antes de enfileirar o comando; campos extras na impressão) |
 | **Agentes** | `tenaz-dominio-manutencao`, `tenaz-backend-go`, `tenaz-api-contrato`, `tenaz-conexao-contas` (catálogo reaproveitado), `tenaz-design-sistema`, `tenaz-frontend-web`, `tenaz-mobile-offline`, `tenaz-qa-automacao` |
 | **Portão de saída** | Pausa com motivo obrigatório; apontamento de horas por técnico; catálogo padrão de códigos de falha de modo, causa e atividade; impressão da OS; execução completa offline com reconexão sem perda |
 | **Evidência** | Execução da OS no app passo a passo, apontamento, pausa com motivo, OS impressa em PDF, OS de serviço da subcontratada |
@@ -114,7 +116,7 @@ Cada etapa abaixo traz:
 
 | | |
 |---|---|
-| **Entrega** | RF-PRE-001 a RF-PRE-006, RF-PRE-008, RF-PRE-009, RF-PRE-010; RF-ADM-010; OS preventiva no app; RF-SRV-009 (horas por técnico), RF-SRV-010 (distribuição e reatribuição), RF-TER-001 antecipado (fornecedor com papéis), RF-SRV-011 parcial |
+| **Entrega** | RF-PRE-001 a RF-PRE-006, RF-PRE-008, RF-PRE-009, RF-PRE-010; RF-ADM-010; OS preventiva no app; RF-SRV-009 (horas por técnico), RF-SRV-010 (distribuição e reatribuição), RF-TER-001 antecipado (fornecedor com papéis), RF-SRV-011 parcial; RF-ATV-013 parcial (planos suspensos em implantação e ativados na entrada em operação); RF-ADM-016 parcial (motor de regras, rotina diária idempotente, `adm.gerenciar_regras`, condições `leitura_fora_faixa` e `os_concluida_com_campo`, efeitos `notificar`, `abrir_solicitacao` e `bloquear_ativo`) |
 | **Agentes** | `tenaz-dominio-manutencao` (gatilhos e antecipação), `tenaz-backend-go`, `tenaz-banco-dados`, `tenaz-api-contrato`, `tenaz-frontend-web`, `tenaz-mobile-offline`, `tenaz-qa-automacao` |
 | **Portão de saída** | **Marco M2:** ciclo completo de solicitação a encerramento, com reconhecimento, assumir, desprogramação e liberação recusada; plano por tempo, por medidor e por "o que vencer primeiro" gerando OS `planejada`; **app operando 72 horas offline sem perda**; OS de serviço distribuída, reatribuída e executada offline por técnico de subcontratada |
 | **Evidência** | Cadastro de plano com os três tipos de gatilho, calendário de preventivas, OS gerada por plano, distribuição de OS de serviço |
@@ -134,7 +136,7 @@ Cada etapa abaixo traz:
 
 | | |
 |---|---|
-| **Entrega** | RF-CON-001 a RF-CON-006, RF-CON-014, RF-CON-016; RF-OS-013, RF-OS-014; campos de NR-12 e assinatura no app; RF-SRV-008 (componentes substituídos), RF-SRV-015 (ativos cobertos pela conexão) |
+| **Entrega** | RF-CON-001 a RF-CON-006, RF-CON-014, RF-CON-016; RF-OS-013, RF-OS-014; campos de NR-12 e assinatura no app; RF-SRV-008 (componentes substituídos), RF-SRV-015 (ativos cobertos pela conexão); RF-ATV-013 completo (documentos críticos exigidos para `colocar_em_operacao`); custo da OS `implantacao` separado do custo de manutenção (RF-OS-013) |
 | **Agentes** | `tenaz-conformidade-br` conduz a interpretação da norma; `tenaz-dominio-manutencao`, `tenaz-backend-go`, `tenaz-api-contrato`, `tenaz-conexao-contas`, `tenaz-design-sistema`, `tenaz-frontend-web`, `tenaz-mobile-offline`, `tenaz-qa-automacao` |
 | **Portão de saída** | **Marco M3:** pelo menos 3 empresas piloto com dados reais; OS de máquina NR-12 não conclui sem os sete campos do item 12.11.2, com assinatura avançada; alertas de documento em D-60, D-30 e D-7; reserva e baixa de peças; subcontratada piloto registrando OS de serviço com componentes; convite, aceite e ativos sincronizados entre duas contas em homologação |
 | **Evidência** | Conclusão de OS de NR-12 com os sete campos, assinatura com manifesto de evidências, agenda de documentos, alerta de vencimento, componentes substituídos no app |
@@ -144,7 +146,7 @@ Cada etapa abaixo traz:
 
 | | |
 |---|---|
-| **Entrega** | RF-IND-001 a RF-IND-005, RF-IND-007; RF-ATV-010 completo; RF-TER-003, RF-TER-004, RF-TER-005; RF-MOB-010 e o perfil de prestador no app; RF-SRV-012, RF-SRV-013, RF-SRV-003 completo, RF-SRV-016 (OS do cliente chega à subcontratada) |
+| **Entrega** | RF-IND-001 a RF-IND-005, RF-IND-007; RF-ATV-010 completo; RF-TER-003, RF-TER-004, RF-TER-005; RF-MOB-010 e o perfil de prestador no app; RF-SRV-012, RF-SRV-013 (com os campos extras da OS), RF-SRV-003 completo, RF-SRV-016 (OS do cliente chega à subcontratada); KPIs sem OS `implantacao` nem ativo `em_implantacao`; RF-ADM-016 completo (condições de documento e de checklist, `bloquear_ativo_ate_documento`, simulação, histórico, efeito na conta conectada só pelo status no teste de três contas); RF-OS-021 completo (filtro, exportação, link de uso único) |
 | **Agentes** | `tenaz-dominio-manutencao` (fórmulas), `tenaz-isolamento` (perfil de prestador e link de uso único), `tenaz-backend-go`, `tenaz-api-contrato`, `tenaz-conexao-contas`, `tenaz-design-sistema`, `tenaz-frontend-web`, `tenaz-mobile-offline`, `tenaz-qa-automacao` |
 | **Portão de saída** | **Teste de isolamento do prestador (RNF-037) verde no CI** — sem ele o perfil de prestador não é liberado (risco R4); link de uso único com token no fragmento da URL, recusando reuso, outro aparelho e revogação; todo indicador com o texto de "como calculamos" (RF-IND-002) |
 | **Evidência** | Painel de indicadores, "como calculamos" aberto, OS atribuída a fornecedor, portal do prestador, página do link de uso único, relatório da OS em PDF com assinatura do cliente |
@@ -156,7 +158,7 @@ Cada etapa abaixo traz:
 |---|---|
 | **Entrega** | RF-INT-001, RF-INT-002, RF-INT-003 completo; RF-ADM-007, RF-ADM-009, RF-ADM-013; SSO no app; RF-SRV-017, RF-SRV-018, RF-SRV-019, RF-SRV-020, RF-SRV-021, RF-SRV-001 com cobrança, RF-SRV-011 completo |
 | **Agentes** | `tenaz-api-contrato` conduz; `tenaz-conexao-contas`, `tenaz-isolamento`, `tenaz-backend-go`, `tenaz-plataforma-sre` (chaves, limites), `tenaz-frontend-web`, `tenaz-mobile-offline`, `tenaz-qa-automacao` |
-| **Portão de saída** | **Marco M4 e portão da conexão:** os 126 requisitos do MVP entregues; RNF-041 verde e atraso p95 de RNF-042 abaixo de 60 s medido em homologação; ciclo completo entre contas, inclusive liberação recusada e encerramento da conexão sem perda de histórico; documentação pública da API publicada; nenhum defeito crítico aberto. Portão vermelho aqui dispara a contingência do [roadmap](../6_ROADMAP.md), seção 6, com aval do dono do produto |
+| **Portão de saída** | **Marco M4 e portão da conexão:** os 129 requisitos do MVP entregues; RNF-041 verde e atraso p95 de RNF-042 abaixo de 60 s medido em homologação; ciclo completo entre contas, inclusive liberação recusada e encerramento da conexão sem perda de histórico; documentação pública da API publicada; nenhum defeito crítico aberto. Portão vermelho aqui dispara a contingência do [roadmap](../6_ROADMAP.md), seção 6, com aval do dono do produto |
 | **Evidência** | Documentação pública da API, tela de chaves e escopos, entrega de webhook, login por SSO, ciclo de OS entre duas contas lado a lado, relatório de serviços por cliente |
 | **Depende de** | E09 |
 
@@ -184,7 +186,7 @@ Cada etapa abaixo traz:
 
 ## 4. Fase 2 — meses 7 a 12
 
-Os 62 requisitos e as quatro trilhas estão no [roadmap](../6_ROADMAP.md), seção 5, com entrega verificável por mês na seção 5.1. Este plano não os redivide; acrescenta só a atribuição de agentes por trilha.
+Os 75 requisitos e as cinco trilhas (a trilha E é proposta, com time e prazo a decidir pelo dono do produto) estão no [roadmap](../6_ROADMAP.md), seção 5, com entrega verificável por mês na seção 5.1. Este plano não os redivide; acrescenta só a atribuição de agentes por trilha.
 
 | Trilha do roadmap | Conteúdo | Agente que conduz | Apoio |
 |---|---|---|---|
@@ -192,6 +194,7 @@ Os 62 requisitos e as quatro trilhas estão no [roadmap](../6_ROADMAP.md), seç�
 | **B** — estoque completo e estendido | Inventário, compras, NF-e, vários almoxarifados, estoque em terceiros, peças serializadas e reparáveis, ordem de reparo | `tenaz-dominio-manutencao`; `tenaz-conformidade-br` no fiscal (**P8**) | `tenaz-banco-dados`, `tenaz-backend-go`, `tenaz-isolamento` |
 | **C** — integrações, identidade e IA | Multi-unidade, capacitações, telemática, ERP, SAML e SCIM, IA nível 1 | `tenaz-integracoes-dados` | `tenaz-api-contrato`, `tenaz-plataforma-sre` |
 | **D** — terceiros, locação e SRV | Contratos de prestação com SLA, avaliação, locação completa, portal do locatário, evolução do SRV pedida pelos pilotos | `tenaz-conexao-contas` e `tenaz-dominio-manutencao` | `tenaz-isolamento` (RNF-038), `tenaz-frontend-web` |
+| **E** — projetos, contratos com clientes e pacotes | Projetos de implantação com etapas (PRJ), contratos com clientes com meta de disponibilidade e medição mensal (CTR), pacotes de segmento | `tenaz-dominio-manutencao` | `tenaz-produto` (conteúdo dos pacotes, P10), `tenaz-conformidade-br` (P9), `tenaz-conexao-contas` (OS de etapa na conta conectada), `tenaz-frontend-web`, `tenaz-mobile-offline` |
 
 Portão da fase: **marco M6** do [roadmap](../6_ROADMAP.md), seção 3.2, com os testes de isolamento do locatário e do almoxarifado em terceiro verdes no CI e a janela de observação do SOC 2 iniciada.
 
@@ -219,3 +222,4 @@ Portões: **M7** (relatório SOC 2 Type II, mês 19) e **M8** (fase completa, m�
 **Histórico de versões**
 
 - v0.1 (12/11/2026): primeira versão. Etapas E00 a E12 correspondentes às sprints S0 a S12, com entrega, agentes, portão de saída e evidência; atribuição de agentes às trilhas da fase 2 e aos blocos da fase 3.
+- v0.2 (12/11/2026): alinhada ao roadmap 0.4 e ao sumário executivo 0.5. Configuração por segmento acrescentada às entregas: RF-ATV-013 (E02, E04, E06, E08), RF-OS-021 (E04, E05, E09) e RF-ADM-016 (E06, E09); portão de E10 com 129 requisitos; Fase 2 com 75 requisitos e a trilha E (PRJ, CTR e pacotes), com agentes.

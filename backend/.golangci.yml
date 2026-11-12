@@ -1,0 +1,79 @@
+# Analisadores do backend da Tenaz.
+#
+# A lista obrigatória está na seção 8.2 de docs/5_ARQUITETURA_SOFTWARE.md:
+# errcheck, staticcheck, gosec, depguard, sqlclosecheck, bodyclose e
+# contextcheck. Os demais entram por serem baratos e pegarem erro real.
+
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    - errcheck       # erro ignorado
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gosec          # padrões inseguros
+    - depguard       # dependência proibida
+    - sqlclosecheck  # rows/stmt sem Close
+    - bodyclose      # corpo de resposta HTTP sem Close
+    - contextcheck   # context.Context não propagado
+    - errorlint      # comparação de erro sem errors.Is/As
+    - nilerr         # return nil quando err != nil
+    - rowserrcheck   # rows.Err() não conferido
+    - noctx          # requisição HTTP sem contexto
+
+  settings:
+    depguard:
+      rules:
+        principal:
+          list-mode: lax
+          deny:
+            # Sem ORM: o SQL é explícito e tipado na compilação (princípio 2
+            # da seção 1.2 do documento 2).
+            - pkg: gorm.io/gorm
+              desc: "sem ORM na Tenaz; use sqlc com pgx"
+            - pkg: github.com/jinzhu/gorm
+              desc: "sem ORM na Tenaz; use sqlc com pgx"
+            - pkg: entgo.io/ent
+              desc: "sem ORM na Tenaz; use sqlc com pgx"
+            # pgx v5 é a versão adotada.
+            - pkg: github.com/jackc/pgx/v4
+              desc: "use github.com/jackc/pgx/v5"
+            # Log estruturado é log/slog, com o filtro de redação de obs.
+            - pkg: github.com/sirupsen/logrus
+              desc: "use log/slog pelo pacote internal/plataforma/obs"
+            - pkg: go.uber.org/zap
+              desc: "use log/slog pelo pacote internal/plataforma/obs"
+
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+
+    gosec:
+      excludes:
+        # G115 (conversão de inteiro) dá muito falso positivo com índices.
+        - G115
+
+  exclusions:
+    rules:
+      # Em teste, erro ignorado em limpeza e número aleatório fraco não são
+      # problema, e exigir tratamento só polui o teste.
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
+          - noctx
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - tenaz

@@ -1,0 +1,90 @@
+# Infraestrutura local de desenvolvimento da Tenaz.
+#
+# Sobe o que o backend precisa para rodar e para os testes de integração:
+# PostgreSQL com RLS, Valkey para cache e MinIO para os anexos. O backend e a
+# web rodam no host, para o ciclo de edição ficar rápido (seção 7 de
+# docs/5_ARQUITETURA_SOFTWARE.md).
+#
+#   docker compose -f infra/docker/compose.yaml up -d
+#   docker compose -f infra/docker/compose.yaml down -v
+#
+# As credenciais aqui são de desenvolvimento local e estão no repositório de
+# propósito: não valem em nenhum outro ambiente. Segredo de verdade vive em
+# cofre, nunca em arquivo versionado.
+
+name: tenaz-dev
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: tenaz-postgres
+    environment:
+      POSTGRES_USER: tenaz_migrador
+      POSTGRES_PASSWORD: tenaz_dev
+      POSTGRES_DB: tenaz
+      # Collation determinística, para ordenação igual em qualquer máquina.
+      POSTGRES_INITDB_ARGS: "--locale=C --encoding=UTF8"
+      TZ: UTC
+    command:
+      - postgres
+      # Registra toda consulta acima de 200 ms, para achar falta de índice
+      # cedo, e deixa o plano visível em desenvolvimento.
+      - -c
+      - log_min_duration_statement=200
+      - -c
+      - log_statement=none
+      - -c
+      - timezone=UTC
+      - -c
+      - max_connections=100
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_dados:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tenaz_migrador -d tenaz"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: tenaz-valkey
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Object storage para os anexos. Fica atrás do perfil "anexos" e não sobe no
+  # `up -d` comum, porque os anexos só aparecem a partir do cadastro de ativos
+  # e porque a MinIO deixou de publicar a tag `latest`: nem o Docker Hub nem o
+  # quay.io aceitam pull anônimo dela. A tag precisa ser fixada numa release
+  # concreta antes de o módulo de anexos entrar. Ver pendência da etapa.
+  #
+  #   docker compose -f infra/docker/compose.yaml --profile anexos up -d
+  minio:
+    profiles: ["anexos"]
+    image: quay.io/minio/minio:latest
+    container_name: tenaz-minio
+    command: ["server", "/dados", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: tenaz_dev
+      MINIO_ROOT_PASSWORD: tenaz_dev_secreto
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_dados:/dados
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  postgres_dados:
+  minio_dados:

@@ -24,7 +24,7 @@ Este documento define como o trabalho acontece. Quem decide o escopo é o [sumá
 
 ## 1. O problema que este modelo resolve
 
-A documentação da Tenaz especifica 206 requisitos funcionais e 42 não funcionais, com modelo de dados, contrato de API, 28 fluxos de negócio, 304 regras de negócio e 9 ADRs. O [roadmap](../6_ROADMAP.md) entrega isso com 15 pessoas em dedicação integral, sendo 126 requisitos funcionais nas 13 sprints do MVP.
+A documentação da Tenaz especifica 220 requisitos funcionais e 42 não funcionais, com modelo de dados, contrato de API, 31 fluxos de negócio, 361 regras de negócio e 10 ADRs. O [roadmap](../6_ROADMAP.md) entrega isso com 15 pessoas em dedicação integral, sendo 129 requisitos funcionais no MVP (13 sprints na versão anterior do roadmap; o impacto da configuração por segmento está em aberto).
 
 A execução real não tem 15 pessoas. Tem o dono do produto e uma equipe de agentes. Isso muda três coisas e deixa duas intactas:
 

@@ -1,0 +1,221 @@
+name: CI
+
+# Esteira obrigatória de todo pull request e de todo push na branch principal.
+#
+# A ordem importa: o que é barato e pega erro grosseiro vem antes do que é
+# caro. O que BLOQUEIA merge e deploy está marcado no nome do passo.
+#
+# Fonte: docs/5_ARQUITETURA_SOFTWARE.md, seções 9.3 e 9.4.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  VERSAO_GO: "1.27"
+  VERSAO_PYTHON: "3.13"
+
+jobs:
+  documentacao:
+    name: Documentação (links, IDs, etapas)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.VERSAO_PYTHON }}
+
+      # Regra 3.3 de CLAUDE.md. A pendência aberta na etapa 008 era justamente
+      # esta: o verificador existia e não rodava no CI.
+      - name: Verificador de documentação
+        run: python ferramentas/verificar_docs.py
+
+  changelog:
+    name: CHANGELOG atualizado (RNF-040)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # RNF-040: pull request que altera código de produto sem alterar o
+      # CHANGELOG é recusado. O rótulo `interno` dispensa, para refatoração,
+      # teste e ferramenta.
+      - name: Conferir entrada no CHANGELOG
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'interno') }}
+        run: |
+          set -euo pipefail
+          base="origin/${{ github.base_ref }}"
+          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+          alterados="$(git diff --name-only "$base"...HEAD)"
+          echo "Arquivos alterados:"; echo "$alterados"
+
+          produto="$(echo "$alterados" | grep -E '^(backend/|web/|app/|pacotes/)' || true)"
+          if [[ -z "$produto" ]]; then
+            echo "Nenhum código de produto alterado; CHANGELOG não é exigido."
+            exit 0
+          fi
+
+          if echo "$alterados" | grep -qx 'CHANGELOG.md'; then
+            echo "CHANGELOG atualizado."
+            exit 0
+          fi
+
+          echo "::error::Este pull request altera código de produto e não atualiza o CHANGELOG.md (RNF-040)."
+          echo "Acrescente a entrada em [Não lançado] com o ID do requisito, ou aplique o rótulo 'interno' com justificativa."
+          exit 1
+
+  backend:
+    name: Backend (formato, análise, contrato, testes)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.VERSAO_GO }}
+          cache-dependency-path: backend/go.sum
+
+      - name: Dependências íntegras
+        working-directory: backend
+        run: |
+          go mod download
+          go mod verify
+
+      - name: Formato
+        run: ferramentas/tarefas.sh conferir-formato
+
+      - name: Análise estática
+        run: ferramentas/tarefas.sh vet
+
+      # O contrato é gerado dos tipos Go. Se o arquivo versionado difere do
+      # gerado, alguém mudou a API sem regenerar (seção 2.5).
+      - name: Contrato OpenAPI em dia
+        run: ferramentas/tarefas.sh conferir-contrato
+
+      - name: Testes unitários
+        working-directory: backend
+        run: go test ./internal/... -count=1
+
+      # BLOQUEIA merge e deploy. Falha aqui é incidente de segurança de
+      # severidade alta, mesmo acontecendo só no CI.
+      - name: Suíte de isolamento (RNF-013, RNF-037, RNF-041)
+        working-directory: backend
+        run: go test ./testes/vazamento/ -count=1 -v
+
+  versao:
+    name: Esteira de versão (RNF-039)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.VERSAO_GO }}
+          cache-dependency-path: backend/go.sum
+
+      # A versão vem da tag e é injetada no build. Nunca é digitada em arquivo
+      # de código. Este passo prova que a injeção funciona e que o binário
+      # reporta exatamente o que o script derivou.
+      - name: Versão derivada da tag e injetada no binário
+        run: |
+          set -euo pipefail
+          esperada="$(ferramentas/versao.sh --versao)"
+          commit_esperado="$(ferramentas/versao.sh --commit)"
+          echo "Versão esperada: $esperada"
+
+          cd backend
+          go build -ldflags "$(cd .. && ferramentas/versao.sh --ldflags)" -o /tmp/tenaz ./cmd/tenaz
+
+          obtida="$(/tmp/tenaz versao | sed -n 's/^versao=//p')"
+          commit_obtido="$(/tmp/tenaz versao | sed -n 's/^commit=//p')"
+
+          if [[ "$obtida" != "$esperada" ]]; then
+            echo "::error::versão embutida ($obtida) difere da derivada da tag ($esperada)"
+            exit 1
+          fi
+          if [[ "$commit_obtido" != "$commit_esperado" ]]; then
+            echo "::error::commit embutido ($commit_obtido) difere do commit atual ($commit_esperado)"
+            exit 1
+          fi
+          echo "versão e commit coerentes"
+
+      - name: Endpoint GET /v1/versao responde a versão publicada
+        run: |
+          set -euo pipefail
+          TENAZ_ENDERECO_HTTP=:8080 /tmp/tenaz api &
+          pid=$!
+          trap 'kill $pid 2>/dev/null || true' EXIT
+
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/v1/versao >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+
+          corpo="$(curl -fsS http://127.0.0.1:8080/v1/versao)"
+          echo "Resposta: $corpo"
+
+          esperada="$(ferramentas/versao.sh --versao)"
+          echo "$corpo" | grep -q "\"versao\":\"$esperada\"" || {
+            echo "::error::GET /v1/versao não devolveu a versão do build"; exit 1; }
+
+          # O endpoint é público e expõe só três campos. Nada de dependência,
+          # sistema operacional, região ou infraestrutura.
+          for proibido in dependencias sistema os_version regiao infraestrutura host banco; do
+            if echo "$corpo" | grep -q "$proibido"; then
+              echo "::error::GET /v1/versao expôs campo proibido: $proibido"; exit 1
+            fi
+          done
+          echo "endpoint de versão correto"
+
+  javascript:
+    name: Web e app (tipos, testes, fila offline)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22.17"
+
+      - name: Habilitar pnpm
+        run: corepack enable pnpm
+
+      - name: Instalar dependências
+        run: pnpm install --frozen-lockfile
+
+      - name: Tipos
+        run: pnpm -r typecheck
+
+      # Inclui os testes da fila de comandos do app, rodados contra SQLite
+      # real no Node (seção 9.1). É o componente mais crítico do app e o
+      # risco 3 do cronograma.
+      - name: Testes
+        run: pnpm -r test
+
+      - name: Build da web com a versão da tag
+        run: |
+          set -euo pipefail
+          eval "$(ferramentas/versao.sh --export)"
+          cd web
+          TENAZ_VERSAO="$TENAZ_VERSAO" TENAZ_COMMIT="$TENAZ_COMMIT"             TENAZ_DATA_BUILD="$TENAZ_DATA_BUILD" pnpm exec vite build
+          cat dist/versao.json
+          grep -q "\"versao\": \"$TENAZ_VERSAO\"" dist/versao.json || {
+            echo "::error::versao.json da web não traz a versão da tag"; exit 1; }

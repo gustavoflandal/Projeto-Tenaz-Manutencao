@@ -1,0 +1,59 @@
+# Geração do código de acesso a dados.
+#
+# Sem ORM: o sqlc gera Go tipado a partir das migrações e das consultas .sql,
+# conferido na compilação (princípio 2 da seção 1.2 de
+# docs/2_ARQUITETURA_BANCO_DADOS.md).
+#
+# Regra que o teste de vazamento cobra: toda consulta sobre tabela de cliente
+# cita empresa_id no WHERE, mesmo com RLS ligado.
+#
+#   sqlc generate
+
+version: "2"
+
+sql:
+  - engine: postgresql
+    schema: db/migracoes
+    queries: internal/modulos
+    gen:
+      go:
+        package: consultas
+        out: internal/plataforma/db/consultas
+        sql_package: pgx/v5
+
+        # Nomes do domínio em português, como no banco e no sumário.
+        emit_json_tags: true
+        json_tags_case_style: snake
+        emit_prepared_queries: false
+        emit_interface: true
+        emit_empty_slices: true
+        emit_pointers_for_null_types: true
+        emit_result_struct_pointers: false
+
+        overrides:
+          # UUID com a biblioteca que o backend já usa para gerar v7.
+          - db_type: "uuid"
+            go_type: "github.com/google/uuid.UUID"
+          - db_type: "uuid"
+            nullable: true
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+              pointer: true
+
+          # Dinheiro e quantidade nunca viram float: numeric vai para um tipo
+          # decimal exato (seção 1.4 do documento 2).
+          - db_type: "pg_catalog.numeric"
+            go_type: "github.com/jackc/pgx/v5/pgtype.Numeric"
+
+          # xid8: cursor de sincronização (seção 11 do documento 2).
+          - db_type: "xid8"
+            go_type: "uint64"
+
+          - db_type: "citext"
+            go_type: "string"
+          - db_type: "citext"
+            nullable: true
+            go_type:
+              type: "string"
+              pointer: true

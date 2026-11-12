@@ -1,8 +1,10 @@
 # Especificação de Requisitos — Tenaz
 
-**Versão:** 0.3 · **Data:** 12/11/2026 · **Status:** Em elaboração
+**Versão:** 0.4 · **Data:** 12/11/2026 · **Status:** Em elaboração
 **Produto:** Tenaz · Gestão de Manutenção e Frota
-Alinhado ao sumário executivo 0.4.
+Alinhado ao sumário executivo 0.5.
+
+**Mudanças da versão 0.4:** configuração por segmento (sumário 3.7). No MVP: regras configuráveis de condição e efeito (RF-ADM-016), fase de ciclo de vida do ativo e entrada em operação (RF-ATV-013), campos extras da OS (RF-OS-021) e o tipo de OS `implantacao`. Na Fase 2: pacotes de segmento (RF-ADM-017) e os módulos novos PRJ, projetos de implantação (RF-PRJ-001 a RF-PRJ-007), e CTR, contratos com clientes (RF-CTR-001 a RF-CTR-005). Origem: caso de um fornecedor de radares instalados e mantidos por prestadores em várias cidades ([etapa 012](etapas/012_2026-11-12_configuracao-por-segmento.md)).
 
 **Mudanças da versão 0.2:** novo módulo **SRV** (gestão de serviços do prestador, MVP, plano Serviços), com 21 requisitos (RF-SRV-001 a RF-SRV-021) e dois requisitos não funcionais para a conexão entre contas (RNF-041 e RNF-042, risco R5). Aplicadas as decisões do sumário 3.6: permissão `os.encerrar`, escopos de acesso externo, ação `assumir`, token do link de uso único no fragmento da URL, desistência e "reabrir como nova" na solicitação, fim do contrato de locação por `encerrar`, categorias canônicas da matriz de responsabilidade, campos e origens da OS, papéis `posto_combustivel` e `seguradora`, peça em trânsito, permissão `est.decidir_destino`, distinção entre `bloqueio_ativo`, aptidão para despacho e `bloqueio_energia`, locatário só no portal web.
 
@@ -33,6 +35,8 @@ Este documento detalha os requisitos funcionais e não funcionais da Tenaz. Ele 
    - [INT — Integrações](#415-int--integrações)
    - [IA — Assistente](#416-ia--assistente)
    - [MOB — App de campo](#417-mob--app-de-campo)
+   - [PRJ — Projetos e implantação](#418-prj--projetos-e-implantação)
+   - [CTR — Contratos com clientes](#419-ctr--contratos-com-clientes)
 5. [Requisitos não funcionais](#5-requisitos-não-funcionais)
 6. [Resumo por módulo e fase](#6-resumo-por-módulo-e-fase)
 7. [Pendências citadas](#7-pendências-citadas)
@@ -42,7 +46,7 @@ Este documento detalha os requisitos funcionais e não funcionais da Tenaz. Ele 
 
 ## 1. Visão geral
 
-A Tenaz é um SaaS multiempresa de gestão de manutenção de equipamentos e frota. Uma empresa cliente cadastra máquinas, instalações, veículos, implementos e componentes numa única base hierárquica, com medidores múltiplos. Sobre essa base, o sistema gera e controla solicitações, ordens de serviço, planos preventivos, checklists, estoque, custos, documentos com vencimento e indicadores. Técnicos e motoristas usam um app que opera sem conexão por pelo menos 7 dias. Prestadores externos (subcontratadas, assistências técnicas, oficinas) executam OS com acesso restrito, mantêm estoque da empresa sob controle e consertam peças rastreadas; ativos locados, cedidos ou tomados, têm contrato, vistoria e responsável pelo custo da manutenção. A subcontratada ou assistência técnica também pode ter **conta própria** na Tenaz (módulo SRV, plano Serviços): cadastra técnicos, clientes e equipamentos de clientes, distribui OS, registra serviço, componentes e horas no app e, quando o cliente também usa a Tenaz, conecta as duas contas para que a OS trafegue entre elas (sumário 3.5).
+A Tenaz é um SaaS multiempresa de gestão de manutenção de equipamentos e frota. Uma empresa cliente cadastra máquinas, instalações, veículos, implementos e componentes numa única base hierárquica, com medidores múltiplos. Sobre essa base, o sistema gera e controla solicitações, ordens de serviço, planos preventivos, checklists, estoque, custos, documentos com vencimento e indicadores. Técnicos e motoristas usam um app que opera sem conexão por pelo menos 7 dias. Prestadores externos (subcontratadas, assistências técnicas, oficinas) executam OS com acesso restrito, mantêm estoque da empresa sob controle e consertam peças rastreadas; ativos locados, cedidos ou tomados, têm contrato, vistoria e responsável pelo custo da manutenção. A subcontratada ou assistência técnica também pode ter **conta própria** na Tenaz (módulo SRV, plano Serviços): cadastra técnicos, clientes e equipamentos de clientes, distribui OS, registra serviço, componentes e horas no app e, quando o cliente também usa a Tenaz, conecta as duas contas para que a OS trafegue entre elas (sumário 3.5). Empresas que instalam e mantêm equipamentos próprios em clientes, como radares de fiscalização eletrônica em várias cidades, controlam a implantação como projeto com etapas (PRJ) e o contrato com o cliente, com meta de disponibilidade e medição mensal (CTR). Cada empresa ajusta a Tenaz ao seu segmento com campos extras, regras de condição e efeito e pacotes prontos, sempre de catálogos fechados (sumário 3.7).
 
 Três ideias orientam os requisitos:
 
@@ -276,6 +280,35 @@ Requisitos movidos na versão 0.2:
 - **Validações:** CPF válido e único na empresa, quando informado; uma pessoa tem no máximo um usuário por empresa; pessoa com `fornecedor` informado só pode ser ligada a usuário com perfil `prestador` daquele fornecedor.
 - **Regras:** pessoa sem login não é cobrada. Dados de saúde só são lidos com `pessoa.saude.ler` (RNF-021). Pessoa com histórico (condução, capacitação, assinatura, execução) não é excluída, só inativada. A pessoa não é modelada como usuário sem login.
 
+#### RF-ADM-016 · Regras configuráveis de condição e efeito
+
+**Fase:** MVP · **Plano mínimo:** Essencial
+
+- **Descrição:** regras da empresa (`regra_automacao`) no formato **condição → efeito**, com condição e efeito escolhidos de catálogos fechados (sumário 3.7). Permitem que cada segmento ligue o comportamento de que precisa sem código novo: por exemplo, "verificação metrológica vencida bloqueia o radar até a nova verificação".
+- **Dados principais:** nome, descrição, condição (`documento_vencido`, `documento_a_vencer`, `os_concluida_com_campo`, `item_checklist_reprovado`, `leitura_fora_faixa`; na Fase 2, `capacitacao_vencida` e `etapa_projeto_atrasada`), parâmetros da condição (tipo de documento, dias de antecedência, campo extra sim/não da OS, item de checklist, medidor), filtro (classes de ativo, unidades, criticidades), efeito (`notificar`, `abrir_solicitacao`, `bloquear_ativo`, `bloquear_ativo_ate_documento`; na Fase 2, `impedir_atribuicao`), parâmetros do efeito (destinatários e canal, prioridade da solicitação, tipo de documento que levanta o bloqueio, motivo do bloqueio), situação (`ativa`, `inativa`), quem criou e alterou. Cada disparo gera um `disparo_regra` (regra, fato que disparou, ativo, efeito aplicado, data e hora). Rota `/v1/regras-automacao`.
+- **Operações:** criar a partir de modelos (incluídos nos pacotes de segmento, RF-ADM-017); simular sem gravar, mostrando quais ativos seriam afetados hoje; ativar e inativar; consultar o histórico de disparos por regra e por ativo; exportar.
+- **Validações:** condição e efeito do catálogo; combinação permitida (ex.: `bloquear_ativo_ate_documento` exige o tipo de documento que levanta o bloqueio; `abrir_solicitacao` não é permitido com `documento_a_vencer` para não abrir solicitação repetida a cada dia) (proposta); limite de 50 regras ativas por empresa (proposta); criar, alterar e ativar exigem a permissão `adm.gerenciar_regras`, padrão em `administrador` e `gestor`.
+- **Regras:**
+  - A regra é avaliada no fato que a dispara (documento vence, OS é concluída, checklist é enviado, leitura é registrada) e numa rotina diária idempotente, que não repete o efeito para o mesmo fato.
+  - `bloquear_ativo` cria um `bloqueio_ativo` com `origem = regra`, que deixa o ativo `parado` (RF-ATV-006) e só é levantado por quem tem a permissão de bloqueio, com motivo.
+  - `bloquear_ativo_ate_documento` cria o mesmo bloqueio e o levanta sozinho quando um documento do tipo exigido é registrado no ativo com emissão posterior ao fato que disparou a regra (sumário 3.6).
+  - `abrir_solicitacao` cria solicitação com origem `regra` (RF-SOL-001), que segue a triagem normal.
+  - Uma regra **nunca** muda o estado de uma OS, nunca altera fórmula de indicador e nunca grava dado em outra conta; o efeito vale só na conta onde a regra existe (o status do ativo não é campo compartilhado na conexão entre contas). Na OS executada por uma subcontratada conectada, os campos extras não trafegam (sumário 3.6), então a condição `os_concluida_com_campo` não dispara com dados da subcontratada; a solução fica em aberto (seção 8.3, ponto 38).
+  - Os comportamentos padrão da Tenaz (alertas de RF-CON-006, item reprovado de checklist gerando solicitação em RF-CHK) continuam valendo sem regra; a regra acrescenta efeitos, não desliga os padrões.
+  - Inativar a regra não levanta bloqueios já criados por ela; o sistema lista esses bloqueios para decisão.
+  - Condição ou efeito novo entra por requisito neste documento, com teste, nunca por configuração (risco R7).
+
+#### RF-ADM-017 · Pacotes de segmento
+
+**Fase:** Fase 2 · **Plano mínimo:** Essencial
+
+- **Descrição:** conjunto pronto de configuração por segmento (`pacote_segmento`), mantido pela Tenaz e aplicado à conta na criação ou depois, para que a empresa comece com a operação quase montada.
+- **Dados principais:** pacote (código, nome, segmento, versão, descrição), conteúdo: classes de ativo com campos extras e medidores, campos extras da OS (RF-OS-021), procedimentos, planos padrão (RF-PRE-010), modelos de checklist, tipos de documento, regras configuráveis (RF-ADM-016), modelos de projeto (RF-PRJ-001), códigos de falha sugeridos e módulos recomendados. A aplicação gera `aplicacao_pacote` (pacote, versão, data, quem aplicou, itens criados e itens ignorados por já existirem).
+- **Operações:** escolher um ou mais pacotes no roteiro de primeiros passos (RF-ADM-001); aplicar depois, pela administração; ver antes de aplicar o que será criado; aplicar uma versão nova do pacote, que só cria o que falta.
+- **Pacotes iniciais (proposta):** `fiscalizacao_eletronica`, `transportadora`, `industria`, `comercio`, `locadora`, `prestador_servicos`. O `fiscalizacao_eletronica` traz: classes "Radar fixo", "Câmera de fiscalização", "Gabinete", "Poste", "Laço indutivo", "Nobreak" e "Link de dados"; campos extras da OS "Rompeu lacre?", "Lacres retirados" e "Lacres instalados"; tipo de documento "Verificação metrológica", crítico; as regras "verificação vencida → `bloquear_ativo_ate_documento`" e "OS concluída com 'Rompeu lacre?' = sim → `bloquear_ativo_ate_documento`", entregues inativas até **P9**; modelo de projeto "Implantação de ponto de fiscalização" (RF-PRJ-001); planos de limpeza de lentes, poda de vegetação, teste de laços e verificação do nobreak.
+- **Validações:** pacote publicado pela Tenaz e compatível com o plano da conta (itens de módulos não contratados não são criados e aparecem como ignorados).
+- **Regras:** a aplicação é atômica: cria tudo o que falta ou nada. Aplicar exige `adm.gerenciar_configuracao`. A escolha de pacote no roteiro de primeiros passos aparece a partir da Fase 2; no MVP, o roteiro segue sem ela. Aplicar um pacote **só cria o que falta**; nunca altera nem apaga o que a empresa já tem ou editou, identificado pela chave natural do item (sigla da classe, código do tipo de documento, nome da regra). Tudo o que o pacote cria é configuração comum da empresa, editável como se ela tivesse criado. Regras vindas de pacote nascem `inativa` e a empresa as ativa depois de revisar (proposta). O catálogo de pacotes é global, só leitura para as contas e fica fora do RLS por empresa, como os demais catálogos globais (RNF-013).
+
 ---
 
 ### 4.2 ATV — Ativos
@@ -295,7 +328,7 @@ Requisitos movidos na versão 0.2:
 **Fase:** MVP · **Plano mínimo:** Essencial
 
 - **Descrição:** cadastro único para qualquer bem que recebe manutenção, com tipo `equipamento`, `veiculo`, `implemento` ou `componente`.
-- **Dados principais:** TAG, nome, tipo, classe, criticidade (A, B ou C), status operacional, localização, ativo pai, fabricante, modelo, número de série, ano de fabricação, data e valor de aquisição, **valor de reposição** (`valor_reposicao`, RAV), **regime de operação** (`horas_operacao_dia`, `dias_operacao_semana`), **propriedade** (`proprio`, `de_terceiro` ou `de_cliente`), cliente atendido (`cliente_servico_id`, só em `de_cliente`), garantia até, centro de custo, responsável, fotos, campos extras da classe, marcação "sujeito à NR-12", marcação "sujeito à NR-13".
+- **Dados principais:** TAG, nome, tipo, classe, criticidade (A, B ou C), status operacional, localização, ativo pai, fabricante, modelo, número de série, ano de fabricação, data e valor de aquisição, **valor de reposição** (`valor_reposicao`, RAV), **regime de operação** (`horas_operacao_dia`, `dias_operacao_semana`), **propriedade** (`proprio`, `de_terceiro` ou `de_cliente`), cliente atendido (`cliente_servico_id`, só em `de_cliente`), **fase de ciclo de vida** (`fase_ciclo_vida`: `em_implantacao` ou `em_operacao`, padrão `em_operacao`) e data de entrada em operação (`data_entrada_operacao`) (RF-ATV-013), garantia até, centro de custo, responsável, fotos, campos extras da classe, marcação "sujeito à NR-12", marcação "sujeito à NR-13".
 - **Operações:** criar, editar, duplicar, mover na árvore, inativar, consultar a árvore e o histórico.
 - **Validações:** TAG única na empresa; ativo pai na mesma empresa; profundidade máxima de 6 níveis; sem ciclos; `componente` sempre tem ativo pai (proposta); marcação NR-12 só em `equipamento` ou `implemento` (proposta); RAV maior que zero quando informado; `horas_operacao_dia` entre 0 e 24 e `dias_operacao_semana` entre 0 e 7.
 - **Regras:** ativo com histórico nunca é excluído, só inativado. A sugestão de TAG segue `<SIGLA>-<NNNN>` da classe. Os campos obrigatórios extras vêm da classe (RF-ATV-005). O regime de operação é a base do tempo requerido nos KPIs quando informado; sem ele, vale o calendário da unidade. Ativo `de_terceiro` é o tomado em locação ou em comodato; quando tomado, liga-se a um contrato de locação `tomado` (RF-LOC-002). Ativo `de_cliente` só existe na conta de uma subcontratada com o módulo SRV: é o equipamento de um cliente atendido, com `cliente_servico_id` obrigatório; quando vem de um cliente conectado, é cópia sincronizada e guarda `conexao_empresa_id` e `ativo_remoto_id` (RF-SRV-005, RF-SRV-015). Pneu não é ativo: é a entidade própria `pneu` (RF-FRO-002).
@@ -343,9 +376,9 @@ Requisitos movidos na versão 0.2:
   | Status | Quando |
   |---|---|
   | `operando` | Nenhuma causa abaixo |
-  | `em_manutencao` | Há OS em `em_execucao` ou `pausada` e o ativo foi retirado de operação de forma programada (OS `preventiva`, `preditiva`, `inspecao_legal` ou `corretiva_planejada` marcada "retira o ativo de operação") |
+  | `em_manutencao` | Há OS em `em_execucao` ou `pausada` e o ativo foi retirado de operação de forma programada (OS `preventiva`, `preditiva`, `inspecao_legal`, `corretiva_planejada`, `melhoria` ou `implantacao` em ativo `em_operacao`, marcada "retira o ativo de operação") |
   | `parado` | Falha que parou o ativo ("o ativo parou?" = sim), `corretiva_emergencial` em curso, parecer NR-12 `inapto` (RF-CON-002) ou bloqueio de conformidade (`bloqueio_ativo`) |
-  | `inativo` | Baixado, vendido ou em reserva (RF-ATV-011) |
+  | `inativo` | Baixado, vendido ou em reserva (RF-ATV-011), ou em implantação (`fase_ciclo_vida = em_implantacao`, RF-ATV-013) |
 
   - `parado` prevalece sobre `em_manutencao`.
   - O status volta a `operando` no **encerramento** da OS, se não restar outra causa.
@@ -354,6 +387,7 @@ Requisitos movidos na versão 0.2:
   - **Apto para despacho** (veículo) é verificação calculada, separada do status e sem entidade própria (RF-CON-007): um veículo `operando` pode estar impedido por documento crítico vencido.
   - `bloqueio_ativo` é a entidade que deixa o ativo `parado` (bloqueio de conformidade); não se confunde com `bloqueio_energia`, o registro de bloqueio e etiquetagem (LOTO) de uma intervenção (RF-CON-004, RF-CON-011) (sumário 3.6).
   - Ativo cedido e em locação continua `operando`; sua localização passa a ser o local de uso do locatário enquanto o item do contrato estiver entregue (RF-LOC-003).
+  - O `bloqueio_ativo` tem `origem` `manual`, `conformidade` ou `regra` (RF-ADM-016, sumário 3.6).
   - `inativo` sai do denominador dos KPIs. A criticidade define a prioridade padrão das OS do ativo: A → `alta`, B → `media`, C → `baixa`.
 
 #### RF-ATV-007 · QR code e etiquetas
@@ -412,6 +446,16 @@ Requisitos movidos na versão 0.2:
 - **Dados principais:** matriz de risco (probabilidade e consequência), RAV, custo de ciclo de vida, vida útil estimada, plano de ativo com ações ligadas a riscos.
 - **Operações:** avaliar risco por ativo; ligar riscos a planos de manutenção; gerar relatório de evidências para auditoria de certificação.
 - **Regras:** a ISO 55001 não é exigência legal; o recurso atende clientes que buscam certificação. A transição das certificadoras vai até 31/07/2027, segundo o estudo.
+
+#### RF-ATV-013 · Fase de ciclo de vida e entrada em operação
+
+**Fase:** MVP · **Plano mínimo:** Essencial
+
+- **Descrição:** separação entre o ativo que está sendo instalado e o ativo que já opera, para que a implantação não conte como indisponibilidade nem como custo de manutenção.
+- **Dados principais:** `fase_ciclo_vida` (`em_implantacao`, `em_operacao`), `data_entrada_operacao`, quem colocou em operação, projeto de origem (RF-PRJ-002, Fase 2), documento de entrega ou termo de recebimento (opcional).
+- **Operações:** cadastrar o ativo já `em_implantacao` (manualmente, por importação ou por um projeto); abrir OS `implantacao` no ativo; ação `colocar_em_operacao` (`POST /v1/ativos/{id}/colocar-em-operacao`), pela web ou pela API; colocar em operação vários ativos de uma vez; filtrar ativos por fase.
+- **Validações:** `colocar_em_operacao` só em ativo `em_implantacao`; exige que não haja OS `implantacao` não encerrada no ativo, salvo cancelada (proposta); exige os campos obrigatórios da classe preenchidos e, quando a classe marcar, os documentos críticos válidos (ex.: verificação metrológica) (proposta); exige a permissão `atv.colocar_em_operacao`, padrão em `gestor` e `planejador`.
+- **Regras:** o ativo `em_implantacao` fica com status `inativo`, sai dos KPIs e da base de veículos cobrados, e seus planos ficam suspensos; a interface mostra "Em implantação" (sumário 3.3). `colocar_em_operacao` muda a fase para `em_operacao`, o status para `operando`, grava `data_entrada_operacao`, ativa os planos a partir dessa data e gera o evento `ativo.colocado_em_operacao`. A fase **não volta** para `em_implantacao`: a reinstalação de um ativo em operação em outro ponto é transferência (RF-ATV-011) com OS `melhoria` marcada "retira o ativo de operação" ou, na Fase 2, projeto cuja etapa gera OS `implantacao` (RF-PRJ-004), com o ativo `em_manutencao` enquanto durar a OS. Ativo `de_cliente` (SRV) e ativo tomado (`de_terceiro`) também podem ter fase `em_implantacao`. Na conexão entre contas, a fase não é campo compartilhado no lançamento.
 
 ---
 
@@ -502,7 +546,7 @@ Requisitos movidos na versão 0.2:
 **Fase:** MVP · **Plano mínimo:** Essencial
 
 - **Descrição:** pedido de manutenção (`solicitacao`) aberto por qualquer usuário, inclusive `solicitante` e `motorista` gratuitos.
-- **Dados principais:** número `SS-<AAAA>-<NNNNNN>`, ativo ou localização, descrição, fotos, vídeo curto ou áudio, "o ativo parou?", prioridade sugerida, solicitante, contato, data e hora, origem (web, app, portal QR, checklist, telemática, API e, na Fase 2, `portal_locatario` para a solicitação aberta pelo locatário, RF-LOC-008).
+- **Dados principais:** número `SS-<AAAA>-<NNNNNN>`, ativo ou localização, descrição, fotos, vídeo curto ou áudio, "o ativo parou?", prioridade sugerida, solicitante, contato, data e hora, origem (web, app, portal QR, checklist, telemática, API, `regra` para a solicitação aberta por uma regra configurável (RF-ADM-016) e, na Fase 2, `portal_locatario` para a solicitação aberta pelo locatário, RF-LOC-008).
 - **Operações:** abrir pela web, pelo app (inclusive offline), pelo portal QR, pela API; anexar mídia; acompanhar.
 - **Validações:** ativo ou localização obrigatório; descrição com pelo menos 10 caracteres ou um anexo de mídia (proposta).
 - **Regras:** a solicitação nasce `nova`. Ao digitar o ativo, o sistema mostra solicitações e OS abertas do mesmo ativo para evitar duplicidade. Solicitação offline recebe número provisório e o número definitivo na sincronização.
@@ -559,7 +603,7 @@ Requisitos movidos na versão 0.2:
 **Fase:** MVP · **Plano mínimo:** Essencial
 
 - **Descrição:** registro de um trabalho de manutenção (`ordem_servico`).
-- **Dados principais:** número `OS-<AAAA>-<NNNNNN>` sequencial por empresa e reiniciado a cada ano, tipo, prioridade (`baixa`, `media`, `alta`, `urgente`), ativo ou localização, unidade, título e descrição, `origem` (`manual`, `solicitacao`, `plano`, `checklist`, `telematica`, `rascunho_ia`, `vistoria_locacao`, `prestador`), solicitação e plano de origem, "o ativo parou?", "retira o ativo de operação" (OS programadas), data e hora da parada, data-limite, responsável, equipe, **executor** (`executor_tipo`: `interno` ou `fornecedor`, com `fornecedor_id`), **responsável pelo custo** (`responsavel_custo`: `empresa`, `locatario`, `locador`, `garantia` ou `fornecedor`), `justificativa_responsavel_custo` (quando o responsável difere do padrão), contrato de locação ou de prestação aplicável, anexos. Na conta de uma subcontratada (SRV), também `descricao_servico` e os itens `servico_os` do serviço a realizar (RF-SRV-007).
+- **Dados principais:** número `OS-<AAAA>-<NNNNNN>` sequencial por empresa e reiniciado a cada ano, tipo, prioridade (`baixa`, `media`, `alta`, `urgente`), ativo ou localização, unidade, título e descrição, `origem` (`manual`, `solicitacao`, `plano`, `checklist`, `telematica`, `rascunho_ia`, `vistoria_locacao`, `prestador`, `cliente_conectado`, `projeto`), solicitação, plano e etapa de projeto de origem, campos extras (`campos_extras`, RF-OS-021), causa externa da parada (`causa_externa`, opcional: `vandalismo`, `acidente_terceiro`, `falta_energia`, `obra_terceiro`, `solicitacao_cliente`, `caso_fortuito`), "o ativo parou?", "retira o ativo de operação" (OS programadas), data e hora da parada, data-limite, responsável, equipe, **executor** (`executor_tipo`: `interno` ou `fornecedor`, com `fornecedor_id`), **responsável pelo custo** (`responsavel_custo`: `empresa`, `locatario`, `locador`, `garantia` ou `fornecedor`), `justificativa_responsavel_custo` (quando o responsável difere do padrão), contrato de locação ou de prestação aplicável, anexos. Na conta de uma subcontratada (SRV), também `descricao_servico` e os itens `servico_os` do serviço a realizar (RF-SRV-007).
 - **Operações:** criar na web, no app (inclusive offline), pela API, a partir de solicitação, de plano ou de vistoria de locação; receber a OS aberta por uma subcontratada conectada (origem `prestador`, RF-SRV-017).
 - **Validações:** tipo obrigatório; ativo ou localização obrigatório; data-limite não anterior à abertura; `fornecedor_id` obrigatório quando `executor_tipo = fornecedor`; `responsavel_custo = locatario` só em ativo com contrato de locação `cedido` vigente na data da abertura ou da avaria; `responsavel_custo = locador` só em ativo com contrato `tomado`.
 - **Regras:** a OS nasce `aberta`, salvo as geradas por plano, que nascem `planejada` (RF-PRE-009). O número é atribuído pelo servidor; OS criada offline recebe número provisório e o definitivo na sincronização, sem lacuna visível ao usuário de campo (proposta). A prioridade padrão vem da criticidade do ativo (A → `alta`, B → `media`, C → `baixa`) e pode ser alterada; `corretiva_emergencial` nasce `urgente`. O responsável pelo custo padrão é `empresa`; em ativo locado vem da matriz do contrato (RF-LOC-004) e pode ser alterado com `justificativa_responsavel_custo`; em ativo ou peça em garantia o sistema sugere `garantia` (RF-OS-020). OS só de localização não entra nos KPIs por ativo. OS de origem `prestador` nasce `aberta` e passa pela triagem normal da empresa (sumário 3.5).
@@ -568,9 +612,9 @@ Requisitos movidos na versão 0.2:
 
 **Fase:** MVP · **Plano mínimo:** Essencial
 
-- **Descrição:** classificação obrigatória que alimenta os KPIs: `preventiva`, `preditiva`, `corretiva_planejada`, `corretiva_emergencial`, `inspecao_legal`, `melhoria`.
-- **Validações:** `preventiva` e `inspecao_legal` geradas por plano mantêm o vínculo com o plano; `inspecao_legal` exige referência à obrigação atendida (documento, NR-12, NR-13) (proposta).
-- **Regras:** `corretiva_emergencial` pode ir de `aberta` direto para `em_execucao`. A troca de tipo depois de `concluida` exige permissão de `gestor`, motivo e gera auditoria, porque altera % planejada e PM compliance.
+- **Descrição:** classificação obrigatória que alimenta os KPIs: `preventiva`, `preditiva`, `corretiva_planejada`, `corretiva_emergencial`, `inspecao_legal`, `melhoria`, `implantacao`.
+- **Validações:** `preventiva` e `inspecao_legal` geradas por plano mantêm o vínculo com o plano; `inspecao_legal` exige referência à obrigação atendida (documento, NR-12, NR-13) (proposta); `implantacao` só em ativo `em_implantacao`, ligada a uma etapa de projeto (RF-PRJ-004) ou, na conta da subcontratada, recebida de um cliente conectado (origem `cliente_conectado`), e nunca é gerada por plano.
+- **Regras:** `corretiva_emergencial` pode ir de `aberta` direto para `em_execucao`. A OS `implantacao` segue o mesmo ciclo de vida, fica fora dos KPIs de manutenção (MTBF, MTTR, disponibilidade, % planejada, cumprimento de preventiva, backlog de manutenção) e seu custo é apresentado como custo de implantação, separado do custo de manutenção (RF-OS-013, RF-IND-005). A troca de tipo depois de `concluida` exige permissão de `gestor`, motivo e gera auditoria, porque altera % planejada e PM compliance.
 
 #### RF-OS-003 · Ciclo de vida da OS
 
@@ -615,7 +659,7 @@ Requisitos movidos na versão 0.2:
 **Fase:** MVP · **Plano mínimo:** Essencial
 
 - **Descrição:** indicação de que o trabalho envolve indisponibilidade do ativo, por falha ou por retirada programada.
-- **Dados principais:** "o ativo parou?" (falha que parou o ativo: sim ou não); "retira o ativo de operação" (OS `preventiva`, `preditiva`, `inspecao_legal` e `corretiva_planejada`: sim ou não); data e hora da parada (padrão: abertura, editável para antes); data e hora do retorno à operação.
+- **Dados principais:** "o ativo parou?" (falha que parou o ativo: sim ou não); "retira o ativo de operação" (OS `preventiva`, `preditiva`, `inspecao_legal`, `corretiva_planejada`, `melhoria` e `implantacao` em ativo `em_operacao`: sim ou não); data e hora da parada (padrão: abertura, editável para antes); data e hora do retorno à operação.
 - **Operações:** informar na solicitação, na abertura, no planejamento ou durante a execução.
 - **Regras:** as mudanças de status seguem RF-ATV-006 e o sumário (seção 3.3):
   - "o ativo parou?" = sim, ou `corretiva_emergencial` em curso: o ativo fica `parado` desde a parada até o encerramento, inclusive durante a execução e as pausas.
@@ -763,6 +807,16 @@ Requisitos movidos na versão 0.2:
 - **Dados principais:** item, peça serializada ou serviço, fornecedor, início, prazo em dias ou em medidor, documento, origem (compra, serviço de oficina ou assistência, ordem de reparo).
 - **Operações:** registrar garantia na entrada da peça, no retorno da oficina (RF-TER-008) ou no retorno do conserto (RF-EST-018); avisar ao abrir OS em ativo ou peça em garantia.
 - **Regras:** OS em garantia recebe `responsavel_custo = garantia` como sugestão, é marcada para cobrança do fornecedor e o custo pode ser lançado como recuperável (proposta). Falha de peça recondicionada dentro da garantia do reparo abre nova ordem de reparo sem custo para o mesmo fornecedor (proposta).
+
+#### RF-OS-021 · Campos extras da OS
+
+**Fase:** MVP · **Plano mínimo:** Essencial
+
+- **Descrição:** campos definidos pela empresa (`campo_extra_os`) para registrar na OS o que é próprio do segmento: números de lacre, protocolo da concessionária, número da autorização do órgão, leitura de um instrumento.
+- **Dados principais:** definição: chave, rótulo, tipo (`texto`, `numero`, `data`, `lista`, `sim_nao`), opções (lista), unidade (número), tipos de OS e classes de ativo em que aparece, momento da obrigatoriedade (`nenhum`, `abertura`, `conclusao`), marcação "preenchido pelo prestador" (aparece para o perfil `prestador` e no link de uso único) (proposta), texto de ajuda, ordem, situação. Valores: `ordem_servico.campos_extras`, gravados com a chave da definição.
+- **Operações:** criar, editar, ordenar e inativar definições; preencher na web, no app (inclusive offline), pelo link de uso único (só campos marcados como do prestador, proposta) e pela API; filtrar e exportar OS pelos campos; usar campo `sim_nao` como condição de regra (`os_concluida_com_campo`, RF-ADM-016).
+- **Validações:** chave única na empresa, em minúsculas, sem acento; tipo não muda depois de haver valor gravado (cria-se um campo novo); valor conforme o tipo; campo obrigatório na conclusão impede `concluir` enquanto vazio, inclusive no app offline, que valida antes de enfileirar o comando; limite de 30 campos ativos por combinação de tipo de OS e classe (proposta).
+- **Regras:** inativar a definição não apaga valores já gravados; a OS mostra o rótulo vigente na data do registro. Campo novo obrigatório não afeta OS já concluídas, nem a conclusão feita no app offline antes de o aparelho receber a definição nova: o servidor aceita essa conclusão sem o campo e a sinaliza para revisão (proposta). Criar e editar definições exige `adm.gerenciar_configuracao` (sumário 3.6). Os campos extras **não** trafegam na conexão entre contas no lançamento (sumário 3.6) e não entram em fórmula de indicador; aparecem no relatório da OS em PDF (RF-SRV-013) e na impressão (RF-OS-018). As definições viajam ao app junto com o cache de configuração.
 
 ---
 
@@ -1785,7 +1839,7 @@ Movido para **RF-TER-008** (oficina externa e assistência técnica) na versão 
 
 - **Descrição:** agenda genérica de documentos com validade ligados a ativo, pessoa ou empresa (`documento_vencimento`).
 - **Dados principais:** tipo de documento, vínculo (ativo, pessoa ou empresa), número, emissor, data de emissão, validade, arquivo, documento crítico para operação (sim/não), situação calculada (`valido`, `a_vencer`, `vencido`) (proposta), histórico de renovações.
-- **Catálogo inicial de tipos:** CRLV-e; verificação do cronotacógrafo (Inmetro); CIV; CIPP; RNTRC; apólices de seguro (inclusive os seguros exigidos para o RNTRC pela Resolução ANTT 6.068/2025); laudo ou relatório de inspeção NR-13; CNH; exame toxicológico; prontuário NR-10; inspeção de SPDA; licenças diversas. A empresa pode criar tipos.
+- **Catálogo inicial de tipos:** CRLV-e; verificação do cronotacógrafo (Inmetro); CIV; CIPP; RNTRC; apólices de seguro (inclusive os seguros exigidos para o RNTRC pela Resolução ANTT 6.068/2025); laudo ou relatório de inspeção NR-13; CNH; exame toxicológico; prontuário NR-10; inspeção de SPDA; verificação metrológica (Inmetro ou órgão da RBMLQ, para medidores de velocidade, balanças e instrumentos regulamentados); licenças diversas. A empresa pode criar tipos.
 - **Operações:** cadastrar; anexar o arquivo; renovar (a nova versão substitui a vigente e a anterior vai para o histórico); consultar por vencimento; exportar.
 - **Validações:** validade posterior à emissão; arquivo obrigatório para tipos marcados como críticos (proposta).
 - **Regras:**
@@ -1794,6 +1848,7 @@ Movido para **RF-TER-008** (oficina externa e assistência técnica) na versão 
   - **CRLV-e:** validade digitada; o licenciamento anual (CTB, art. 105) não foi re-lido no estudo.
   - **NR-13 no Essencial:** o laudo é tratado como documento com validade digitada; o cálculo dos prazos é RF-CON-009 (Profissional).
   - Prazos de NR-10 e SPDA são digitados; o estudo não re-leu essas normas.
+  - **Verificação metrológica:** validade digitada a partir do certificado até a conferência da norma de cada instrumento (**P9**). O efeito de bloqueio vem de uma regra configurável (RF-ADM-016), não do tipo de documento.
 
 #### RF-CON-006 · Alertas de vencimento D-60, D-30 e D-7
 
@@ -2262,6 +2317,132 @@ Referências exibidas ao lado dos KPIs, sempre com a fonte: CMF até 4% do fatur
 - **Operações:** apagar o cache do aparelho remotamente na próxima conexão (usuário inativado ou aparelho perdido); exigir versão mínima do app; enviar diagnóstico de sincronização ao suporte com consentimento do usuário.
 - **Regras:** a limpeza ocorre na próxima conexão, depois do envio dos comandos pendentes. O servidor aceita comandos feitos antes da inativação do usuário e recusa, com registro, os feitos depois (proposta). Os dados locais do app ficam criptografados no aparelho.
 
+### 4.18 PRJ — Projetos e implantação
+
+Módulo da Fase 2, plano Profissional. Controla a implantação de ativos que exige uma sequência de etapas com dependências, como a instalação de um radar (autorização, energia, fundação e poste, laços, montagem, aferição, entrega), a instalação de uma máquina ou a montagem de uma câmara fria. Reaproveita OS, fornecedor, documentos com vencimento, campos extras e o app; o projeto não executa trabalho, organiza OS.
+
+#### RF-PRJ-001 · Modelos de projeto
+
+**Fase:** Fase 2 · **Plano mínimo:** Profissional
+
+- **Descrição:** roteiro reutilizável de implantação (`modelo_projeto`), com as etapas (`modelo_etapa_projeto`) e o que cada uma exige.
+- **Dados principais:** modelo: nome, descrição, classes de ativo a que se aplica, situação, versão. Etapa do modelo: nome, ordem, etapas predecessoras, duração prevista em dias, peso no avanço físico, executor padrão (`interno` ou `fornecedor`), gera OS (sim/não) e, quando gera, procedimento ou tarefas da OS `implantacao`, tipos de documento exigidos para concluir, campos extras exigidos para concluir, valor de referência da etapa (para pagamento do prestador), marcação "etapa de entrega" (a última, que coloca os ativos em operação).
+- **Operações:** criar, copiar, editar (gera versão nova), inativar; criar a partir de um pacote de segmento (RF-ADM-017); ver as dependências em diagrama. Rota `/v1/modelos-projeto`.
+- **Validações:** pelo menos uma etapa; predecessoras do mesmo modelo, sem ciclos; peso maior ou igual a zero e soma dos pesos maior que zero; no máximo 40 etapas por modelo (proposta); no máximo uma etapa de entrega.
+- **Regras:** projeto já criado guarda a versão do modelo usada; mudar o modelo não altera projetos existentes.
+
+#### RF-PRJ-002 · Projeto de implantação
+
+**Fase:** Fase 2 · **Plano mínimo:** Profissional
+
+- **Descrição:** implantação de um ou mais ativos (`projeto`), criada a partir de um modelo.
+- **Dados principais:** número `PJ-<AAAA>-<NNNNNN>`, modelo e versão, nome, unidade, localização, ativos implantados (normalmente `em_implantacao`, RF-ATV-013), cliente atendido e contrato com cliente (opcionais, RF-CTR-001), responsável, datas previstas e reais de início e fim, orçamento previsto por etapa, situação (`rascunho`, `em_andamento`, `suspenso`, `concluido`, `cancelado`, sumário 3.3), anexos. Rota `/v1/projetos`, com ações `iniciar`, `suspender`, `retomar`, `concluir` e `cancelar`.
+- **Operações:** criar a partir de um modelo, com as etapas copiadas e as datas previstas calculadas pela duração e pelas dependências; criar vários projetos de uma vez (um por ponto ou por ativo) a partir de uma planilha (RF-INT-003) (proposta); incluir e retirar ativos em `rascunho`; iniciar; suspender e retomar com motivo; cancelar com motivo.
+- **Validações:** `iniciar` exige pelo menos um ativo ou uma localização e responsável; `suspender` e `cancelar` exigem motivo; cancelar com OS em `em_execucao` exige pausá-las antes; ativo em no máximo um projeto não concluído (proposta).
+- **Regras:** iniciar o projeto torna `disponivel` as etapas sem predecessoras. Suspender pausa os prazos das etapas, não as OS (o planejador decide sobre cada OS). Projeto `concluido` ou `cancelado` não é editado. Cancelar não apaga os ativos `em_implantacao`: o sistema pede o destino de cada um (manter em implantação ou inativar com motivo). Gera os eventos `projeto.iniciado`, `projeto.concluido` e `projeto.cancelado`.
+
+#### RF-PRJ-003 · Etapas e dependências
+
+**Fase:** Fase 2 · **Plano mínimo:** Profissional
+
+- **Descrição:** execução de cada etapa (`etapa_projeto`) do projeto, na ordem das dependências.
+- **Dados principais:** projeto, etapa do modelo, executor (`interno` ou `fornecedor`, com `fornecedor_id`), responsável, datas previstas e reais, situação (`pendente`, `disponivel`, `em_andamento`, `concluida`, `dispensada`, sumário 3.3), OS da etapa, documentos e campos exigidos com a situação de cada um, valor da etapa, motivo de dispensa.
+- **Operações:** atribuir executor e responsável; gerar a OS da etapa (RF-PRJ-004); registrar documentos exigidos (RF-CON-005) e campos exigidos; concluir; dispensar com motivo.
+- **Validações:** a etapa só passa a `disponivel` quando todas as predecessoras estão `concluida` ou `dispensada`; `em_andamento` quando a primeira OS da etapa inicia ou por ação manual em etapa sem OS; `concluida` exige as OS da etapa `encerrada` ou `cancelada`, pelo menos uma `encerrada` quando a etapa gera OS, e os documentos e campos exigidos registrados; `dispensada` só a partir de `pendente` ou `disponivel`, com motivo e a permissão `prj.dispensar_etapa`, padrão em `gestor`. Criar, iniciar, suspender, retomar, concluir e cancelar projeto e modelo exigem `prj.gerenciar` (sumário 3.6).
+- **Regras:** concluir ou dispensar uma etapa torna `disponivel` as sucessoras cujas predecessoras terminaram e notifica seus responsáveis. Etapa com data prevista vencida e não concluída fica "atrasada" (condição calculada, não estado) e pode disparar regra `etapa_projeto_atrasada` (RF-ADM-016). Documento exigido registrado no ativo vale para a etapa quando emitido depois do início da etapa (proposta).
+
+#### RF-PRJ-004 · OS de implantação da etapa
+
+**Fase:** Fase 2 · **Plano mínimo:** Profissional
+
+- **Descrição:** cada etapa que "gera OS" produz uma ou mais OS do tipo `implantacao`, executadas como qualquer OS.
+- **Dados principais:** OS com `tipo = implantacao`, `origem = projeto`, etapa de origem, ativo ou localização do projeto, tarefas do procedimento da etapa, executor da etapa.
+- **Operações:** gerar a OS quando a etapa fica `disponivel` (automático, proposta) ou manualmente; gerar uma OS por ativo do projeto quando a etapa se repete por ativo (proposta); atribuir a fornecedor (RF-TER-003), inclusive com conta conectada (RF-SRV-016), ou a técnico interno; executar no app offline.
+- **Validações:** as da OS (RF-OS-001 a RF-OS-014) e os campos extras obrigatórios da OS (RF-OS-021).
+- **Regras:** a OS de implantação fica fora dos KPIs de manutenção (RF-OS-002) e entra no custo realizado do projeto. Na conta da subcontratada conectada, a OS chega como qualquer OS do cliente; o projeto e suas etapas não são compartilhados no lançamento, só a OS.
+
+#### RF-PRJ-005 · Acompanhamento do projeto
+
+**Fase:** Fase 2 · **Plano mínimo:** Profissional
+
+- **Descrição:** visão de prazo, avanço e custo de um projeto e da carteira de projetos.
+- **Dados principais:** cronograma (barras por etapa, previsto e real, com dependências), avanço físico (soma dos pesos das etapas `concluida` e `dispensada` sobre a soma dos pesos), etapas atrasadas, custo previsto (orçamento) e realizado (custos das OS de implantação, RF-OS-013, mais lançamentos avulsos do projeto) por etapa e total, desvio de prazo em dias.
+- **Operações:** ver o projeto em cronograma, lista de etapas e quadro; ver a carteira por unidade, cliente, fornecedor e situação; filtrar atrasados; exportar em PDF e XLSX e pela API.
+- **Regras:** os números mostram como são calculados (RF-IND-002). A etapa dispensada conta no avanço físico e não conta no custo.
+
+#### RF-PRJ-006 · Medição de etapas para pagamento do prestador
+
+**Fase:** Fase 2 · **Plano mínimo:** Profissional
+
+- **Descrição:** relatório por fornecedor e período com as etapas concluídas por ele e o valor de cada uma, base para o pagamento da empreitada.
+- **Dados principais:** fornecedor, período, etapas `concluida` no período com projeto, ativo, data de conclusão e valor da etapa; ajustes com motivo; total.
+- **Operações:** gerar por fornecedor e período; ajustar valor de uma linha com motivo e a permissão `prj.ajustar_medicao`; marcar como enviada ao ERP (proposta); exportar em PDF e XLSX e pela API.
+- **Validações:** só etapas `concluida` entram; etapa dispensada não entra; uma etapa entra em uma única medição (proposta).
+- **Regras:** a Tenaz não paga nem fatura: o pagamento sai do ERP. O valor padrão vem do valor da etapa no projeto, que vem do modelo ou do contrato de prestação (RF-TER-006) quando houver.
+
+#### RF-PRJ-007 · Entrega e entrada em operação
+
+**Fase:** Fase 2 · **Plano mínimo:** Profissional
+
+- **Descrição:** fechamento do projeto, com termo de entrega e entrada dos ativos em operação.
+- **Dados principais:** etapa de entrega, termo de entrega (gerado em PDF com os ativos, as etapas, os documentos e as fotos), assinatura do responsável e, quando houver, do representante do cliente atendido (RF-CON-014), data de entrada em operação.
+- **Operações:** concluir a etapa de entrega; gerar e assinar o termo; concluir o projeto.
+- **Validações:** `concluir` o projeto exige todas as etapas `concluida` ou `dispensada`; a etapa de entrega não pode ser dispensada (proposta).
+- **Regras:** concluir o projeto executa `colocar_em_operacao` em todos os ativos do projeto que ainda estão `em_implantacao` (RF-ATV-013), ativa os planos e, quando o projeto tem contrato com cliente, inclui os ativos como itens cobertos a partir da data de entrada em operação (RF-CTR-002) (proposta).
+
+### 4.19 CTR — Contratos com clientes
+
+Módulo da Fase 2, plano Profissional. Controla o contrato de serviço da empresa com um cliente atendido que exige disponibilidade dos equipamentos, como o contrato de fiscalização eletrônica com uma prefeitura, de elevadores com um condomínio ou de equipamentos médicos com um hospital. Usa o cadastro `cliente_servico` (sumário 3.1), as OS e os registros de parada, sem mudar o cálculo técnico da disponibilidade (RF-IND-003).
+
+#### RF-CTR-001 · Contrato com cliente
+
+**Fase:** Fase 2 · **Plano mínimo:** Profissional
+
+- **Descrição:** contrato de serviço (`contrato_cliente`) com um cliente atendido.
+- **Dados principais:** número `CT-<AAAA>-<NNNNNN>`, cliente atendido (`cliente_servico`), número do contrato no cliente (ex.: número do processo licitatório) (proposta), vigência (início, fim, renovação), unidades, meta de disponibilidade do contrato (%), calendário de apuração (`continuo_24x7` ou calendário do contrato, com dias e horários), prazos de atendimento e de solução por prioridade, faixas de desconto (`faixa_desconto_contrato`: de % de disponibilidade, até %, desconto em % do valor do item), causas externas aceitas (subconjunto da lista canônica de `causa_externa`), valor mensal de referência, anexos, situação (`rascunho`, `vigente`, `encerrado`, `cancelado`). Rota `/v1/contratos-cliente`, com ações `ativar`, `encerrar` e `cancelar`.
+- **Operações:** criar em rascunho; incluir itens (RF-CTR-002); ativar; aditar com histórico (proposta); encerrar; cancelar; alertas D-60, D-30 e D-7 antes do fim da vigência (proposta).
+- **Validações:** `rascunho` → `vigente` exige pelo menos um item, meta, calendário e faixas sem sobreposição; só `rascunho` vai para `cancelado`; meta entre 0 e 100; faixas contíguas, da meta para baixo.
+- **Regras:** a ativação gera `contrato_cliente.ativado` e o encerramento gera `contrato_cliente.encerrado`. Os prazos de atendimento e de solução valem para as OS dos itens cobertos; o estouro gera `contrato_cliente.sla_violado` e notifica o `gestor`. Contrato `encerrado` ou `cancelado` não é editado.
+
+#### RF-CTR-002 · Itens cobertos
+
+**Fase:** Fase 2 · **Plano mínimo:** Profissional
+
+- **Descrição:** ativos cobertos pelo contrato (`item_contrato_cliente`), com datas de inclusão e exclusão.
+- **Dados principais:** contrato, ativo, data de inclusão, data de exclusão, meta própria do item (opcional, sobrepõe a do contrato), valor mensal do item, situação.
+- **Operações:** incluir e excluir itens em rascunho ou por aditivo; incluir automaticamente os ativos de um projeto concluído (RF-PRJ-007) (proposta); ver a disponibilidade corrente de cada item.
+- **Validações:** ativo `proprio`, `de_terceiro` ou `de_cliente`, não `inativo` na inclusão, salvo `em_implantacao` com inclusão a partir da entrada em operação; um ativo em no máximo um contrato com cliente vigente no mesmo período.
+- **Regras:** o item só conta na medição entre a inclusão (ou a entrada em operação, o que for depois) e a exclusão.
+
+#### RF-CTR-003 · Paradas por causa externa
+
+**Fase:** Fase 2 · **Plano mínimo:** Profissional
+
+- **Descrição:** marcação, na OS, de que a parada teve causa fora do controle da empresa, para que a medição do contrato possa desconsiderá-la.
+- **Dados principais:** `ordem_servico.causa_externa` (`vandalismo`, `acidente_terceiro`, `falta_energia`, `obra_terceiro`, `solicitacao_cliente`, `caso_fortuito`), evidências (boletim de ocorrência, protocolo da concessionária, fotos), quem marcou, aprovação da exclusão na medição (quem, quando, motivo).
+- **Operações:** marcar na abertura ou na execução, pela web, pelo app ou pelo prestador; anexar evidência; aprovar ou recusar a exclusão ao fechar a medição.
+- **Validações:** causa da lista canônica; evidência obrigatória por parâmetro do contrato (proposta); só causa aceita no contrato pode ser excluída.
+- **Regras:** a causa externa **não muda** o MTTR, o MTBF nem a disponibilidade técnica do ativo (RF-IND-003): só a medição do contrato desconta a parada, e só depois de aprovada. A mesma marcação alimenta o relatório de danos causados por terceiros (proposta).
+
+#### RF-CTR-004 · Medição mensal do contrato
+
+**Fase:** Fase 2 · **Plano mínimo:** Profissional
+
+- **Descrição:** apuração por período (`medicao_contrato`) da disponibilidade contratual de cada item e do desconto devido.
+- **Dados principais:** contrato, período, por item: horas requeridas (pelo calendário de apuração), horas paradas (registros de parada das OS do item, RF-OS-005), paradas excluídas aprovadas, disponibilidade contratual, meta, faixa atingida, desconto em % e em valor; total do contrato; memória de cálculo; situação (`em_apuracao`, `fechada`, sumário 3.3); quem fechou e quando.
+- **Operações:** abrir a medição do período (automática no primeiro dia do mês seguinte, proposta); revisar paradas e aprovar exclusões; fechar; reabrir com motivo e a permissão `ctr.reabrir_medicao`; exportar em PDF e XLSX e pela API; marcar como enviada ao cliente ou ao ERP (proposta).
+- **Validações:** fechar exige todas as paradas com causa externa decididas (`decisao_exclusao` `aprovada` ou `recusada`) e a permissão `ctr.fechar_medicao`; medição `fechada` não é editada; criar, ativar, encerrar e cancelar contrato exigem `ctr.gerenciar` (sumário 3.6).
+- **Regras:** disponibilidade contratual do item = (horas requeridas − horas paradas não excluídas) ÷ horas requeridas, dentro do calendário de apuração; a fórmula e o tratamento de paradas que cruzam o período estão em 4_FLUXOS_PROCESSO.md. A medição mostra como é calculada (RF-IND-002). A Tenaz não fatura: o valor com desconto vai para o ERP. Mudança em OS depois do fechamento não altera a medição fechada; aparece como divergência na reabertura (proposta). Gera `medicao_contrato.fechada`.
+
+#### RF-CTR-005 · Painel do contrato
+
+**Fase:** Fase 2 · **Plano mínimo:** Profissional
+
+- **Descrição:** acompanhamento corrente do contrato antes do fechamento.
+- **Dados principais:** disponibilidade parcial do mês por item e do contrato, itens abaixo da meta, desconto projetado, OS abertas dos itens com prazo de atendimento e de solução, paradas com causa externa aguardando decisão.
+- **Operações:** ver por contrato e por cliente; ordenar itens pelo impacto no desconto; abrir a OS a partir do item; exportar.
+- **Regras:** a projeção usa o mesmo cálculo da medição, com o período até o momento. O acesso do cliente final ao painel depende de **P10**; até lá, o painel é interno e a medição sai em PDF e XLSX.
+
 ---
 ## 5. Requisitos não funcionais
 
@@ -2384,11 +2565,11 @@ Contagem de requisitos funcionais por fase e por plano mínimo. As colunas de pl
 
 | Módulo | MVP | Fase 2 | Fase 3 | Total | Essencial | Profissional | Enterprise | Serviços |
 |---|---|---|---|---|---|---|---|---|
-| ADM | 12 | 2 | 1 | 15 | 11 | 2 | 2 | 0 |
-| ATV | 11 | 0 | 1 | 12 | 11 | 0 | 1 | 0 |
+| ADM | 13 | 3 | 1 | 17 | 13 | 2 | 2 | 0 |
+| ATV | 12 | 0 | 1 | 13 | 12 | 0 | 1 | 0 |
 | MED | 8 | 0 | 0 | 8 | 8 | 0 | 0 | 0 |
 | SOL | 6 | 0 | 0 | 6 | 6 | 0 | 0 | 0 |
-| OS | 17 | 2 | 1 | 20 | 17 | 3 | 0 | 0 |
+| OS | 18 | 2 | 1 | 21 | 18 | 3 | 0 | 0 |
 | PRE | 9 | 1 | 2 | 12 | 10 | 0 | 2 | 0 |
 | CHK | 6 | 0 | 0 | 6 | 6 | 0 | 0 | 0 |
 | EST | 5 | 13 | 0 | 18 | 5 | 13 | 0 | 0 |
@@ -2401,7 +2582,15 @@ Contagem de requisitos funcionais por fase e por plano mínimo. As colunas de pl
 | INT | 3 | 5 | 4 | 12 | 1 | 7 | 4 | 0 |
 | IA | 0 | 4 | 3 | 7 | 0 | 6 | 1 | 0 |
 | MOB | 8 | 2 | 0 | 10 | 8 | 2 | 0 | 0 |
-| **Total** | **126** | **62** | **16** | **204** | **104** | **68** | **11** | **21** |
+| PRJ | 0 | 7 | 0 | 7 | 0 | 7 | 0 | 0 |
+| CTR | 0 | 5 | 0 | 5 | 0 | 5 | 0 | 0 |
+| **Total** | **129** | **75** | **16** | **220** | **108** | **80** | **11** | **21** |
+
+Mudanças em relação à versão 0.3 (126 / 62 / 16 = 204):
+
+- **MVP +3:** RF-ADM-016 (regras configuráveis), RF-ATV-013 (fase de ciclo de vida) e RF-OS-021 (campos extras da OS), todos no Essencial.
+- **Fase 2 +13:** RF-ADM-017 (pacotes de segmento, Essencial), RF-PRJ-001 a RF-PRJ-007 e RF-CTR-001 a RF-CTR-005 (Profissional).
+- **Sem mudar contagens:** RF-ATV-002, RF-ATV-006, RF-SOL-001, RF-OS-001, RF-OS-002 e RF-CON-005 receberam a fase de ciclo de vida, a origem do bloqueio, as origens `projeto` e `regra`, os campos extras, a causa externa, o tipo `implantacao` e o tipo de documento "verificação metrológica".
 
 Mudanças em relação à versão 0.2 (105 / 62 / 16 = 183):
 
@@ -2430,6 +2619,8 @@ Requisitos não funcionais: 42 (RNF-001 a RNF-042), válidos desde o MVP, exceto
 | P6 — prazos NR-13 com SPIE, categorias III a V | RF-CON-009 |
 | P7 — local da cópia de recuperação de desastre | RNF-004, RNF-005, RNF-006 (opções na seção 5.1) |
 | P8 — CFOPs e tratamento fiscal de remessa e retorno a subcontratada, envio para conserto e locação | RF-EST-015, RF-EST-018, RF-EST-019, RF-LOC-002, RF-LOC-009 |
+| P9 — regras metrológicas de medidores de velocidade (verificação, reparo, lacres) | RF-ADM-017 (pacote `fiscalizacao_eletronica`), RF-CON-005 |
+| P10 — acesso do cliente final de um contrato | RF-CTR-005 |
 
 ---
 
@@ -2495,7 +2686,11 @@ Requisitos não funcionais: 42 (RNF-001 a RNF-042), válidos desde o MVP, exceto
 | 31 | No MVP não há contrato de prestação (Fase 2) para dizer quais ativos do cliente são "cobertos" | O cliente seleciona ativos ou classes na própria conexão; na Fase 2, o contrato vigente passa a definir a lista (RF-SRV-015) |
 | 32 | OS aberta pela subcontratada só pode ser executada depois da triagem do cliente, o que atrasa emergências em campo | Execução imediata só de `corretiva_emergencial` e só se a conexão permitir (RF-SRV-017) (proposta) |
 | 33 | Capacitações de técnicos (RF-CON-012) são Fase 2, mas o sumário 3.5 as inclui no cadastro de técnicos do SRV (MVP) | Cadastro e alertas de `capacitacao` entregues no MVP para contas com SRV, sem bloqueio de atribuição; RF-CON-012 completa a Fase 2 para as demais contas (RF-SRV-003) (proposta) |
-| 34 | Prazos de SLA do cliente atendido não têm nome canônico | Prazos de atendimento e de solução por prioridade no `cliente_servico` (RF-SRV-004, RF-SRV-021) (proposta); nomes a definir no modelo de dados |
+| 34 | Prazos de SLA do cliente atendido não têm nome canônico | Prazos de atendimento e de solução por prioridade no `cliente_servico` (RF-SRV-004, RF-SRV-021) (proposta); nomes a definir no modelo de dados. Na Fase 2, quando houver `contrato_cliente`, os prazos do contrato prevalecem (RF-CTR-001) |
+| 35 | Dano causado por terceiro em equipamento fixo (abalroamento, vandalismo, furto de cabos) não tem registro de sinistro: `sinistro` é de veículo (RF-FRO-011) | A causa externa da OS registra o fato e a evidência (RF-CTR-003); a cobrança do custo do causador fica como proposta a detalhar |
+| 36 | O documento de design prevê a visão "Mapa" na lista de ativos, sem requisito que a garanta | Necessária para pontos espalhados em cidades; requisito a criar quando a tela de ativos for desenhada (proposta) |
+| 37 | Regras configuráveis no plano Serviços (contas de subcontratadas) | Campos extras da OS e regras disponíveis também no plano Serviços (proposta), dependente de P4 |
+| 38 | Campo extra da OS que dispara regra no cliente (ex.: "Rompeu lacre?") não chega quando a OS é executada por subcontratada conectada, porque campos extras não trafegam na conexão | Em aberto, para decisão no sumário. Opções: (a) grupo novo da conexão para campos extras marcados pelo cliente como compartilháveis, com revisão do risco R5; (b) o cliente confirma o campo ao liberar a OS; (c) a regra fica restrita a OS executadas sem conexão |
 
 ---
 
@@ -2504,3 +2699,4 @@ Requisitos não funcionais: 42 (RNF-001 a RNF-042), válidos desde o MVP, exceto
 - v0.1 (12/11/2026): primeira versão, em elaboração.
 - v0.2 (12/11/2026): alinhada ao sumário executivo 0.3. Novos módulos TER e LOC; EST estendido (estoque em terceiro, remessa e retorno, peças serializadas, reparáveis, quarentena, ordem de reparo, NF-e de remessa e retorno); RF-ADM-015 (pessoas); RF-EST-010 movido para RF-TER-001 e RF-FRO-012 para RF-TER-008; reserva no MVP e inventário na Fase 2; assinatura avançada no MVP; prioridades, reconhecimento, transições da OS, status do ativo, perfis, cobrança, webhooks, SLA e SOC 2 conforme o sumário; RNF-037 a RNF-039.
 - v0.3 (12/11/2026): alinhada ao sumário executivo 0.4. Novo módulo SRV (RF-SRV-001 a RF-SRV-021, MVP, plano Serviços) e conexão entre contas; RNF-041 e RNF-042 (risco R5); decisões do sumário 3.6 aplicadas (`os.encerrar`, escopos, `assumir`, link com token no fragmento, solicitação, locação, matriz, campos da OS, papéis de fornecedor, peça em trânsito, `est.decidir_destino`, bloqueios, locatário só na web); MVP com 126 requisitos e total de 204; seção 8 dividida em resolvidos pelo 0.3, resolvidos pelo 0.4 e em aberto.
+- v0.4 (12/11/2026): alinhada ao sumário executivo 0.5. Configuração por segmento: RF-ADM-016 (regras configuráveis), RF-ATV-013 (fase de ciclo de vida), RF-OS-021 (campos extras da OS) e o tipo de OS `implantacao` no MVP; RF-ADM-017 (pacotes de segmento) e os módulos PRJ (RF-PRJ-001 a RF-PRJ-007) e CTR (RF-CTR-001 a RF-CTR-005) na Fase 2; origens `projeto` e `regra`, causa externa da parada, origem do bloqueio de ativo e tipo de documento "verificação metrológica"; MVP com 129 requisitos e total de 220; pendências P9 e P10; pontos 35 a 37 em aberto.

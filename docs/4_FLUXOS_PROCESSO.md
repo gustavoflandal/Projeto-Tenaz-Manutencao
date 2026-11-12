@@ -1,12 +1,14 @@
 # Fluxos de Processo e Regras de Negócio — Tenaz
 
-**Versão:** 0.3 · **Data:** 12/11/2026 · **Status:** Em elaboração
+**Versão:** 0.4 · **Data:** 12/11/2026 · **Status:** Em elaboração
 **Produto:** Tenaz · Gestão de Manutenção e Frota
-**Alinhado ao sumário executivo 0.4**
+**Alinhado ao sumário executivo 0.5**
 
 Este documento descreve os fluxos de negócio da Tenaz, as máquinas de estado, as regras de negócio e o cálculo dos indicadores. Ele é o **dono dos identificadores de regra de negócio** (`RN-<MÓDULO>-<NNN>`): requisitos, APIs, testes e telas citam as regras por esses IDs e não as redefinem.
 
-Os códigos de módulo, os nomes de entidade, os estados de solicitação, OS, ordem de reparo, contrato de locação e ativo, os tipos de OS, as prioridades e os motivos de pausa seguem exatamente o [Sumário Executivo](0_SUMARIO_EXECUTIVO.md). As normas e os KPIs vêm do [estudo de mercado](pesquisa/reports/Benchmarking%20manuten%C3%A7%C3%A3o%20e%20frota%20Brasil.md).
+Os códigos de módulo, os nomes de entidade, os estados de solicitação, OS, ordem de reparo, contrato de locação, projeto, etapa de projeto, contrato com cliente, medição do contrato e ativo, os tipos de OS, as prioridades e os motivos de pausa seguem exatamente o [Sumário Executivo](0_SUMARIO_EXECUTIVO.md). As normas e os KPIs vêm do [estudo de mercado](pesquisa/reports/Benchmarking%20manuten%C3%A7%C3%A3o%20e%20frota%20Brasil.md).
+
+**Mudanças da versão 0.4:** alinhamento ao sumário 0.5, **configuração por segmento** (sumário 3.7), a partir do caso de um fornecedor de radares instalados e mantidos por prestadores em várias cidades (etapa 012). Três fluxos novos, e o documento passa a ter 31: Fluxo 29, regras configuráveis de condição e efeito, com o catálogo de condições e efeitos, as combinações permitidas e o bloqueio até documento que se levanta sozinho; Fluxo 30, implantação por projeto, do modelo à entrada em operação (`colocar_em_operacao`), com os estados de projeto e de etapa (`pendente`, `disponivel`, `em_andamento`, `concluida`, `dispensada`); Fluxo 31, medição mensal do contrato com cliente, com os estados do contrato e da medição, a `decisao_exclusao` das paradas por causa externa e o fechamento. Cinquenta e sete regras novas: RN-ADM-009 a RN-ADM-016, RN-ATV-011 a RN-ATV-015, RN-OS-022 a RN-OS-026, RN-CON-040 a RN-CON-044, RN-IND-009 a RN-IND-011, RN-PRJ-001 a RN-PRJ-016 e RN-CTR-001 a RN-CTR-015; RN-ATV-003 é substituída por RN-ATV-012. O ativo `em_implantacao` fica `inativo`, `colocar_em_operacao` o leva a `operando` e a fase não volta (seção 0.6). A OS `implantacao` e o ativo em implantação saem dos indicadores de manutenção e o custo de implantação fica separado (seção 33.8); entra a fórmula da disponibilidade contratual (seção 33.9). Campos extras da OS no Fluxo 02. Parâmetros, lacunas L-31 a L-39 e pendências P9, P10 e R7. As seções de referência foram renumeradas: catálogo de regras (32), indicadores (33), parâmetros (34), lacunas e pendências (35). O catálogo tem 361 IDs, 353 em vigor.
 
 **Mudanças da versão 0.2:** transições da OS e da solicitação conforme o sumário 3.3 (programar sem planejar, desprogramar, liberação recusada, cancelamento só a partir de `aberta`, `planejada`, `programada` e `pausada`); novas regras do status do ativo (`parado` prevalece sobre `em_manutencao`); prioridade `urgente`; campo `data_reconhecimento`; origens de leitura; entidade `pessoa`; perfis `comprador`, `plh`, `prestador` e `locatario`; MOPP como capacitação; registro de bloqueio NR-12 (12.11.3) no MVP; catálogo padrão de códigos de falha no MVP. Fluxos novos de terceiros (TER), estoque estendido (EST) e locação (LOC): Fluxos 18 a 22. A oficina externa (Fluxo 14) passa de FRO para TER. As seções de referência foram renumeradas: catálogo de regras (23), indicadores (24), parâmetros (25), lacunas e pendências (26).
 
@@ -18,7 +20,7 @@ Os códigos de módulo, os nomes de entidade, os estados de solicitação, OS, o
 
 ### 0.1 Como ler cada fluxo
 
-Cada fluxo tem: módulos envolvidos, fase de entrega, atores, diagrama Mermaid, passos numerados, exceções e as regras aplicadas. O texto completo de cada regra está no [catálogo](#29-catálogo-de-regras-de-negócio) (seção 29). O fluxo cita a regra pelo ID.
+Cada fluxo tem: módulos envolvidos, fase de entrega, atores, diagrama Mermaid, passos numerados, exceções e as regras aplicadas. O texto completo de cada regra está no [catálogo](#32-catálogo-de-regras-de-negócio) (seção 32). O fluxo cita a regra pelo ID.
 
 ### 0.2 Atores
 
@@ -47,11 +49,12 @@ O **escopo de acesso** de quem age sobre um registro é `interno` (usuário da p
 - Dentro de um módulo, as regras são numeradas em blocos de dezena por tema (ex.: FRO 001 a 009 para pneus, 010 a 019 para combustível). Os números vagos ficam reservados para o mesmo tema.
 - Uma regra nunca muda de ID. Regra revogada fica no catálogo marcada como revogada. Regra que muda de módulo, ou cujo enunciado muda por decisão do sumário, mantém o ID antigo com a nota "Substituída por" e ganha um ID novo (ex.: RN-FRO-030 → RN-TER-030; RN-EST-041 → RN-EST-060). Quem cita o ID antigo continua encontrando o texto original.
 - Blocos de dezena dos módulos da versão 0.2: TER 001 a 009 cadastro e catálogo, 010 a 019 OS executada por prestador, 020 a 029 contratos e SLA, 030 a 039 oficina externa e assistência técnica; EST 020 a 029 almoxarifados e estoque em terceiro, 030 a 039 peças serializadas, 040 a 049 peças reparáveis e ordem de reparo; LOC 001 a 009 contrato, 010 a 019 responsabilidade e cobrança, 020 a 029 vistorias, 030 a 039 portal do locatário, 040 a 049 locação tomada.
+- Blocos novos da versão 0.4: CON 040 a 049 bloqueio de ativo por regra configurável (o bloco 030 é de capacitações). ADM, ATV, OS e IND continuam em sequência, sem blocos; PRJ e CTR, módulos novos, começam em 001 e seguem em sequência.
 - Blocos novos da versão 0.3: EST 050 a 059 trânsito e recebimento da remessa (continuação do bloco 020, que está cheio), 060 a 069 decisão de destino da peça com defeito (continuação do bloco 040, cheio); SRV 001 a 009 conta, técnicos e especialidades, 010 a 019 clientes atendidos e equipamentos de clientes, 020 a 029 abertura e distribuição da OS de serviço, 030 a 039 execução, componentes, assinatura e relatório, 040 a 049 conexão entre contas, 050 a 059 OS entre contas conectadas, 060 a 069 sincronização, falha e reprocessamento, 070 a 079 indicadores da subcontratada.
 
 ### 0.4 Nomes que o sumário ainda não define
 
-O sumário 0.3 tornou canônicos vários nomes que a versão 0.1 propunha (`bloqueio_ativo`, `tipo_documento`, `exigencia_capacitacao`, `reserva_estoque`, `requisicao_compra`, `pedido_compra`, `equipamento_nr13`, `segmento_medidor`, `evento_telematica`, `regra_telematica`, `comando_sync`, `rascunho_ia`, `orcamento_fornecedor`). O sumário 0.4 tornou canônicos as categorias da matriz de responsabilidade (`preventiva`, `corretiva_desgaste`, `avaria_mau_uso`, `pneus`, `deslocamento`), a origem de solicitação `portal_locatario`, os valores de `origem` da OS (`manual`, `solicitacao`, `plano`, `checklist`, `telematica`, `rascunho_ia`, `vistoria_locacao`, `prestador`), os campos `justificativa_responsavel_custo`, `motivo_recusa_liberacao`, `local_uso`, `franquia_horas` e `franquia_km`, a entidade `bloqueio_energia` (registro LOTO de uma intervenção) e os nomes do SRV: `cliente_servico`, propriedade `de_cliente`, `especialidade_tecnico`, `pessoa_especialidade`, `descricao_servico`, `servico_os`, `tipo_material` (`consumido`, `substituido`, `fornecido_pelo_cliente`), `numero_serie_retirado`, `numero_serie_instalado`, `conexao_empresa`, `vinculo_os`, `lado_origem` e `estado_sincronizacao`. Os conceitos que ainda não têm nome canônico (ex.: estados do pneu, situação da leitura, situação do orçamento de fornecedor, decisão sobre peça com defeito) aparecem marcados como **(proposto)** e estão listados na seção 32.4 para inclusão no sumário e no documento 2. Até lá, nenhum outro documento deve usá-los como definitivos.
+O sumário 0.3 tornou canônicos vários nomes que a versão 0.1 propunha (`bloqueio_ativo`, `tipo_documento`, `exigencia_capacitacao`, `reserva_estoque`, `requisicao_compra`, `pedido_compra`, `equipamento_nr13`, `segmento_medidor`, `evento_telematica`, `regra_telematica`, `comando_sync`, `rascunho_ia`, `orcamento_fornecedor`). O sumário 0.4 tornou canônicos as categorias da matriz de responsabilidade (`preventiva`, `corretiva_desgaste`, `avaria_mau_uso`, `pneus`, `deslocamento`), a origem de solicitação `portal_locatario`, os valores de `origem` da OS (`manual`, `solicitacao`, `plano`, `checklist`, `telematica`, `rascunho_ia`, `vistoria_locacao`, `prestador`), os campos `justificativa_responsavel_custo`, `motivo_recusa_liberacao`, `local_uso`, `franquia_horas` e `franquia_km`, a entidade `bloqueio_energia` (registro LOTO de uma intervenção) e os nomes do SRV: `cliente_servico`, propriedade `de_cliente`, `especialidade_tecnico`, `pessoa_especialidade`, `descricao_servico`, `servico_os`, `tipo_material` (`consumido`, `substituido`, `fornecido_pelo_cliente`), `numero_serie_retirado`, `numero_serie_instalado`, `conexao_empresa`, `vinculo_os`, `lado_origem` e `estado_sincronizacao`. O sumário 0.5 tornou canônicos os nomes da configuração por segmento: `regra_automacao`, `disparo_regra`, `campo_extra_os` e `ordem_servico.campos_extras`, `pacote_segmento`, `aplicacao_pacote`, `fase_ciclo_vida` (`em_implantacao`, `em_operacao`), a ação `colocar_em_operacao`, `data_entrada_operacao`, o tipo de OS `implantacao`, as origens de OS `projeto` e `cliente_conectado` (nenhum efeito de regra abre OS), a origem de solicitação `regra`, `bloqueio_ativo.origem` (`manual`, `conformidade`, `regra`), `ordem_servico.causa_externa` e seus valores, `decisao_exclusao` (`pendente`, `aprovada`, `recusada`), `projeto`, `modelo_projeto`, `modelo_etapa_projeto`, `etapa_projeto`, `contrato_cliente`, `item_contrato_cliente`, `faixa_desconto_contrato`, `medicao_contrato`, os estados de projeto, etapa (`disponivel`, não "liberada"), contrato com cliente e medição, e as permissões `adm.gerenciar_regras`, `adm.gerenciar_configuracao`, `atv.colocar_em_operacao`, `prj.gerenciar`, `prj.dispensar_etapa`, `prj.ajustar_medicao`, `ctr.gerenciar`, `ctr.fechar_medicao` e `ctr.reabrir_medicao`. Os conceitos que ainda não têm nome canônico (ex.: estados do pneu, situação da leitura, situação do orçamento de fornecedor, decisão sobre peça com defeito) aparecem marcados como **(proposto)** e estão listados na seção 35.4 para inclusão no sumário e no documento 2. Até lá, nenhum outro documento deve usá-los como definitivos.
 
 ### 0.5 Princípios transversais
 
@@ -64,22 +67,25 @@ O sumário 0.3 tornou canônicos vários nomes que a versão 0.1 propunha (`bloq
 
 ### 0.6 Status operacional do ativo
 
-O status operacional (`operando`, `em_manutencao`, `parado`, `inativo`) é **derivado** de fatos do sistema e recalculado a cada evento que o afeta (RN-ATV-001), conforme o sumário 3.3. A precedência é `inativo` > `parado` > `em_manutencao` > `operando`: **`parado` prevalece sobre `em_manutencao`**.
+O status operacional (`operando`, `em_manutencao`, `parado`, `inativo`) é **derivado** de fatos do sistema e recalculado a cada evento que o afeta (RN-ATV-001), conforme o sumário 3.3. O ativo em implantação (`fase_ciclo_vida = em_implantacao`) é `inativo` (RN-ATV-011). A precedência é `inativo` > `parado` > `em_manutencao` > `operando`: **`parado` prevalece sobre `em_manutencao`**.
 
 ```go
 func StatusOperacional(a Ativo) Status {
-    if a.Inativo {                                   // baixado, vendido, em reserva ou devolvido ao locador
+    if a.Inativo || a.Fase == EmImplantacao {        // baixado, vendido, em reserva, devolvido ao locador
+                                                     // ou em implantação (a OS implantacao não muda isso)
         return Inativo
     }
     if ExisteFalhaComParada(a) ||                    // solicitação com "ativo parado" = sim em nova/em_triagem,
                                                      // ou OS corretiva com "parou o ativo" = sim não encerrada nem cancelada
         ExisteOS(a, CorretivaEmergencial, []Estado{EmExecucao, Pausada, Concluida}) ||
-        ExisteBloqueioVigente(a) ||                  // bloqueio_ativo: NR-12 inapto, item crítico de checklist, conformidade
+        ExisteBloqueioVigente(a) ||                  // bloqueio_ativo de origem manual, conformidade ou regra:
+                                                     // NR-12 inapto, item crítico de checklist, regra configurável
         ExisteParadaManual(a) {
         return Parado
     }
     if ExisteOS(a, RetiradaProgramada, []Estado{EmExecucao, Pausada, Concluida}) {
-        return EmManutencao                          // preventiva, preditiva, inspeção, corretiva planejada ou melhoria
+        return EmManutencao                          // preventiva, preditiva, inspeção, corretiva planejada, melhoria
+                                                     // ou implantacao em reinstalação (ativo em_operacao)
                                                      // com "exige parada" = sim, sem falha que parou o ativo
     }
     return Operando
@@ -89,10 +95,12 @@ func StatusOperacional(a Ativo) Status {
 - **Falha com parada:** solicitação com "ativo parado" = sim, ou OS `corretiva_planejada` ou `corretiva_emergencial` com "parou o ativo" = sim. O ativo fica `parado` do instante da parada até o **encerramento** (ou cancelamento) do último registro que o mantém parado, mesmo durante a execução. Assim, corretiva planejada aberta por falha que parou o ativo deixa o ativo `parado` até o encerramento; corretiva planejada em ativo que ainda operava, executada com retirada programada, deixa o ativo `em_manutencao` só durante a execução.
 - **Retirada programada:** OS de `preventiva`, `preditiva`, `inspecao_legal`, `corretiva_planejada` ou `melhoria` com "exige parada" = sim (vem do plano ou é informado no planejamento). O ativo fica `em_manutencao` de `data_inicio` até o encerramento.
 - O status volta a `operando` no **encerramento** da OS, se não restar outra causa (RN-ATV-006). Uma OS em `concluida` aguardando liberação mantém o status que tinha.
-- Os KPIs de tempo (MTTR, disponibilidade) usam `data_inicio`, `data_conclusao` e os intervalos de parada, não o encerramento administrativo. Uma liberação tardia não infla o MTTR nem a indisponibilidade (RN-ATV-006, seção 30).
-- Cada mudança de status grava um intervalo (início, fim, status, causa). Os intervalos alimentam a disponibilidade (seção 30).
+- Os KPIs de tempo (MTTR, disponibilidade) usam `data_inicio`, `data_conclusao` e os intervalos de parada, não o encerramento administrativo. Uma liberação tardia não infla o MTTR nem a indisponibilidade (RN-ATV-006, seção 33).
+- Cada mudança de status grava um intervalo (início, fim, status, causa). Os intervalos alimentam a disponibilidade (seção 33).
 - A parada manual exige motivo e é classificada como **manutenção** ou **operacional** (ex.: falta de operador, sem demanda). Parada operacional não conta como indisponibilidade de manutenção (RN-ATV-002).
 - **Atenção** não é status gravado: é uma condição calculada sobre `operando` (plano vencendo, documento vencendo, leitura fora da faixa), exibida com a cor de Atenção da marca (RN-ATV-007).
+- **Em implantação:** o ativo `em_implantacao` fica `inativo` (fora dos KPIs e da cobrança de veículo, planos suspensos, sem avaliação de regras) e a interface mostra "Em implantação". Recebe só OS `implantacao`, que não mudam o status (RN-ATV-011, RN-ATV-012). A ação `colocar_em_operacao` muda a fase para `em_operacao`, o status para `operando`, grava `data_entrada_operacao` e ativa os planos (RN-ATV-013, RN-ATV-014). A fase não volta para `em_implantacao`; a reinstalação é transferência com projeto, e a OS `implantacao` com "exige parada" = sim deixa o ativo `em_manutencao` durante a execução (RN-ATV-015).
+- **Bloqueio de regra:** o `bloqueio_ativo` de origem `regra` deixa o ativo `parado` desde o instante do fato que o disparou e não sai com o encerramento de OS: só com o documento exigido ou pelo `gestor` (Fluxo 29, RN-CON-040 a RN-CON-043).
 - **Apto para despacho** é uma verificação separada do status (RN-ATV-008, Fluxo 08). Bloqueio de despacho (documento crítico vencido) não muda o status para `parado` por si só: o veículo pode estar fisicamente apto. Já o `bloqueio_ativo` por parecer NR-12 `inapto` e por item crítico de checklist muda o status para `parado`.
 - Ativo **cedido** em locação vigente continua com o status calculado pelas regras acima (normalmente `operando`); só a localização passa a ser o local de uso do locatário (RN-LOC-005). Ativo **tomado** em locação tem `propriedade = de_terceiro` e segue as mesmas regras de status (RN-LOC-006); devolvido ao locador, passa a `inativo` (sumário 3.6).
 - Equipamento de cliente (`propriedade = de_cliente`, na conta de uma subcontratada) tem o status calculado pelas mesmas regras, **só com os fatos da conta da subcontratada** (as OS dela). O status do ativo original, na conta do cliente conectado, é calculado na conta do cliente com os fatos dela, inclusive os que chegaram pela sincronização (RN-SRV-015, RN-SRV-056). Os dois status nunca são copiados um para o outro.
@@ -179,7 +187,8 @@ flowchart TD
 | Situação | Tratamento |
 |---|---|
 | Solicitação só com localização | Na triagem, o `planejador` vincula um ativo ou aprova como OS de localização (RN-OS-015) |
-| Ativo informado está `inativo` | A solicitação é aceita (pode ser um alerta real), mas a aprovação exige trocar o ativo ou reativá-lo (RN-ATV-003) |
+| Ativo informado está `inativo` | A solicitação é aceita (pode ser um alerta real), mas a aprovação exige trocar o ativo ou reativá-lo (RN-ATV-003, substituída por RN-ATV-012). Ativo `em_implantacao`: a aprovação gera OS `implantacao` (RN-ATV-012) |
+| Solicitação aberta por regra configurável | Origem `regra`, "ativo parado" = não, deduplicada pela regra e pelo ativo; segue esta triagem (Fluxo 29, RN-ADM-014) |
 | Solicitante quer desistir | Não existe estado de cancelamento da solicitação. A desistência, a partir de `nova` ou `em_triagem`, é registrada como `recusada` com motivo `desistencia` (RN-SOL-008). A desistência a partir de `nova` não grava `data_reconhecimento` e fica fora do MTTA |
 | Triagem informa que o ativo não está parado | O `planejador` corrige o campo; o status do ativo é recalculado e o intervalo de parada é encerrado no instante da correção, com auditoria |
 | Duplicada marcada por engano | `duplicada` é final. O `gestor` usa a ação "reabrir como nova", que cria outra solicitação em `nova` com os dados e anexos da original, vinculada a ela, com motivo. A original continua `duplicada` (RN-SOL-008) |
@@ -189,7 +198,7 @@ flowchart TD
 
 ### 1.6 Regras aplicadas
 
-RN-SOL-001 a RN-SOL-009, RN-ATV-001, RN-ATV-004, RN-OS-015, RN-OS-017, RN-LOC-011, RN-LOC-031, RN-MOB-007, RN-ADM-002.
+RN-SOL-001 a RN-SOL-009, RN-ATV-001, RN-ATV-004, RN-ATV-012, RN-ADM-014, RN-OS-015, RN-OS-017, RN-LOC-011, RN-LOC-031, RN-MOB-007, RN-ADM-002.
 
 ---
 
@@ -236,7 +245,7 @@ Qualquer transição fora desta tabela é recusada (RN-OS-001).
 
 | # | De | Para | Ação | Quem (padrão) | Campos obrigatórios e pré-condições | Status do ativo (RN-ATV-001) |
 |---|---|---|---|---|---|---|
-| T1 | — | `aberta` | criar | `planejador`, `gestor`; `tecnico` só para corretivas; Sistema (solicitação, regra de telemática, vistoria de locação, OS aberta pela subcontratada conectada, RN-SRV-056); IA após confirmação humana | Ativo (ou localização), tipo de OS, descrição, prioridade (`baixa`, `media`, `alta`, `urgente`; `corretiva_emergencial` nasce `urgente`, RN-OS-017), origem (`manual`, `solicitacao`, `plano`, `checklist`, `telematica`, `rascunho_ia`, `vistoria_locacao`, `prestador`), "parou o ativo", executor (`interno` ou `fornecedor`) e responsável pelo custo (RN-OS-019). Grava `data_abertura` | Falha com parada: `parado` |
+| T1 | — | `aberta` | criar | `planejador`, `gestor`; `tecnico` só para corretivas; Sistema (solicitação, regra de telemática, vistoria de locação, OS aberta pela subcontratada conectada, RN-SRV-056); IA após confirmação humana | Ativo (ou localização), tipo de OS, descrição, prioridade (`baixa`, `media`, `alta`, `urgente`; `corretiva_emergencial` nasce `urgente`, RN-OS-017), origem (`manual`, `solicitacao`, `plano`, `checklist`, `telematica`, `rascunho_ia`, `vistoria_locacao`, `prestador`, `cliente_conectado`, `projeto`; nenhum efeito de regra abre OS), "parou o ativo", executor (`interno` ou `fornecedor`) e responsável pelo custo (RN-OS-019). Campos extras obrigatórios na abertura, quando a criação é de usuário (RN-OS-024). OS `implantacao` só em ativo `em_implantacao` ou ligada a etapa de projeto (RN-OS-022). Grava `data_abertura` | Falha com parada: `parado` |
 | T1a | — | `planejada` | gerar por plano | Sistema | Plano, procedimento, data de vencimento, gatilho (RN-OS-014). Grava `data_abertura` | Sem mudança |
 | T2 | `aberta` | `planejada` | planejar | `planejador`, `gestor` | Ao menos uma tarefa (ou procedimento), HH estimadas, peças previstas (pode ser "nenhuma"), "exige parada" | Sem mudança |
 | T3 | `aberta` | `programada` | programar sem planejar | `planejador`, `gestor` | Campos de T4. Tarefas, HH e peças ficam opcionais e podem ser completadas depois, sem mudar o estado (RN-OS-020). Grava `data_reconhecimento` se vazia | Sem mudança |
@@ -272,11 +281,12 @@ Qualquer transição fora desta tabela é recusada (RN-OS-001).
 | Ao menos um apontamento de horas | Sempre, exceto OS de fornecedor cobrada por visita ou por serviço (unidade de preço diferente de `hora`, RN-TER-014) |
 | "Parou o ativo" confirmado e, se sim, instante de início da parada | Sempre |
 | Descrição do serviço executado | Sempre |
-| Código de falha (modo, causa, atividade) | Corretivas, em todos os planos: catálogo padrão no MVP; catálogo personalizável no Profissional, Fase 2 (RN-OS-018) |
+| Código de falha (modo, causa, atividade) | Corretivas (nunca na OS `implantacao`, RN-OS-022), em todos os planos: catálogo padrão no MVP; catálogo personalizável no Profissional, Fase 2 (RN-OS-018) |
 | Leitura de cada medidor do ativo exigido pelo plano | Preventiva ou inspeção com gatilho por medidor (RN-PRE-013); opcional nas demais |
 | Peças saídas e não usadas devolvidas ou declaradas como consumidas | Sempre que houver saída para a OS (RN-EST-005) |
 | Destino de peça reparável retirada com defeito (quarentena) | Quando a OS retirou peça de item reparável (RN-EST-040, Fase 2) |
 | Respostas do checklist vinculado | Quando a OS tem checklist obrigatório |
+| Campos extras obrigatórios na conclusão (`campo_extra_os`) | Quando a definição do tipo de OS e da classe do ativo exige; validados igual no servidor e no app offline. Conclusão offline feita antes de o aparelho receber a definição nova é aceita sem o campo e sinalizada para revisão (RN-OS-023, RN-OS-024) |
 
 ### 2.5 Requisitos para encerrar (T12)
 
@@ -307,10 +317,13 @@ A OS de `preventiva`, `preditiva` ou `inspecao_legal` gerada por plano já nasce
 | Ativo em contrato de locação vigente | Responsável pelo custo padrão vem da matriz do contrato e só muda com justificativa (RN-LOC-011); OS em ativo tomado a cargo do locador é executada pelo locador (Fluxo 22) |
 | OS atribuída a fornecedor com conta própria conectada | A execução acontece na conta da subcontratada e chega a esta OS pela sincronização; cada campo tem um lado dono e a liberação continua da empresa (Fluxo 26, RN-SRV-051, RN-SRV-054) |
 | Técnico tenta assumir OS `programada` ou de outra equipe | Recusado. A OS programada já tem responsável; o `planejador` reprograma (RN-OS-021) |
+| OS `implantacao` | Mesmo ciclo e mesmas transições; sem código de falha; fora dos KPIs de manutenção e com custo de implantação (RN-OS-022, RN-IND-009, RN-IND-010). No ativo `em_implantacao`, não muda o status, que continua `inativo` |
+| OS vinculada a conta conectada com campo extra obrigatório na conclusão do cliente | A conclusão sincronizada é aceita sem o campo, que não trafega; a regra `os_concluida_com_campo` não dispara (RN-OS-024, lacuna L-39) |
+| Regra configurável bloqueia o ativo com a OS em execução | A OS segue: regra nunca muda estado de OS (RN-ADM-011). O encerramento não levanta o bloqueio de regra (RN-CON-041) |
 
 ### 2.8 Regras aplicadas
 
-RN-OS-001 a RN-OS-021, RN-SRV-051 a RN-SRV-054, RN-SRV-056, RN-ATV-001, RN-ATV-006, RN-CON-001, RN-CON-002, RN-CON-006, RN-CON-007, RN-CON-030, RN-CON-031, RN-EST-002, RN-EST-005, RN-EST-006, RN-EST-023, RN-EST-040, RN-PRE-013, RN-TER-002, RN-TER-011, RN-TER-013, RN-TER-014, RN-TER-015, RN-TER-024, RN-LOC-011.
+RN-OS-001 a RN-OS-026, RN-SRV-051 a RN-SRV-054, RN-ADM-011, RN-CON-041, RN-IND-009, RN-IND-010, RN-SRV-056, RN-ATV-001, RN-ATV-006, RN-CON-001, RN-CON-002, RN-CON-006, RN-CON-007, RN-CON-030, RN-CON-031, RN-EST-002, RN-EST-005, RN-EST-006, RN-EST-023, RN-EST-040, RN-PRE-013, RN-TER-002, RN-TER-011, RN-TER-013, RN-TER-014, RN-TER-015, RN-TER-024, RN-LOC-011.
 
 ---
 
@@ -416,10 +429,11 @@ if geraPorTempo || geraPorMedidor {
 | Plano de classe alterado | Afeta apenas as OS geradas depois da alteração (RN-PRE-010) |
 | Ativo inativado | Planos suspensos, sem gerar OS. Na reativação, a base passa a ser a data da reativação e a leitura atual; vencimentos durante a inatividade não contam (RN-PRE-011) |
 | Leitura que gerou a OS é invalidada depois | A OS não é cancelada automaticamente; o `planejador` é alertado para decidir (RN-MED-008) |
+| Ativo em implantação | Planos suspensos desde o cadastro. Na entrada em operação, a base é `data_entrada_operacao` e a leitura atual; nada é devido antes (RN-ATV-014) |
 
 ### 3.8 Regras aplicadas
 
-RN-PRE-001 a RN-PRE-013, RN-OS-014, RN-MED-007, RN-MED-008, RN-IND-002.
+RN-PRE-001 a RN-PRE-013, RN-OS-014, RN-MED-007, RN-MED-008, RN-IND-002, RN-ATV-014.
 
 ---
 
@@ -583,10 +597,11 @@ flowchart TD
 | Foto obrigatória sem câmera disponível | O item não pode ser finalizado; o app permite salvar rascunho |
 | Motorista tenta sair com veículo bloqueado | A Tenaz não controla o veículo; a aptidão negativa é exposta por API ao TMS (Fluxo 08) e o evento é registrado se houver telemática indicando movimento |
 | Inspeção rotineira do operador de máquina NR-12 | O registro é opcional (NR-12 item 12.14.2.1); a empresa decide se exige (RN-CHK-007) |
+| Item reprovado com regra configurável `item_checklist_reprovado` | O efeito da regra se soma ao padrão de RN-CHK-001 e RN-CHK-005, sem substituí-lo (Fluxo 29, RN-ADM-011) |
 
 ### 5.6 Regras aplicadas
 
-RN-CHK-001 a RN-CHK-007, RN-SOL-007, RN-MOB-004, RN-MOB-007, RN-MOB-008, RN-CON-021.
+RN-CHK-001 a RN-CHK-007, RN-SOL-007, RN-MOB-004, RN-MOB-007, RN-MOB-008, RN-CON-021, RN-ADM-011.
 
 ---
 
@@ -852,10 +867,11 @@ Um veículo está apto para despacho quando todas as condições abaixo são ver
 | Documento interno marcado como crítico pela empresa | O `gestor` pode liberar com justificativa por até 72 horas, uma vez por vencimento (RN-CON-025) |
 | Documento com validade digitada errada | Correção pelo `gestor`, com auditoria; a correção recalcula alertas e bloqueios |
 | Validade de CIV/CIPP calculada pela tabela oficial | Fora do escopo enquanto a pendência P2 não for resolvida (RN-CON-022) |
+| Regra configurável `documento_vencido` com bloqueio | Além do bloqueio de despacho, o ativo fica `parado` desde 00:00 do dia seguinte à validade, até o registro de documento do tipo com emissão posterior à do vencido e validade vigente (Fluxo 29, RN-CON-042). Os dois bloqueios são independentes (RN-CON-044) |
 
 ### 8.7 Regras aplicadas
 
-RN-CON-020 a RN-CON-026, RN-CON-034, RN-CON-035, RN-CHK-004, RN-ATV-008, RN-ADM-004, RN-ADM-008.
+RN-CON-020 a RN-CON-026, RN-CON-034, RN-CON-035, RN-CON-042, RN-CON-044, RN-CHK-004, RN-ATV-008, RN-ADM-004, RN-ADM-008.
 
 ---
 
@@ -1023,7 +1039,7 @@ stateDiagram-v2
     sucata --> [*]
 ```
 
-O sumário define a entidade `pneu`, mas não seus estados. Os nomes acima estão listados na seção 32.4.
+O sumário define a entidade `pneu`, mas não seus estados. Os nomes acima estão listados na seção 35.4.
 
 ### 11.3 Passos
 
@@ -2542,11 +2558,441 @@ RN-SRV-043, RN-SRV-045, RN-SRV-047, RN-SRV-060 a RN-SRV-067, RN-MOB-004, RN-MOB-
 
 ---
 
-## 29. Catálogo de regras de negócio
+## Fluxo 29 — Regras configuráveis: avaliação, disparo e bloqueio até documento
 
-Fonte: "NR-12", "NR-13" e outras normas indicam o texto legal conforme verificado no estudo de mercado; "Estudo" indica o [estudo de mercado](pesquisa/reports/Benchmarking%20manuten%C3%A7%C3%A3o%20e%20frota%20Brasil.md); "Sumário" indica o [sumário executivo](0_SUMARIO_EXECUTIVO.md) 0.4 (as citações "Sumário 2.1", "3.3" e similares de regras da versão 0.2 continuam válidas na versão 0.4); "Decisão de produto" indica escolha da Tenaz, sujeita a validação com clientes. As sete regras marcadas com **[P-n]** são as regras prioritárias do estudo (seção "Regras de negócio prioritárias"). Regra que mudou de módulo, ou cujo enunciado mudou por decisão do sumário 0.4, continua no catálogo com o ID antigo e a indicação "Substituída por", para que quem já a cita continue encontrando o texto.
+**Módulos:** ADM, CON, ATV, OS, SOL, CHK, MED, MOB · **Fase:** MVP, plano Essencial (condições `capacitacao_vencida` e `etapa_projeto_atrasada` e efeito `impedir_atribuicao` na Fase 2)
 
-### 29.1 ADM — Administração
+A empresa liga comportamentos do seu segmento a fatos que a Tenaz já registra, com regras `regra_automacao` no formato **condição → efeito**, escolhidos de catálogos fechados (sumário 3.7). A regra não cria estado, tela nem fluxo: ela acrescenta um efeito a um fato. Não se confunde com a regra de telemática (`regra_telematica`, RN-INT-002, Fluxo 15), que continua própria das integrações.
+
+### 29.1 Atores
+
+`administrador` e `gestor` (criam, simulam, ativam e inativam regras, com a permissão `adm.gerenciar_regras`; aplicam pacotes e definem campos extras, com `adm.gerenciar_configuracao`), `gestor` (levanta bloqueio manualmente, com motivo), `tecnico`, `prestador` e subcontratada conectada (registram os fatos: conclusão de OS, checklist, leitura), Sistema (avaliação e rotina diária), destinatários das notificações.
+
+### 29.2 Catálogo de condições
+
+Cada condição tem um **fato** que a dispara, um **instante do fato** (usado no início do bloqueio e na comparação com a emissão do documento) e uma **chave do fato**, que garante que o mesmo fato não aplique o efeito duas vezes (RN-ADM-010).
+
+| Condição | Fato que dispara | Instante do fato | Chave do fato | Alvo | Fase |
+|---|---|---|---|---|---|
+| `documento_vencido` | `documento_vencimento` do tipo do parâmetro passou da validade e o ativo não tem outro documento do mesmo tipo válido | 00:00 do dia seguinte à validade, no fuso da unidade | Regra + documento vencido | Ativo do documento | MVP |
+| `documento_a_vencer` | Faltam N dias (parâmetro) para a validade de um documento do tipo do parâmetro e não há documento mais novo do mesmo tipo | 00:00 do dia em que faltam N dias | Regra + documento | Ativo do documento | MVP |
+| `os_concluida_com_campo` | OS concluída (T10) com o campo extra `sim_nao` do parâmetro igual a sim (RN-OS-023) | `data_conclusao` | Regra + OS (uma vez por OS) | Ativo da OS | MVP |
+| `item_checklist_reprovado` | `checklist_execucao` enviada com o item do parâmetro reprovado | Data e hora da execução | Regra + execução + item | Ativo do checklist | MVP |
+| `leitura_fora_faixa` | Leitura válida do medidor do parâmetro com valor ou uso diário fora da faixa mínima e máxima dada na regra (proposta) | Instante da leitura | Regra + leitura | Ativo do medidor | MVP |
+| `capacitacao_vencida` | Capacitação do tipo do parâmetro de uma `pessoa` venceu | 00:00 do dia seguinte à validade | Regra + capacitação | Pessoa | Fase 2 |
+| `etapa_projeto_atrasada` | Etapa de projeto atrasada (RN-PRJ-010) | 00:00 do dia seguinte à data prevista de fim | Regra + etapa | Etapa e seu responsável | Fase 2 |
+
+Leitura `pendente` ou `rejeitada` (Fluxo 04) não dispara a condição; ela é avaliada quando a leitura fica válida.
+
+### 29.3 Catálogo de efeitos
+
+| Efeito | O que faz | Parâmetros | Como termina | Fase |
+|---|---|---|---|---|
+| `notificar` | Envia uma notificação por disparo | Destinatários (perfis, pessoas, responsável do ativo) e canal | — | MVP |
+| `abrir_solicitacao` | Cria solicitação `nova` com origem `regra` e "ativo parado" = não (RN-ADM-014) | Prioridade (padrão: a da criticidade) e texto | Segue a triagem (Fluxo 01) | MVP |
+| `bloquear_ativo` | Cria `bloqueio_ativo` com `origem = regra`; o ativo fica `parado` (RN-CON-040) | Motivo | Só pelo `gestor`, com motivo (RN-CON-041) | MVP |
+| `bloquear_ativo_ate_documento` | Cria o mesmo bloqueio, com o tipo de documento que o levanta | Tipo de documento exigido, motivo | Sozinho, com o documento (RN-CON-042), ou pelo `gestor`, salvo documento exigido por lei (RN-CON-043) | MVP |
+| `impedir_atribuicao` | Impede atribuir a pessoa a OS dos ativos do filtro, além do que RN-CON-030 já impede | — | Com a capacitação renovada | Fase 2 |
+
+### 29.4 Combinações permitidas
+
+Só estas combinações são aceitas ao criar ou alterar uma regra (RN-ADM-009). A tabela é também o caso de teste da validação da regra.
+
+| Condição | `notificar` | `abrir_solicitacao` | `bloquear_ativo` | `bloquear_ativo_ate_documento` | `impedir_atribuicao` |
+|---|---|---|---|---|---|
+| `documento_vencido` | sim | sim | sim (documento com alvo ativo) | sim (documento com alvo ativo) | não |
+| `documento_a_vencer` | sim | não (abriria solicitação repetida a cada dia) | sim (documento com alvo ativo) | sim (documento com alvo ativo) | não |
+| `os_concluida_com_campo` | sim | sim | sim | sim | não |
+| `item_checklist_reprovado` | sim | sim | sim | sim | não |
+| `leitura_fora_faixa` | sim | sim | sim | sim | não |
+| `capacitacao_vencida` (Fase 2) | sim | não | não | não | sim |
+| `etapa_projeto_atrasada` (Fase 2) | sim | não | não | não | não |
+
+### 29.5 Diagrama da avaliação
+
+```mermaid
+flowchart TD
+    R0["Rotina diária às 06:00 no fuso da unidade: condições de prazo"] --> R2
+    R1["Fato gravado: documento vence, OS concluída, checklist enviado, leitura registrada"] --> R2["Após o commit, Sistema busca as regras ativas com essa condição"]
+    R2 --> R3{"Ativo do fato está inativo, inclusive em implantação?"}
+    R3 -->|sim| R4["Não avalia"]
+    R3 -->|não| R5{"Filtro casa: classe, unidade, criticidade e parâmetros da condição?"}
+    R5 -->|não| R4
+    R5 -->|sim| R6{"Já há disparo desta regra para a chave do fato?"}
+    R6 -->|sim| R7["Não repete o efeito"]
+    R6 -->|não| R8["Grava disparo_regra e aplica o efeito"]
+    R8 --> R9{"Efeito"}
+    R9 -->|notificar| R10["Notifica os destinatários"]
+    R9 -->|abrir_solicitacao| R11{"Solicitação ou OS desta regra em aberto no ativo?"}
+    R11 -->|sim| R12["Incrementa o contador de ocorrências"]
+    R11 -->|não| R13["Solicitação nova com origem regra; segue a triagem"]
+    R9 -->|bloquear_ativo| R14["bloqueio_ativo origem regra; ativo parado; só o gestor levanta, com motivo"]
+    R9 -->|bloquear_ativo_ate_documento| R15["bloqueio_ativo origem regra com o tipo de documento exigido; ativo parado"]
+    R15 --> R16{"Documento do tipo exigido registrado no ativo, emissão não anterior ao fato e validade vigente?"}
+    R16 -->|sim| R17["Bloqueio levantado sozinho; status recalculado"]
+    R16 -->|não| R18["Bloqueio mantido; o gestor pode levantar com motivo, salvo documento exigido por lei"]
+```
+
+### 29.6 Exemplo: radar com lacre rompido
+
+O pacote `fiscalizacao_eletronica` (sumário 3.7) traz a regra "OS concluída com 'Rompeu lacre?' = sim → `bloquear_ativo_ate_documento` (tipo Verificação metrológica)", entregue inativa até a pendência **P9**. Depois de revisada e ativada pela empresa:
+
+```mermaid
+sequenceDiagram
+    participant T as Técnico do prestador no app
+    participant S as Servidor da conta
+    participant R as Avaliação de regras
+    participant G as Gestor
+    participant V as Órgão de verificação
+    T->>T: Conclui offline a OS do radar com Rompeu lacre = sim
+    T->>S: Sincroniza o comando concluir com o instante original
+    S->>S: Valida a conclusão e grava data_conclusao
+    S->>R: Fato os_concluida_com_campo depois do commit
+    R->>R: Regra ativa, classe Radar fixo no filtro, chave do fato sem disparo
+    R->>S: Cria bloqueio_ativo origem regra exigindo Verificação metrológica
+    S->>S: Radar parado desde data_conclusao, com auditoria
+    R->>G: Notifica o bloqueio com o motivo e o próximo passo
+    V-->>G: Nova verificação feita e certificado emitido
+    G->>S: Registra o documento Verificação metrológica com emissão e validade
+    S->>S: Tipo exigido, emissão não anterior ao fato e validade vigente
+    S->>S: Levanta o bloqueio e recalcula o status do radar
+```
+
+A segunda regra do pacote, "verificação vencida → `bloquear_ativo_ate_documento`", é avaliada pela rotina diária: o radar com verificação vencida fica `parado` desde 00:00 do dia seguinte à validade até o registro de uma verificação com emissão posterior à da verificação vencida.
+
+### 29.7 Passos
+
+1. **Criação.** O `gestor` cria a regra a partir de um modelo (do pacote de segmento, RN-ADM-016) ou do zero: nome, condição e parâmetros, filtro (classes de ativo, unidades, criticidades), efeito e parâmetros. A combinação é validada pela tabela 29.4 e a regra nasce `inativa` (RN-ADM-009).
+2. **Simulação.** Antes de ativar, o `gestor` simula: o Sistema mostra os ativos que a regra afetaria hoje e não grava nada (RN-ADM-012).
+3. **Ativação.** Ao ativar, as condições de prazo são avaliadas na hora sobre o estado atual (ex.: documentos já vencidos); fatos pontuais anteriores (OS concluídas, checklists, leituras) não são avaliados (RN-ADM-013).
+4. **Avaliação.** A cada fato do catálogo 29.2, depois do commit, e na rotina diária, o Sistema avalia as regras ativas da condição sobre o ativo do fato, descarta ativo `inativo` (inclusive `em_implantacao`) e aplica o filtro (RN-ADM-010, RN-ADM-015).
+5. **Disparo.** Se a chave do fato ainda não disparou a regra, o Sistema grava um `disparo_regra` e aplica o efeito (RN-ADM-012). O mesmo fato nunca dispara de novo a mesma regra, mesmo que o efeito tenha sido desfeito.
+6. **Efeito.** Notificação, solicitação com origem `regra` (deduplicada, RN-ADM-014) ou bloqueio de origem `regra`, que deixa o ativo `parado` desde o instante do fato (RN-CON-040).
+7. **Fim do bloqueio.** O bloqueio `bloquear_ativo` só sai pelo `gestor`, com motivo (RN-CON-041). O bloqueio `bloquear_ativo_ate_documento` sai sozinho quando o documento exigido é registrado (RN-CON-042), ou pelo `gestor`, salvo se o tipo for exigido por lei (RN-CON-043). O status é recalculado (RN-ATV-001).
+8. **Histórico.** Cada regra e cada ativo mostram os disparos, o efeito e o desfecho.
+
+### 29.8 Casos do bloqueio até documento
+
+Casos de teste da regra do radar (29.6), com a OS concluída em 10/11 às 20:00 e "Rompeu lacre?" = sim.
+
+| # | Situação | Resultado esperado |
+|---|---|---|
+| 1 | Regra ativa, radar da classe do filtro, primeira conclusão da OS | Bloqueio de origem `regra` desde 10/11 20:00; radar `parado`; `disparo_regra` gravado |
+| 2 | Liberação recusada e nova conclusão da mesma OS com "sim" | Sem novo disparo: a chave é a OS (RN-ADM-010) |
+| 3 | Primeira conclusão com "não", nova conclusão com "sim" depois da recusa | Dispara na segunda conclusão, com o instante dela |
+| 4 | Verificação metrológica registrada com emissão em 10/11 e validade futura | Bloqueio levantado no instante do registro: a emissão não tem hora, e o mesmo dia vale (RN-CON-042) |
+| 5 | Verificação com emissão em 09/11 | Não levanta; a mensagem diz que a emissão é anterior ao fato e o que registrar |
+| 6 | Documento de outro tipo (ex.: laudo elétrico) | Não levanta |
+| 7 | Verificação com validade já vencida no registro | Não levanta |
+| 8 | OS feita no componente câmera do radar | O bloqueio vai para o radar, ancestral do tipo `equipamento` (RN-ADM-015); o documento precisa estar no radar |
+| 9 | Radar com dois bloqueios que exigem verificação (lacre e verificação vencida) | Uma verificação que atende os dois levanta os dois |
+| 10 | `gestor` tenta levantar à mão e o tipo Verificação metrológica está marcado como exigido por lei | Recusado: só o documento levanta (RN-CON-043) |
+| 11 | Regra inativada com o bloqueio vigente | O bloqueio continua; a regra lista os bloqueios vigentes para decisão (RN-ADM-013) |
+| 12 | OS concluída offline às 10:00 e sincronizada às 16:00 | Bloqueio com início às 10:00; intervalos de status recalculados com auditoria (RN-ADM-010) |
+| 13 | Encerramento da OS do lacre | Não levanta o bloqueio de regra (RN-CON-041) |
+| 14 | Documento que levantou o bloqueio é corrigido ou invalidado depois | O bloqueio não é recriado; o `gestor` é alertado para decidir (RN-CON-043) |
+
+### 29.9 Exceções
+
+| Situação | Tratamento |
+|---|---|
+| Regra com combinação fora da tabela 29.4 | Recusada na gravação, com a combinação permitida mais próxima |
+| Mais de 50 regras ativas na empresa | A ativação é recusada (parâmetro, proposta) (RN-ADM-009) |
+| Regra que bloqueia um ativo com OS em execução | A OS continua: a regra nunca muda o estado de uma OS (RN-ADM-011) |
+| Ativo do cliente conectado bloqueado por regra | O efeito vale só na conta onde a regra existe: o status do ativo não é campo compartilhado na conexão (sumário 3.6, Fluxo 25, RN-SRV-015) (RN-ADM-011) |
+| OS do cliente executada pela subcontratada conectada com regra `os_concluida_com_campo` | A condição não dispara com dados da subcontratada: os campos extras não trafegam na conexão (sumário 3.6). Solução em aberto (lacuna L-39; ponto 38 do documento 1) (RN-ADM-015) |
+| Regra na conta da subcontratada | Vale para os ativos `de_cliente` da própria conta; nada é gravado na conta do cliente (RN-ADM-015) |
+| Mesmo item de checklist com regra `abrir_solicitacao` e com a solicitação padrão de RN-CHK-001 | As duas valem: a regra acrescenta, não substitui o padrão (RN-ADM-011); a deduplicação de cada uma é feita pela própria origem |
+| Documento vencido com regra de bloqueio em veículo | O bloqueio de despacho (RN-CON-021) continua independente do bloqueio de regra (RN-CON-044) |
+| Ativo entra em operação com uma condição de prazo já satisfeita | Avaliada na hora da entrada em operação (RN-ADM-015) |
+
+### 29.10 Regras aplicadas
+
+RN-ADM-009 a RN-ADM-016, RN-CON-040 a RN-CON-044, RN-ATV-001, RN-ATV-005, RN-OS-023, RN-SOL-007, RN-CHK-001, RN-CHK-005, RN-CON-021, RN-CON-025, RN-MOB-006, RN-SRV-015.
+
+---
+
+## Fluxo 30 — Implantação por projeto: modelo, projeto, etapas, OS de implantação, entrega e entrada em operação
+
+**Módulos:** PRJ, ATV, OS, CON, TER, SRV, MOB, IND · **Fase:** Fase 2, plano Profissional (PRJ). O caminho sem projeto (ativo `em_implantacao`, OS `implantacao` e `colocar_em_operacao`) é do MVP, plano Essencial.
+
+O projeto não executa trabalho: ele organiza as OS `implantacao` de cada etapa, na ordem das dependências, e coloca os ativos em operação no fim.
+
+### 30.1 Atores
+
+`administrador`, `gestor` e `planejador` (modelos e projetos, com a permissão `prj.gerenciar`), `administrador` e `gestor` (dispensa de etapa, com `prj.dispensar_etapa`; ajuste da medição do prestador, com `prj.ajustar_medicao`), `planejador` (etapas e OS), responsável da etapa, `tecnico`, `prestador` e subcontratada conectada (executam as OS), liberador (`os.encerrar`), representante do cliente atendido (assina o termo de entrega, quando houver), Sistema.
+
+### 30.2 Estados do projeto
+
+Conforme o sumário 3.3. Número `PJ-<AAAA>-<NNNNNN>`.
+
+```mermaid
+stateDiagram-v2
+    [*] --> rascunho : criar a partir de um modelo
+    rascunho --> em_andamento : iniciar
+    em_andamento --> suspenso : suspender com motivo
+    suspenso --> em_andamento : retomar com motivo
+    em_andamento --> concluido : concluir
+    rascunho --> cancelado : cancelar com motivo
+    em_andamento --> cancelado : cancelar com motivo
+    suspenso --> cancelado : cancelar com motivo
+    concluido --> [*]
+    cancelado --> [*]
+```
+
+| De | Para | Ação (API) | Quem | Pré-condições e efeitos |
+|---|---|---|---|---|
+| — | `rascunho` | criar | `prj.gerenciar` (padrão `administrador`, `gestor`, `planejador`) | Modelo ativo; etapas copiadas em `pendente`; datas previstas calculadas (RN-PRJ-003) |
+| `rascunho` | `em_andamento` | `iniciar` | `prj.gerenciar` | Ao menos um ativo ou uma localização e o responsável. As etapas sem predecessoras ficam `disponivel`. Evento `projeto.iniciado` (RN-PRJ-004) |
+| `em_andamento` | `suspenso` | `suspender` | `prj.gerenciar` | Motivo. Prazos das etapas param; as OS seguem como estão (RN-PRJ-011) |
+| `suspenso` | `em_andamento` | `retomar` | `prj.gerenciar` | Motivo. Datas previstas deslocadas; disponibilidade das etapas reavaliada (RN-PRJ-011) |
+| `em_andamento` | `concluido` | `concluir` | `prj.gerenciar` | Todas as etapas `concluida` ou `dispensada`, a de entrega `concluida`, termo de entrega assinado. Executa `colocar_em_operacao` nos ativos ainda `em_implantacao`. Evento `projeto.concluido` (RN-PRJ-016) |
+| `rascunho`, `em_andamento`, `suspenso` | `cancelado` | `cancelar` | `prj.gerenciar` | Motivo; nenhuma OS do projeto em `em_execucao`; destino de cada ativo `em_implantacao`. Evento `projeto.cancelado` (RN-PRJ-012) |
+
+Projeto `concluido` ou `cancelado` não é editado (RN-PRJ-002).
+
+### 30.3 Estados da etapa de projeto
+
+Conforme o sumário 3.3 e 3.6: o estado é `disponivel`, e não "liberada", para não confundir com a liberação da OS.
+
+```mermaid
+stateDiagram-v2
+    [*] --> pendente : projeto criado
+    pendente --> disponivel : predecessoras concluida ou dispensada
+    disponivel --> em_andamento : primeira OS iniciada ou início manual
+    em_andamento --> concluida : concluir com as exigências cumpridas
+    pendente --> dispensada : dispensar com motivo
+    disponivel --> dispensada : dispensar com motivo
+    concluida --> [*]
+    dispensada --> [*]
+```
+
+| De | Para | Gatilho | Quem | Pré-condições e efeitos |
+|---|---|---|---|---|
+| — | `pendente` | criação do projeto | Sistema | Copiada do modelo com executor, peso, exigências e valor de referência |
+| `pendente` | `disponivel` | disponibilizar | Sistema | Projeto `em_andamento` e todas as predecessoras `concluida` ou `dispensada`. Notifica o responsável e gera as OS da etapa (RN-PRJ-005) |
+| `disponivel` | `em_andamento` | início | Sistema (primeira OS grava `data_inicio`) ou responsável (etapa sem OS) | RN-PRJ-006 |
+| `em_andamento` | `concluida` | concluir | Responsável da etapa, `planejador`, `gestor` | OS da etapa `encerrada` ou `cancelada`, ao menos uma `encerrada` quando a etapa gera OS; documentos e campos exigidos (RN-PRJ-007, RN-PRJ-008). Torna as sucessoras disponíveis |
+| `pendente`, `disponivel` | `dispensada` | dispensar | `prj.dispensar_etapa` (padrão `administrador`, `gestor`) | Motivo; nunca a etapa de entrega; OS não iniciadas canceladas pelo Sistema (RN-PRJ-009). Torna as sucessoras disponíveis |
+
+"Atrasada" não é estado: é condição calculada (RN-PRJ-010).
+
+### 30.4 Diagrama do processo
+
+```mermaid
+flowchart TD
+    P1["Planejador cria o projeto a partir do modelo: ativos em_implantacao, ponto, responsável"] --> P2["Etapas copiadas em pendente; datas previstas pelas durações e dependências"]
+    P2 --> P3["Iniciar: projeto em_andamento; etapas sem predecessoras disponíveis"]
+    P3 --> P4["Etapa disponivel: Sistema gera as OS implantacao com origem projeto"]
+    P4 --> P5["OS atribuída ao técnico interno ou ao prestador da cidade"]
+    P5 --> P6["Primeira OS iniciada: etapa em_andamento"]
+    P6 --> P7["OS executada no app, concluída e encerrada pelo liberador"]
+    P7 --> P8{"OS da etapa encerradas ou canceladas, documentos e campos exigidos registrados?"}
+    P8 -->|não| P7
+    P8 -->|sim| P9["Etapa concluida; cada sucessora fica disponivel quando todas as suas predecessoras terminam"]
+    P9 --> P10{"Etapa de entrega concluída?"}
+    P10 -->|não| P4
+    P10 -->|sim| P11["Termo de entrega gerado e assinado"]
+    P11 --> P12["Concluir projeto: colocar_em_operacao em todos os ativos em_implantacao, numa transação"]
+    P12 --> P13["Ativos em_operacao e operando; planos ativados; itens incluídos no contrato com cliente"]
+```
+
+### 30.5 Exemplo: implantação de um ponto de fiscalização
+
+Modelo "Implantação de ponto de fiscalização" do pacote `fiscalizacao_eletronica` (RF-PRJ-001). A cidade é a unidade, o ponto é a localização, o radar e seus componentes são criados `em_implantacao`, e o prestador da cidade é o executor das etapas de campo.
+
+| # | Etapa | Predecessoras | Executor padrão | Gera OS | Exige para concluir | Peso |
+|---|---|---|---|---|---|---|
+| 1 | Autorização | — | `interno` | Não | Campo "Número da autorização" | 5 |
+| 2 | Energia | 1 | `fornecedor` | Sim | Campo extra "Protocolo da concessionária" | 15 |
+| 3 | Fundação e poste | 1 | `fornecedor` | Sim | Tarefas com foto | 20 |
+| 4 | Laços | 1 | `fornecedor` | Sim | — | 15 |
+| 5 | Montagem | 2, 3, 4 | `fornecedor` | Sim | Campo extra "Lacres instalados" | 20 |
+| 6 | Aferição | 5 | `fornecedor` | Sim | Documento Verificação metrológica no radar, emitido depois do início da etapa (depende de **P9**) | 20 |
+| 7 | Entrega | 6 | `interno` | Não | Termo de entrega assinado; etapa de entrega | 5 |
+
+Energia, fundação e laços correm em paralelo depois da autorização; a montagem espera as três. Com a autorização e a energia concluídas e a fundação dispensada (poste já existente), o avanço físico é (5 + 15 + 20) / 100 = 40% (RN-PRJ-014).
+
+### 30.6 Passos
+
+1. **Modelo.** O `gestor` mantém o modelo com etapas, dependências sem ciclo, pesos, executor padrão, procedimento da OS, exigências e valor de referência; editar gera versão nova (RN-PRJ-001).
+2. **Projeto.** O `planejador` cria o projeto a partir do modelo, com os ativos `em_implantacao` (criados à mão, por importação ou junto com o projeto), a localização, o responsável e, se houver, o cliente atendido e o contrato com cliente. Em `rascunho`, inclui e retira ativos (RN-PRJ-003).
+3. **Início.** Ao iniciar, as etapas sem predecessoras ficam `disponivel` (RN-PRJ-004).
+4. **OS da etapa.** Quando a etapa fica `disponivel`, o Sistema gera as OS `implantacao` da etapa, com `origem = projeto`, o procedimento e o executor da etapa; uma por ativo quando a etapa se repete por ativo (RN-PRJ-005, RN-PRJ-013). O `planejador` atribui ao técnico interno ou ao fornecedor, inclusive com conta conectada (Fluxo 26).
+5. **Execução.** As OS seguem o Fluxo 02, no app offline, com campos extras obrigatórios (RN-OS-024). A primeira OS iniciada põe a etapa em `em_andamento` (RN-PRJ-006). O ativo continua `inativo`: a OS `implantacao` não muda o status do ativo em implantação (seção 0.6).
+6. **Conclusão da etapa.** Com as OS `encerrada` ou `cancelada`, os documentos exigidos registrados em cada ativo e os campos preenchidos, o responsável conclui a etapa; as sucessoras ficam `disponivel` (RN-PRJ-007, RN-PRJ-008).
+7. **Dispensa.** Etapa desnecessária é dispensada por quem tem `prj.dispensar_etapa`, com motivo, antes de começar (RN-PRJ-009).
+8. **Acompanhamento.** Cronograma, avanço físico, etapas atrasadas, custo previsto e realizado e desvio de prazo (RN-PRJ-010, RN-PRJ-014). O custo das OS é custo de implantação, nunca de manutenção (RN-IND-010).
+9. **Medição do prestador.** Por fornecedor e período, as etapas concluídas por ele e o valor de cada uma vão para o pagamento no ERP (RN-PRJ-015).
+10. **Entrega.** A etapa de entrega gera o termo em PDF com ativos, etapas, documentos e fotos, assinado pelo responsável e, quando houver, pelo representante do cliente atendido (RN-CON-005).
+11. **Entrada em operação.** Concluir o projeto executa `colocar_em_operacao` em todos os ativos ainda `em_implantacao`, numa única transação: fase `em_operacao`, status `operando`, `data_entrada_operacao` e planos ativados (RN-ATV-013, RN-PRJ-016). Com contrato com cliente, os ativos entram como itens a partir dessa data (RN-CTR-003).
+
+**Caminho sem projeto (MVP).** O ativo é cadastrado `em_implantacao`, recebe OS `implantacao` (RN-OS-022) e é posto em operação pela ação `colocar_em_operacao`, sozinho ou em lote (RN-ATV-013).
+
+### 30.7 Casos da entrada em operação
+
+| # | Situação | Resultado esperado |
+|---|---|---|
+| 1 | Ativo já `em_operacao` | Recusado: a fase não volta e não se repete (RN-ATV-015) |
+| 2 | Ativo `em_implantacao` com OS `implantacao` em `concluida` aguardando liberação | Recusado, com o número da OS a liberar (RN-ATV-013) |
+| 3 | Uma OS `implantacao` `cancelada` e outra `encerrada` | Aceito |
+| 4 | Classe exige verificação metrológica válida e ela falta ou venceu | Recusado, com o tipo de documento faltante |
+| 5 | Ativo com `bloqueio_ativo` vigente | Recusado até o bloqueio sair (RN-ATV-013) |
+| 6 | Data de entrada informada no futuro, ou antes da última `data_conclusao` de OS `implantacao` | Recusado (RN-ATV-014) |
+| 7 | Usuário sem `atv.colocar_em_operacao` | Recusado |
+| 8 | Lote de 10 ativos fora de projeto, 2 com pendência | 8 entram em operação; 2 recusados com o motivo de cada um |
+| 9 | Conclusão de projeto com 1 dos 10 ativos com pendência | Nada é gravado; o Sistema lista o ativo e o motivo (RN-PRJ-016) |
+| 10 | Pedido para voltar um ativo a `em_implantacao` | Não existe a ação; a reinstalação é transferência com projeto (RN-ATV-015) |
+| 11 | Ativo entra em operação com plano trimestral por tempo | Primeiro vencimento = `data_entrada_operacao` + 3 meses; nada é contado antes (RN-ATV-014) |
+
+### 30.8 Exceções
+
+| Situação | Tratamento |
+|---|---|
+| Problema encontrado depois de concluir uma etapa | A etapa `concluida` não volta. Nova OS `implantacao` no ativo, se ele ainda está `em_implantacao`; depois da entrada em operação, OS corretiva (RN-PRJ-007) |
+| Todas as OS de uma etapa `em_andamento` foram canceladas | A etapa não conclui sem uma OS `encerrada`; o `planejador` gera nova OS (RN-PRJ-007) |
+| Ativo já em outro projeto não concluído | Inclusão recusada, com o número do projeto (RN-PRJ-003, proposta) |
+| Projeto suspenso com OS em execução no campo | As OS seguem; nenhuma etapa fica `disponivel` nem é concluída até retomar (RN-PRJ-011) |
+| Cancelar projeto com OS `em_execucao` | Recusado: pausar antes (RN-PRJ-012, RN-OS-004). OS `concluida` seguem para a liberação |
+| Cancelar projeto com ativos `em_implantacao` | Para cada ativo: manter em implantação ou baixar com motivo (RN-PRJ-012) |
+| Etapa repetida por ativo num projeto de vários radares | Uma OS por ativo; a etapa conclui quando todas estão finais (RN-PRJ-005) |
+| OS da etapa executada pela subcontratada conectada | Na conta dela chega só a OS, com o tipo `implantacao`; projeto, etapas e campos extras não são compartilhados (RN-PRJ-013, RN-OS-022) |
+| Reinstalação de radar em outro ponto | Transferência com projeto; a OS `implantacao` com "exige parada" = sim deixa o radar `em_manutencao`; o intervalo sai dos KPIs técnicos e conta na medição do contrato (RN-ATV-015, RN-IND-009, RN-CTR-004) |
+| Projeto só com localização e etapa que exige documento | Recusado na criação: documento exigido precisa de ativo (RN-PRJ-008, proposta) |
+
+### 30.9 Regras aplicadas
+
+RN-PRJ-001 a RN-PRJ-016, RN-ATV-011 a RN-ATV-015, RN-OS-022, RN-OS-024, RN-IND-009, RN-IND-010, RN-CTR-003, RN-OS-001, RN-OS-004, RN-OS-007, RN-CON-005, RN-ADM-010.
+
+---
+
+## Fluxo 31 — Contrato com cliente: medição mensal, paradas por causa externa e fechamento
+
+**Módulos:** CTR, OS, ATV, IND, SRV (`cliente_servico`) · **Fase:** Fase 2, plano Profissional
+
+A empresa presta serviço a um cliente atendido (ex.: prefeitura) com meta de disponibilidade e desconto por faixa. A medição mensal apura a **disponibilidade contratual** de cada item a partir das mesmas paradas que alimentam os indicadores técnicos, sem mudar esses indicadores (RN-IND-011).
+
+### 31.1 Atores
+
+`administrador` e `gestor` (contrato e itens, com `ctr.gerenciar`; decisão das exclusões e fechamento da medição, com `ctr.fechar_medicao`; reabertura, com `ctr.reabrir_medicao`), `planejador` (OS dos itens), `tecnico` e `prestador` (registram a causa externa e as evidências na conta do contrato), Sistema (abertura e cálculo), ERP (fatura com o desconto), cliente atendido (recebe a medição em PDF e XLSX; acesso próprio depende de **P10**).
+
+### 31.2 Estados do contrato com cliente
+
+Conforme o sumário 3.3, como o contrato de locação. Número `CT-<AAAA>-<NNNNNN>`.
+
+```mermaid
+stateDiagram-v2
+    [*] --> rascunho : criar
+    rascunho --> vigente : ativar
+    rascunho --> cancelado : cancelar (só de rascunho)
+    vigente --> encerrado : encerrar
+    encerrado --> [*]
+    cancelado --> [*]
+```
+
+| De | Para | Ação (API) | Quem | Pré-condições e efeitos |
+|---|---|---|---|---|
+| — | `rascunho` | criar | `ctr.gerenciar` (padrão `administrador`, `gestor`) | Cliente atendido, vigência |
+| `rascunho` | `vigente` | `ativar` | `ctr.gerenciar` | Ao menos um item, meta, calendário de apuração, faixas válidas (RN-CTR-002); nenhum ativo em outro contrato com cliente vigente no mesmo período (RN-CTR-003). Evento `contrato_cliente.ativado` |
+| `rascunho` | `cancelado` | `cancelar` | `ctr.gerenciar` | Motivo |
+| `vigente` | `encerrado` | `encerrar` | `ctr.gerenciar` | Motivo se antes do fim da vigência. Evento `contrato_cliente.encerrado`. A medição do último período segue até o fechamento |
+
+### 31.3 Estados da medição do contrato
+
+```mermaid
+stateDiagram-v2
+    [*] --> em_apuracao : abrir o período
+    em_apuracao --> fechada : fechar com todas as decisao_exclusao decididas
+    fechada --> em_apuracao : reabrir com motivo e ctr.reabrir_medicao
+```
+
+| De | Para | Ação | Quem | Pré-condições e efeitos |
+|---|---|---|---|---|
+| — | `em_apuracao` | abrir | Sistema, no dia 1 do mês seguinte (proposta) | Uma por contrato e período (RN-CTR-008) |
+| `em_apuracao` | `fechada` | fechar | `ctr.fechar_medicao` (padrão `administrador`, `gestor`) | Nenhuma parada candidata com `decisao_exclusao = pendente`; grava a memória de cálculo; imutável. Evento `medicao_contrato.fechada` (RN-CTR-011) |
+| `fechada` | `em_apuracao` | reabrir | Usuário com `ctr.reabrir_medicao` | Motivo; recálculo com os dados atuais; divergências contra a versão anterior (RN-CTR-012) |
+
+### 31.4 Diagrama do processo mensal
+
+```mermaid
+flowchart TD
+    M1["Contrato vigente com itens, meta, calendário, faixas e causas aceitas"] --> M2["Durante o mês: OS dos itens com paradas; causa externa marcada com evidência"]
+    M2 --> M3["Painel do contrato projeta a disponibilidade e o desconto"]
+    M3 --> M4["Dia 1 do mês seguinte: medição do período em_apuracao"]
+    M4 --> M5["Sistema calcula por item: horas requeridas no calendário, paradas cortadas no período e candidatas a exclusão"]
+    M5 --> M6{"Causa externa aceita no contrato?"}
+    M6 -->|não| M7["Conta como parada; marcada causa não aceita"]
+    M6 -->|sim| M8{"decisao_exclusao: aprovada?"}
+    M8 -->|sim| M9["Intervalo excluído da medição"]
+    M8 -->|"não, com motivo"| M7
+    M7 --> M10{"Alguma decisao_exclusao pendente?"}
+    M9 --> M10
+    M10 -->|sim| M8
+    M10 -->|não| M11["Disponibilidade contratual por item, faixa e desconto"]
+    M11 --> M12["Fechar com ctr.fechar_medicao: memória de cálculo gravada; medição imutável; evento medicao_contrato.fechada"]
+    M12 --> M13["PDF e XLSX ao cliente; valor com desconto ao ERP"]
+    M12 --> M14{"Divergência depois do fechamento?"}
+    M14 -->|sim| M15["Reabrir com motivo e ctr.reabrir_medicao; recálculo e divergências"]
+    M15 --> M8
+```
+
+### 31.5 Passos
+
+1. **Contrato.** Quem tem `ctr.gerenciar` cria o contrato em `rascunho`: cliente atendido, vigência, meta, calendário de apuração (`continuo_24x7` ou calendário do contrato), prazos de atendimento e solução por prioridade, faixas de desconto, causas externas aceitas e valor de referência; inclui os itens com valor mensal e, se for o caso, meta própria (RN-CTR-002, RN-CTR-003, RN-CTR-005).
+2. **Ativação.** Com itens, meta, calendário e faixas válidas, o contrato fica `vigente` (RN-CTR-001).
+3. **Durante o mês.** As OS dos itens seguem o Fluxo 02. Os prazos do contrato valem para as corretivas dos itens; o estouro gera `contrato_cliente.sla_violado` (RN-CTR-006). Quem registra a parada marca a `causa_externa` e anexa a evidência (boletim de ocorrência, protocolo da concessionária, fotos) (RN-OS-026, RN-CTR-007). O painel mostra a projeção (RN-CTR-015).
+4. **Abertura da medição.** No dia 1 do mês seguinte, o Sistema abre a medição do período em `em_apuracao` (RN-CTR-008).
+5. **Cálculo.** Para cada item: janela do item no período, horas requeridas no calendário, intervalos de parada cortados no período e no calendário, candidatas a exclusão (seção 33.9, RN-CTR-009).
+6. **Decisão das exclusões.** Cada parada com causa externa aceita no contrato nasce com `decisao_exclusao = pendente`; quem tem `ctr.fechar_medicao` a marca `aprovada` ou `recusada` (com motivo). Causa não aceita não é candidata (RN-CTR-007, RN-CTR-010).
+7. **Fechamento.** Sem nenhuma `decisao_exclusao` pendente, quem tem `ctr.fechar_medicao` fecha: a memória de cálculo é gravada e a medição fica imutável (RN-CTR-011).
+8. **Envio.** A medição sai em PDF e XLSX, com "como calculamos"; o valor com desconto vai para o ERP. A Tenaz não fatura.
+9. **Reabertura.** Erro descoberto depois é corrigido reabrindo a medição, com motivo e `ctr.reabrir_medicao` (RN-CTR-012). Mudança em OS depois do fechamento aparece como divergência, sem alterar a medição fechada (RN-CTR-013).
+
+### 31.6 Exemplo: radar da prefeitura em novembro
+
+Contrato `CT-2026-000004` com a prefeitura: meta 98%, calendário `continuo_24x7`, faixas `[95, 98)` 5%, `[90, 95)` 10% e `[0, 90)` 20%, causas aceitas `vandalismo`, `acidente_terceiro` e `falta_energia`, evidência obrigatória. Item: radar RAD-0007, valor mensal R$ 4.000,00. Novembro tem 30 dias: horas requeridas = 720 h.
+
+| # | Parada | Intervalo | Horas em novembro | Causa externa | `decisao_exclusao` | Conta na medição |
+|---|---|---|---|---|---|---|
+| 1 | Falha da câmera | 31/10 22:00 a 01/11 02:00 | 2 (as outras 2 ficaram em outubro) | — | — | 2 |
+| 2 | Gabinete arrombado | 10/11 08:00 a 10/11 20:00 (`data_conclusao`) | 12 | `vandalismo` com boletim | `aprovada` | 0 |
+| 3 | Bloqueio até nova verificação, disparado pela OS 2 ("Rompeu lacre?" = sim) | 10/11 20:00 a 12/11 08:00 (registro da verificação) | 36 | Herdada da OS 2 (RN-CTR-014) | A da OS 2: `aprovada` | 0 |
+| 4 | Falta de energia | 20/11 14:00 a 20/11 18:00 | 4 | `falta_energia` sem protocolo | `recusada`: sem evidência | 4 |
+| 5 | Preventiva com parada | 25/11 09:00 a 25/11 11:00 | 2 | — | — | 2 |
+| 6 | Falha aberta no fim do mês | 30/11 20:00 a 01/12 00:00 (continua em dezembro) | 4 | — | — | 4 |
+
+- Horas paradas não excluídas = 2 + 4 + 2 + 4 = 12 h. Disponibilidade contratual = (720 − 12) / 720 × 100 = **98,33%**: meta atingida, sem desconto.
+- Se a exclusão do vandalismo fosse recusada: 60 h paradas, disponibilidade 91,67%, faixa `[90, 95)`, desconto de 10% = R$ 400,00.
+- A disponibilidade operacional técnica do radar no mês (Ao, seção 33.2, regime 24 h e 7 dias) é (720 − 60) / 720 × 100 = 91,67% nos dois casos: a causa externa não muda a Ao, o MTTR nem o MTBF (RN-IND-011). A OS 2 é falha e entra no MTTR.
+
+### 31.7 Exceções
+
+| Situação | Tratamento |
+|---|---|
+| Item incluído no meio do mês ou ativo que entrou em operação no meio do mês | Conta só a janela do item; o valor de referência do desconto é proporcional às horas requeridas da janela (RN-CTR-003, RN-CTR-011, proposta) |
+| Item sem horas requeridas no período | Fora da medição, sem desconto, listado (RN-CTR-009) |
+| Parada que começa num mês e termina no outro | Cortada nos limites de cada período; a decisão de exclusão é da OS e vale para os dois (RN-CTR-010, RN-IND-005) |
+| Parada ainda aberta no fechamento | Conta até o fim do período; o restante entra no período seguinte |
+| Causa externa marcada depois do encerramento da OS | Não é possível: a OS encerrada é imutável (RN-OS-008, RN-OS-026); ver lacuna L-34 |
+| Causa externa marcada na conta da subcontratada conectada | Não chega ao cliente: a causa externa nunca é compartilhada na conexão no lançamento (sumário 3.6); o cliente marca na própria OS, com as fotos que chegaram |
+| Parada operacional manual (sem OS) num item coberto | Conta como parada na medição; não há causa externa sem OS (RN-CTR-009, proposta) |
+| Ativo coberto vai ser baixado ou posto em reserva | Exige excluir o item antes, com data (RN-CTR-004, proposta) |
+| Reinstalação de item coberto em outro ponto | Conta como parada, salvo exclusão aprovada com causa `solicitacao_cliente` (RN-CTR-004) |
+| OS alterada depois do fechamento (ex.: `data_conclusao` ajustada pelo `gestor`) | A medição fechada não muda; a divergência aparece no painel e na reabertura (RN-CTR-013) |
+| Item com meta própria acima da meta do contrato | Disponibilidade entre as duas metas recebe o desconto da primeira faixa (RN-CTR-002, proposta) |
+| Contrato encerrado com a medição do último mês em apuração | A medição segue até o fechamento (RN-CTR-001) |
+
+### 31.8 Regras aplicadas
+
+RN-CTR-001 a RN-CTR-015, RN-OS-026, RN-IND-005, RN-IND-011, RN-ATV-001, RN-ATV-006, RN-OS-008, RN-ADM-004.
+
+---
+
+## 32. Catálogo de regras de negócio
+
+Fonte: "NR-12", "NR-13" e outras normas indicam o texto legal conforme verificado no estudo de mercado; "Estudo" indica o [estudo de mercado](pesquisa/reports/Benchmarking%20manuten%C3%A7%C3%A3o%20e%20frota%20Brasil.md); "Sumário" indica o [sumário executivo](0_SUMARIO_EXECUTIVO.md) 0.5 (as citações "Sumário 2.1", "3.3" e similares de regras das versões 0.2 e 0.3 continuam válidas na versão 0.5); "Decisão de produto" indica escolha da Tenaz, sujeita a validação com clientes. As sete regras marcadas com **[P-n]** são as regras prioritárias do estudo (seção "Regras de negócio prioritárias"). Regra que mudou de módulo, ou cujo enunciado mudou por decisão do sumário 0.4, continua no catálogo com o ID antigo e a indicação "Substituída por", para que quem já a cita continue encontrando o texto.
+
+### 32.1 ADM — Administração
 
 | ID | Enunciado | Fonte | Fase |
 |---|---|---|---|
@@ -2558,14 +3004,22 @@ Fonte: "NR-12", "NR-13" e outras normas indicam o texto legal conforme verificad
 | RN-ADM-006 | `pessoa` é o registro de quem executa, conduz ou responde por algo (técnico, motorista, condutor eventual, técnico de fornecedor, PLH), com ou sem `usuario`. CNH, ASO, capacitações e documentos pessoais ligam-se à pessoa, nunca ao usuário. `usuario.pessoa_id` é opcional. Pessoa sem usuário pode ser atribuída, indicada como condutor e citada em registros, mas não executa ações no sistema. | Sumário 3.1 | MVP |
 | RN-ADM-007 | Perfis padrão: `administrador`, `gestor`, `planejador`, `tecnico`, `almoxarife`, `comprador`, `plh`, `motorista`, `solicitante`, `visualizador`, `prestador` e `locatario`. A liberação (encerramento) de OS é a permissão `os.encerrar`, padrão em `gestor` e `planejador`, e pode ser concedida a outro perfil, nunca a `prestador` nem a `locatario`. | Sumário 3.1 | MVP (`locatario` na Fase 2) |
 | RN-ADM-008 | Dados de saúde (ASO, exame toxicológico) só são visíveis com a permissão `pessoa.saude.ler`, que não está em nenhum perfil padrão. Sem ela, o usuário vê só a situação (apto, vencido, bloqueado). Concessão e leitura ficam na auditoria. | Sumário 3.1; LGPD | MVP |
+| RN-ADM-009 | `regra_automacao` combina uma condição e um efeito dos catálogos fechados do sumário 3.7, com parâmetros e filtro por classes de ativo, unidades e criticidades. Só as combinações da tabela 29.4 são aceitas; efeito de bloqueio exige condição cujo alvo é ativo, e `bloquear_ativo_ate_documento` exige um tipo de documento com alvo ativo. A regra nasce `inativa`. Criar, alterar, ativar e inativar exigem a permissão `adm.gerenciar_regras` (padrão `administrador` e `gestor`). No máximo 50 regras ativas por empresa (parâmetro, proposta). Condição ou efeito novo entra só por requisito, com teste, nunca por configuração. | Sumário 3.7; RF-ADM-016; decisão de produto (matriz de combinações) | MVP |
+| RN-ADM-010 | A regra é avaliada no fato que a dispara (tabela 29.2), depois do commit do fato, e numa rotina diária idempotente às 06:00 no fuso da unidade para as condições de prazo (`documento_vencido`, `documento_a_vencer`, `capacitacao_vencida`, `etapa_projeto_atrasada`). A mesma chave do fato nunca aplica o efeito da mesma regra duas vezes, mesmo depois de o efeito ter sido desfeito. A avaliação é só no servidor; o fato registrado no app offline é avaliado quando o comando é processado, com o instante original do fato. | Sumário 3.7; RF-ADM-016; decisão de produto (chave e instante do fato) | MVP (condições de prazo da Fase 2 na Fase 2) |
+| RN-ADM-011 | Uma regra nunca muda o estado de uma OS, nunca altera fórmula nem parâmetro de indicador e nunca grava dado em outra conta. O efeito vale só na conta onde a regra existe: o status do ativo não é campo compartilhado na conexão entre contas, então um bloqueio de regra no cliente não aparece na cópia do ativo na subcontratada, e vice-versa. Os comportamentos padrão (alertas de documento, RN-CON-020; bloqueio de despacho, RN-CON-021; solicitação por item reprovado, RN-CHK-001; item crítico, RN-CHK-005) continuam valendo sem regra: a regra acrescenta efeitos, não desliga padrões. | Sumário 3.6 e 3.7; RF-ADM-016 | MVP |
+| RN-ADM-012 | Cada aplicação de efeito grava um `disparo_regra` append-only com a regra e sua versão, a condição, a chave e o instante do fato, o alvo (ativo, pessoa ou etapa), o efeito, o registro criado (bloqueio, solicitação, notificação) e o instante do disparo. Fato que casa com a regra mas não cria registro (solicitação deduplicada, RN-ADM-014) também gera disparo, com o resultado. A simulação mostra os ativos que a regra afetaria hoje e não grava disparo nem efeito. | RF-ADM-016; decisão de produto | MVP |
+| RN-ADM-013 | Alterar uma regra gera versão nova, que vale para fatos com instante igual ou posterior à alteração (RN-ADM-003). Ao ativar, as condições de prazo são avaliadas na hora sobre o estado atual; fatos pontuais anteriores à ativação (OS concluída, checklist, leitura) não são avaliados. Inativar não levanta bloqueios já criados: o Sistema lista os bloqueios vigentes da regra para decisão do `gestor`. | RF-ADM-016; decisão de produto (avaliação na ativação) | MVP |
+| RN-ADM-014 | `abrir_solicitacao` cria solicitação `nova` com origem `regra`, "ativo parado" = não, prioridade do parâmetro do efeito (padrão: a da criticidade, RN-ATV-004) e texto com a regra e o fato. Se já existe, no mesmo ativo, solicitação em `nova` ou `em_triagem` aberta pela mesma regra, ou OS não encerrada nem cancelada gerada dela, o Sistema incrementa o contador de ocorrências em vez de abrir outra, como em RN-SOL-007. A solicitação segue a triagem normal (Fluxo 01). | Sumário 3.6 (origem `regra`); RF-ADM-016 | MVP |
+| RN-ADM-015 | O alvo do efeito é o ativo do fato; fato em `componente` leva o bloqueio ao ancestral mais próximo do tipo `equipamento` ou `veiculo` (RN-ATV-005), e é nele que o documento exigido é procurado. O filtro é aplicado ao ativo do fato. Ativo `inativo`, inclusive `em_implantacao`, não é avaliado; na entrada em operação (RN-ATV-013), as condições de prazo das regras ativas são avaliadas na hora. Na conta da subcontratada, as regras valem para os próprios ativos, inclusive `de_cliente`, e o efeito fica na própria conta. Na conta do cliente, a condição `os_concluida_com_campo` não dispara com OS executada por subcontratada conectada, porque os campos extras não trafegam na conexão; a solução está em aberto (lacuna L-39). | Decisão de produto; RN-ATV-005; sumário 3.5 e 3.6; RF-ADM-016 | MVP |
+| RN-ADM-016 | Aplicar um `pacote_segmento` exige `adm.gerenciar_configuracao` e é atômico: cria tudo o que falta ou nada. Só cria o que falta na conta, identificado pela chave natural do item (sigla da classe, código do tipo de documento, nome da regra); nunca altera nem apaga o que a empresa já tem ou editou. Itens de módulo não contratado são ignorados e listados. Regras vindas de pacote nascem `inativa`. Cada aplicação gera `aplicacao_pacote` com pacote, versão, quem aplicou, itens criados e ignorados. O catálogo de pacotes é global e só leitura para as contas. | Sumário 3.6 e 3.7; RF-ADM-017 | Fase 2 |
 
-### 29.2 ATV — Ativos
+### 32.2 ATV — Ativos
 
 | ID | Enunciado | Fonte | Fase |
 |---|---|---|---|
 | RN-ATV-001 | O status operacional do ativo (`operando`, `em_manutencao`, `parado`, `inativo`) é derivado dos fatos do sistema com precedência `inativo` > `parado` > `em_manutencao` > `operando` (seção 0.6) e recalculado a cada evento. `parado`: falha que parou o ativo, corretiva emergencial em curso, parecer NR-12 `inapto`, `bloqueio_ativo` ou parada manual. `em_manutencao`: OS de retirada programada em `em_execucao`, `pausada` ou `concluida`. Cada mudança grava um intervalo com início, fim e causa. | Sumário 3.3 | MVP |
 | RN-ATV-002 | Parada manual exige perfil `gestor` e motivo classificado como manutenção ou operacional. Parada operacional não conta como indisponibilidade de manutenção. | Decisão de produto | MVP |
-| RN-ATV-003 | Ativo `inativo` não recebe OS nova, não tem planos avaliados, não aceita leitura nova (exceto importação de histórico anterior à inativação) e não conta como veículo cobrado. | Sumário 2.1 (veículo cobrado = `veiculo` não `inativo`) | MVP |
+| RN-ATV-003 | **Substituída por RN-ATV-012** (o sumário 0.5 acrescentou o ativo em implantação, que é `inativo` e recebe OS `implantacao`). Texto original: Ativo `inativo` não recebe OS nova, não tem planos avaliados, não aceita leitura nova (exceto importação de histórico anterior à inativação) e não conta como veículo cobrado. | Sumário 2.1 (veículo cobrado = `veiculo` não `inativo`) | MVP |
 | RN-ATV-004 | A prioridade padrão da OS vem da criticidade do ativo: A → `alta`, B → `media`, C → `baixa`. `corretiva_emergencial` é sempre `urgente` (RN-OS-017). A triagem pode alterar, com registro. | Sumário 3.1 | MVP |
 | RN-ATV-005 | Parada registrada em OS de `componente` aplica-se ao ativo indicado pelo usuário; o padrão é o ancestral mais próximo do tipo `equipamento` ou `veiculo`. | Decisão de produto | MVP |
 | RN-ATV-006 | O status volta a `operando` no encerramento da OS, se não restar outra causa. Os KPIs de tempo (MTTR, disponibilidade) usam `data_inicio`, `data_conclusao` e os intervalos de parada, nunca `data_encerramento`; o tempo de liberação é medido à parte. | Sumário 3.3 | MVP |
@@ -2573,8 +3027,13 @@ Fonte: "NR-12", "NR-13" e outras normas indicam o texto legal conforme verificad
 | RN-ATV-008 | "Apto para despacho" é verificação separada do status: um veículo `operando` pode estar impedido de despacho por documento crítico vencido, checklist pré-viagem ausente ou motorista inapto (Fluxo 08). | Sumário 3.3 | MVP |
 | RN-ATV-009 | **Substituída por RN-ATV-010** (o sumário 0.4 acrescentou a propriedade `de_cliente`). Texto original: Localizações e ativos formam árvores de até 6 níveis. Todo ativo tem `propriedade` (`proprio` ou `de_terceiro`), `valor_reposicao`, `horas_operacao_dia` e `dias_operacao_semana` (padrão da classe). Pneu é entidade própria, não ativo. | Sumário 3.1 | MVP |
 | RN-ATV-010 | Localizações e ativos formam árvores de até 6 níveis. Todo ativo tem `propriedade`: `proprio`, `de_terceiro` (tomado em locação ou em comodato) ou `de_cliente` (equipamento de um cliente atendido, só em conta com o módulo SRV, ligado a `cliente_servico`, RN-SRV-012). Todo ativo tem `valor_reposicao`, `horas_operacao_dia` e `dias_operacao_semana` (padrão da classe). Pneu é entidade própria, não ativo. Substitui RN-ATV-009. | Sumário 3.1 | MVP |
+| RN-ATV-011 | Todo ativo tem `fase_ciclo_vida`: `em_implantacao` ou `em_operacao` (padrão na criação: `em_operacao`, proposta). O ativo `em_implantacao` tem status `inativo` (seção 0.6) e a interface mostra "Em implantação"; ele fica fora dos KPIs (RN-IND-009), não é veículo cobrado, tem os planos suspensos e não é avaliado por regras (RN-ADM-015). Vale também para ativo `de_cliente` e `de_terceiro`. A fase não é campo compartilhado na conexão entre contas no lançamento. | Sumário 3.1 e 3.3; RF-ATV-013 | MVP |
+| RN-ATV-012 | Ativo `inativo` não recebe OS nova, não tem planos avaliados, não aceita leitura nova (exceto importação de histórico anterior à inativação) e não conta como veículo cobrado. Exceção: o ativo `em_implantacao` recebe OS do tipo `implantacao` (e só desse tipo), solicitação cuja aprovação gera OS `implantacao`, a leitura inicial manual de cada medidor, as leituras de origem `os` dessas OS e documentos com vencimento. Substitui RN-ATV-003. | Sumário 2.1 e 3.3; RF-ATV-013 | MVP |
+| RN-ATV-013 | `colocar_em_operacao` só é aceita com: fase `em_implantacao`; nenhuma OS `implantacao` do ativo fora de `encerrada` ou `cancelada`; campos obrigatórios da classe preenchidos; documentos críticos válidos quando a classe exige (ex.: verificação metrológica); nenhum `bloqueio_ativo` vigente (proposta); e a permissão `atv.colocar_em_operacao` (padrão `administrador`, `gestor` e `planejador`). Na mesma transação: fase `em_operacao`, status `operando`, `data_entrada_operacao` gravada e planos ativados; depois do commit, evento `ativo.colocado_em_operacao` e avaliação das regras (RN-ADM-015). Em lote, cada ativo é validado e respondido em separado; na conclusão de projeto, a operação é atômica (RN-PRJ-016). | Sumário 3.3; RF-ATV-013; decisão de produto (bloqueio vigente impede) | MVP |
+| RN-ATV-014 | `data_entrada_operacao` é o instante da ação; o usuário pode informar data anterior, nunca futura nem anterior à última `data_conclusao` de OS `implantacao` do ativo (proposta). Os planos passam a ter como base essa data e a leitura atual de cada medidor, sem vencimento contado antes dela (como RN-PRE-011), e o tempo requerido dos KPIs começa nela. | RF-ATV-013; decisão de produto | MVP |
+| RN-ATV-015 | A fase não volta de `em_operacao` para `em_implantacao`. A reinstalação de um ativo em operação em outro ponto é transferência (RF-ATV-011) com projeto, cuja OS `implantacao` com "exige parada" = sim deixa o ativo `em_manutencao` durante a execução (ou `parado`, se houver outra causa). Esse intervalo sai dos KPIs técnicos (RN-IND-009) e conta na medição do contrato com cliente (RN-CTR-004). | Sumário 3.3; RF-ATV-013 | MVP (reinstalação por projeto na Fase 2) |
 
-### 29.3 MED — Medidores
+### 32.3 MED — Medidores
 
 | ID | Enunciado | Fonte | Fase |
 |---|---|---|---|
@@ -2588,7 +3047,7 @@ Fonte: "NR-12", "NR-13" e outras normas indicam o texto legal conforme verificad
 | RN-MED-008 | Leitura nunca é apagada nem alterada. Correção invalida a leitura com motivo e, se for o caso, registra nova leitura. OS já gerada por leitura invalidada não é cancelada automaticamente; o `planejador` é alertado. | Decisão de produto | MVP |
 | RN-MED-009 | Toda leitura tem origem: `manual` (inclui checklist, abastecimento digitado e vistoria de locação), `telematica`, `cartao_combustivel`, `os`, `importacao` (inclui CSV e API de integrador) ou `iot` (Fase 3). Não existem outras origens. | Sumário 3.1 | MVP (`telematica` e `cartao_combustivel` na Fase 2; `iot` na Fase 3) |
 
-### 29.4 SOL — Solicitações
+### 32.4 SOL — Solicitações
 
 | ID | Enunciado | Fonte | Fase |
 |---|---|---|---|
@@ -2602,7 +3061,7 @@ Fonte: "NR-12", "NR-13" e outras normas indicam o texto legal conforme verificad
 | RN-SOL-008 | `aprovada`, `recusada` e `duplicada` são finais. A desistência do solicitante, a partir de `nova` ou `em_triagem`, é registrada como `recusada` com motivo `desistencia`. Duplicidade marcada por engano é corrigida pelo `gestor` com "reabrir como nova", que cria outra solicitação vinculada à original. | Sumário 3.3 e 3.6 | MVP |
 | RN-SOL-009 | Iniciar a triagem grava `data_reconhecimento` da solicitação uma única vez. É a base do MTTA de registros abertos por solicitação. | Sumário 3.3 | MVP |
 
-### 29.5 OS — Ordens de serviço
+### 32.5 OS — Ordens de serviço
 
 | ID | Enunciado | Fonte | Fase |
 |---|---|---|---|
@@ -2627,8 +3086,13 @@ Fonte: "NR-12", "NR-13" e outras normas indicam o texto legal conforme verificad
 | RN-OS-019 | Toda OS tem executor (`executor_tipo`: `interno` ou `fornecedor`, com `fornecedor_id`) e responsável pelo custo (`responsavel_custo`: `empresa`, `locatario`, `locador`, `garantia` ou `fornecedor`). O padrão é `empresa`; em ativo com item de contrato de locação vigente, vem da matriz (RN-LOC-011); em garantia aceita, `garantia` (RN-TER-032); em retrabalho de fornecedor, `fornecedor` (RN-TER-024). | Sumário 3.3 | MVP (`locatario` e `locador` na Fase 2) |
 | RN-OS-020 | OS em `aberta` pode ser programada sem planejar (`aberta` → `programada`) com data, duração e responsável; tarefas, HH e peças podem ser completadas depois sem mudar o estado. | Sumário 3.3 | MVP |
 | RN-OS-021 | A ação `assumir` permite ao `tecnico` atribuir-se como responsável de uma OS `aberta` ou `planejada` da sua equipe, sem mudar o estado; grava `data_reconhecimento` se vazia. OS `programada` não é assumida: a troca de responsável é feita pelo `planejador`. Ao iniciar uma OS assumida, o Sistema registra antes a programação (T3 ou T4) com o técnico como responsável e o instante do início como data prevista, e aplica T6 com as mesmas verificações. Na Fase 2, assumir exige capacitação válida (RN-CON-030). | Sumário 3.6; decisão de produto (programação implícita no início) | MVP |
+| RN-OS-022 | A OS `implantacao` só é aceita em ativo `em_implantacao` ou ligada a uma etapa de projeto (inclusive ativo `em_operacao` em reinstalação e OS só de localização do projeto) e nunca é gerada por plano. Segue o mesmo ciclo de vida e as mesmas transições do Fluxo 02; não é falha (RN-IND-006): "parou o ativo" é sempre não e não exige código de falha. Fica fora dos KPIs de manutenção (RN-IND-009) e seu custo é de implantação (RN-IND-010). Na conta da subcontratada, a OS recebida do cliente conectado mantém o tipo `implantacao` sem essa verificação, que é feita na conta do cliente. Trocar o tipo de ou para `implantacao` depois de `concluida` exige `gestor`, motivo e auditoria. | Sumário 3.1; RF-OS-002 | MVP |
+| RN-OS-023 | `campo_extra_os` é definido por tipo de OS e classe de ativo, com chave única na empresa (minúsculas, sem acento), tipo `texto`, `numero`, `data`, `lista` ou `sim_nao` e obrigatoriedade `nenhum`, `abertura` ou `conclusao`; no máximo 30 ativos por combinação de tipo de OS e classe (proposta). Criar e editar definições exige `adm.gerenciar_configuracao`. O tipo não muda depois de haver valor gravado. O valor é validado pelo tipo. A validação de presença e de tipo é a mesma no servidor e no app offline, provada pelos casos compartilhados em JSON junto com os da máquina de estados da OS: o app não enfileira `concluir` com campo obrigatório vazio. | Sumário 3.7; RF-OS-021 | MVP |
+| RN-OS-024 | Campo obrigatório na abertura é exigido em T1 feito por usuário (web, app, API, link) e na aprovação da solicitação. OS criada pelo Sistema (plano, telemática, vistoria, projeto, sincronização entre contas) não é recusada por campo de abertura vazio: o campo passa a ser exigido na conclusão. Campo obrigatório na conclusão impede T10. Campo obrigatório novo não afeta OS já concluídas, nem a conclusão feita no app offline antes de o aparelho receber a definição nova: o servidor aceita essa conclusão sem o campo e a sinaliza para revisão (proposta). Na OS vinculada a uma conta conectada, os campos obrigatórios na conclusão da conta do cliente não impedem a conclusão reaplicada pela sincronização (RN-SRV-053), porque os campos extras não trafegam; ficam vazios e a condição `os_concluida_com_campo` não dispara (RN-ADM-015, lacuna L-39). | RF-OS-021; sumário 3.6; decisão de produto (OS do Sistema e OS vinculada) | MVP |
+| RN-OS-025 | Inativar a definição de campo extra não apaga valores; a OS mostra o rótulo vigente na data do registro. Os valores de `ordem_servico.campos_extras` não trafegam na conexão entre contas no lançamento e nunca entram em fórmula de indicador; aparecem no relatório da OS em PDF e na impressão. No link de uso único aparecem só os campos marcados como do prestador (proposta). | Sumário 3.6; RF-OS-021 | MVP |
+| RN-OS-026 | `ordem_servico.causa_externa` é opcional, da lista canônica (`vandalismo`, `acidente_terceiro`, `falta_energia`, `obra_terceiro`, `solicitacao_cliente`, `caso_fortuito`), com evidências anexadas, e é registrada na abertura ou durante a execução até o encerramento (OS encerrada é imutável, RN-OS-008), pela web, pelo app ou pelo prestador. Não muda o status do ativo nem qualquer indicador técnico (RN-IND-011); só a medição do contrato com cliente desconta a parada, depois de aprovada (RN-CTR-010). | Sumário 3.6; RF-CTR-003 | Fase 2 |
 
-### 29.6 PRE — Planos de manutenção
+### 32.6 PRE — Planos de manutenção
 
 | ID | Enunciado | Fonte | Fase |
 |---|---|---|---|
@@ -2646,7 +3110,7 @@ Fonte: "NR-12", "NR-13" e outras normas indicam o texto legal conforme verificad
 | RN-PRE-012 | Plano de `inspecao_legal` reprograma sempre a partir da data de execução e nunca ultrapassa o prazo legal. OS de inspeção legal não é pulada: só o `gestor` cancela, com OS substituta ou inativação do ativo, e o atraso gera alerta crítico diário. | NR-13 (prazos máximos); decisão de produto | MVP (NR-13 na Fase 2) |
 | RN-PRE-013 | Concluir OS de plano com gatilho por medidor exige a leitura de cada medidor do plano, gravada com origem `os`. | Decisão de produto | MVP |
 
-### 29.7 CHK — Checklists
+### 32.7 CHK — Checklists
 
 | ID | Enunciado | Fonte | Fase |
 |---|---|---|---|
@@ -2658,7 +3122,7 @@ Fonte: "NR-12", "NR-13" e outras normas indicam o texto legal conforme verificad
 | RN-CHK-006 | Leitura de medidor informada no checklist gera `leitura_medidor` com origem `manual`. | Sumário 3.1 (origem `manual` inclui checklist) | MVP |
 | RN-CHK-007 | O registro da inspeção rotineira do operador de máquina NR-12 no início do turno é opcional; a empresa decide se exige. | NR-12, item 12.14.2.1 | MVP |
 
-### 29.8 EST — Estoque e compras
+### 32.8 EST — Estoque e compras
 
 | ID | Enunciado | Fonte | Fase |
 |---|---|---|---|
@@ -2702,7 +3166,7 @@ Fonte: "NR-12", "NR-13" e outras normas indicam o texto legal conforme verificad
 | RN-EST-051 | Remessa sem confirmação de recebimento além do prazo (padrão 5 dias) gera alerta diário ao `almoxarife` e ao `gestor`. | Decisão de produto | Fase 2 |
 | RN-EST-060 | Peça reparável com defeito não pode ser sucateada (`baixa_sucata`) nem enviada para conserto sem decisão registrada (`reparar`, `sucatear` ou `garantia`), com motivo, usuário e data. Registrar a decisão exige a permissão `est.decidir_destino`, padrão nos perfis `gestor`, `planejador` e `almoxarife`, que a empresa pode conceder a outros perfis (RN-ADM-005). Substitui RN-EST-041. | Sumário 3.6 | Fase 2 |
 
-### 29.9 TER — Terceiros
+### 32.9 TER — Terceiros
 
 | ID | Enunciado | Fonte | Fase |
 |---|---|---|---|
@@ -2731,7 +3195,7 @@ Fonte: "NR-12", "NR-13" e outras normas indicam o texto legal conforme verificad
 | RN-TER-034 | `orcamento_fornecedor` tem situação `pendente`, `aprovado` ou `recusado` (proposto) e liga-se a uma OS ou a uma ordem de reparo. Cada OS ou ordem de reparo tem no máximo um orçamento `aprovado`. | Sumário 3.2; situação: decisão de produto | Fase 2 |
 | RN-TER-035 | Peças e serviços faturados por terceiro e aplicados direto na OS (NF-e de peças, NFS-e de serviço) entram no custo da OS sem passar pelo estoque. | Decisão de produto | MVP |
 
-### 29.10 LOC — Locação
+### 32.10 LOC — Locação
 
 | ID | Enunciado | Fonte | Fase |
 |---|---|---|---|
@@ -2760,7 +3224,7 @@ Fonte: "NR-12", "NR-13" e outras normas indicam o texto legal conforme verificad
 | RN-LOC-042 | A substituição de ativo locado (nos dois sentidos) é registrada como novo item com vistoria de entrega e saída do item original com vistoria de devolução. | Decisão de produto | Fase 2 |
 | RN-LOC-043 | Planos de preventiva de ativo tomado com preventiva a cargo do locador geram OS com o locador como executor; a aderência entra no PM compliance da empresa em indicador separado. | Decisão de produto | Fase 2 |
 
-### 29.11 FRO — Frota
+### 32.11 FRO — Frota
 
 | ID | Enunciado | Fonte | Fase |
 |---|---|---|---|
@@ -2785,7 +3249,7 @@ Fonte: "NR-12", "NR-13" e outras normas indicam o texto legal conforme verificad
 | RN-FRO-032 | **Substituída por RN-TER-032.** Texto original: peças e serviços de terceiros têm garantia por prazo e, se houver, por km; nova OS corretiva no mesmo ativo dentro da garantia gera aviso de possível garantia. | Estudo | Fase 2 |
 | RN-FRO-033 | **Substituída por RN-TER-033.** Texto original: ativo enviado à oficina fica `em_manutencao`; data e km de saída e retorno são obrigatórios; km rodado acima do trajeto informado mais 20% gera alerta. | Decisão de produto | Fase 2 |
 
-### 29.12 CON — Conformidade
+### 32.12 CON — Conformidade
 
 | ID | Enunciado | Fonte | Fase |
 |---|---|---|---|
@@ -2816,8 +3280,13 @@ Fonte: "NR-12", "NR-13" e outras normas indicam o texto legal conforme verificad
 | RN-CON-033 | Capacitações das pessoas geram alertas em D-60, D-30 e D-7 à pessoa (se tiver usuário) e ao `gestor`. | Decisão de produto | MVP |
 | RN-CON-034 | Motorista com CNH vencida, ou sem capacitação MOPP válida para produto perigoso, não é apto para despacho. | Estudo (CNH, MOPP na agenda); decisão de produto | MVP |
 | RN-CON-035 | MOPP é sempre `capacitacao` da `pessoa`, nunca `documento_vencimento`. CNH e ASO são documentos da pessoa. | Sumário 3.1 | MVP |
+| RN-CON-040 | `bloqueio_ativo.origem` é `manual`, `conformidade` ou `regra`. Qualquer bloqueio vigente deixa o ativo `parado` (RN-ATV-001); o de origem `regra` começa no instante do fato que o disparou (RN-ADM-010). Bloqueios são independentes: o ativo só deixa de estar `parado` por bloqueio quando o último é levantado. Todo levantamento grava quem, quando, como (documento, manual, parecer, OS) e o motivo. | Sumário 3.6 | MVP |
+| RN-CON-041 | Bloqueio de origem `regra` com efeito `bloquear_ativo` só é levantado à mão, pelo `gestor` (permissão de bloqueio), com motivo. O encerramento de OS no ativo não levanta bloqueio de regra, ao contrário do bloqueio por item crítico de checklist (RN-CHK-005). | RF-ADM-016 | MVP |
+| RN-CON-042 | Bloqueio de origem `regra` com efeito `bloquear_ativo_ate_documento` é levantado sozinho, na transação que registra no ativo bloqueado um `documento_vencimento` que: é do tipo exigido pelo efeito; tem data de emissão igual ou posterior à data do fato no fuso da unidade (a emissão não tem hora, e o mesmo dia vale); e tem validade vigente no registro. Nas condições de documento (`documento_vencido`, `documento_a_vencer`), a referência é a emissão do documento que venceu ou vai vencer: o novo precisa ter emissão posterior a ela (proposta). O intervalo de parada termina no instante do registro, não na data de emissão. O mesmo documento levanta todos os bloqueios vigentes do ativo que exigem esse tipo. | Sumário 3.6; decisão de produto (referência das condições de documento, data sem hora, fim do intervalo) | MVP |
+| RN-CON-043 | O `gestor` pode levantar à mão o bloqueio até documento, com motivo, salvo quando o tipo de documento exigido é exigido por lei: aí só o documento levanta, como em RN-CON-025. Documento que levantou um bloqueio e é corrigido ou invalidado depois não recria o bloqueio; o `gestor` é alertado para decidir. | Decisão de produto; RN-CON-025 | MVP |
+| RN-CON-044 | O bloqueio de origem `regra` é independente do bloqueio de despacho (verificação calculada, RN-CON-021) e do registro de bloqueio e etiquetagem (`bloqueio_energia`, RN-CON-006): levantar um não levanta os outros. Documento crítico vencido continua impedindo o despacho mesmo sem regra. | Sumário 3.6 | MVP |
 
-### 29.13 IND — Indicadores
+### 32.13 IND — Indicadores
 
 | ID | Enunciado | Fonte | Fase |
 |---|---|---|---|
@@ -2825,12 +3294,15 @@ Fonte: "NR-12", "NR-13" e outras normas indicam o texto legal conforme verificad
 | RN-IND-002 | A janela de aderência da preventiva é configurável por empresa e por plano (tolerância antes e depois do vencimento), assim como o tratamento da execução antecipada (padrão: conta como cumprida). **[P-6]** | Estudo (SMRP 5.4.14) | MVP |
 | RN-IND-003 | Todo benchmark exibido traz a fonte: "ABRAMAN 2022" para o custo de manutenção sobre faturamento; "referência de mercado" para os demais. **[P-7]** | Estudo | MVP |
 | RN-IND-004 | Cada KPI exibe "como calculamos": fórmula, filtros, parâmetros vigentes e quantidade de registros considerados e excluídos. | Estudo | MVP |
-| RN-IND-005 | Intervalos que cruzam a fronteira do período são cortados nos limites do período; OS abertas no fim do período seguem as regras de cada KPI (seção 30). | Decisão de produto | MVP |
+| RN-IND-005 | Intervalos que cruzam a fronteira do período são cortados nos limites do período; OS abertas no fim do período seguem as regras de cada KPI (seção 33). | Decisão de produto | MVP |
 | RN-IND-006 | Falha, para MTBF e disponibilidade inerente, é OS `corretiva_planejada` ou `corretiva_emergencial` com "parou o ativo" = sim, não cancelada. | Estudo; decisão de produto | MVP |
 | RN-IND-007 | KPI cujo resultado depende de janela ainda não fechada (aderência, first-time fix) é exibido como provisório até a janela fechar. | Decisão de produto | MVP |
 | RN-IND-008 | O custo de manutenção é apurado por responsável pelo custo. Os painéis de custo da empresa (custo de manutenção, Custo/RAV, CMF, custo por km) usam só `responsavel_custo = empresa`; custos de `locatario`, `locador`, `garantia` e `fornecedor` aparecem em visões separadas. | Sumário 3.3; decisão de produto | MVP |
+| RN-IND-009 | A OS `implantacao` e o ativo `em_implantacao` ficam fora de MTBF, MKBF, MTTR, MTTA, Ai, Ao, disponibilidade física, % planejada, PM compliance (cumprimento de preventiva), backlog de manutenção e first-time fix. O ativo `em_implantacao` está `inativo` e sai do tempo requerido; o intervalo mantido por OS `implantacao` em ativo `em_operacao` (reinstalação) sai do tempo requerido e não entra na indisponibilidade. A carga das OS `implantacao` aparece à parte, como backlog de implantação. Schedule compliance e wrench time, que medem a programação e a produtividade da equipe, incluem as OS `implantacao` (proposta). | Sumário 3.1; RF-OS-002 | MVP |
+| RN-IND-010 | O custo das OS `implantacao` (mão de obra, peças e terceiros, consolidado como em RN-OS-007) é custo de implantação: aparece por projeto (custo realizado, RN-PRJ-014), unidade e fornecedor, e nunca entra em custo de manutenção, Custo/RAV, CMF nem custo por km. | Sumário 3.1; RF-OS-002 | MVP |
+| RN-IND-011 | A causa externa e as exclusões aprovadas na medição do contrato não alteram nenhum indicador técnico (MTBF, MTTR, Ai, Ao, disponibilidade física, retrabalho): a falha por vandalismo é falha e a parada conta. A disponibilidade contratual (seção 33.9) é um indicador separado, com o denominador no calendário de apuração do contrato, e nunca substitui a Ao. | Sumário 3.6; RF-CTR-003 | Fase 2 |
 
-### 29.14 INT — Integrações
+### 32.14 INT — Integrações
 
 | ID | Enunciado | Fonte | Fase |
 |---|---|---|---|
@@ -2840,9 +3312,9 @@ Fonte: "NR-12", "NR-13" e outras normas indicam o texto legal conforme verificad
 | RN-INT-004 | DTC com severidade "parar imediatamente" gera registro com prioridade `urgente` e alerta imediato, sem mudar o status do ativo automaticamente. | Estudo (severidades Geotab/Noregon); decisão de produto | Fase 2 |
 | RN-INT-005 | A telemática grava no máximo uma leitura por medidor por hora, mais a última do dia, com origem `telematica`. | Decisão de produto | Fase 2 |
 | RN-INT-006 | Todo evento ou requisição de escrita externa é idempotente pela chave do provedor ou pela `Idempotency-Key` da API. | Estudo (Idempotency-Key) | MVP |
-| RN-INT-007 | Webhooks (plano Profissional) usam o nome completo da entidade e o fato no particípio (ex.: `ordem_servico.criada`, `ordem_servico.encerrada`, `documento_vencimento.vencendo`, `leitura_medidor.registrada`, `ordem_reparo.enviada`, `ordem_reparo.retornada`, `movimentacao_estoque.registrada`, `contrato_locacao.ativado`, `contrato_locacao.encerrado`, `vistoria_locacao.registrada`, `fornecedor.sla_violado`; do SRV, `conexao_empresa.ativada`, `conexao_empresa.encerrada`, `vinculo_os.sincronizado`, `vinculo_os.erro`, RN-SRV-065) e são publicados depois do commit. | Sumário 3.4; ficha 0.3 | MVP (eventos de EST estendido e LOC na Fase 2) |
+| RN-INT-007 | Webhooks (plano Profissional) usam o nome completo da entidade e o fato no particípio (ex.: `ordem_servico.criada`, `ordem_servico.encerrada`, `documento_vencimento.vencendo`, `leitura_medidor.registrada`, `ordem_reparo.enviada`, `ordem_reparo.retornada`, `movimentacao_estoque.registrada`, `contrato_locacao.ativado`, `contrato_locacao.encerrado`, `vistoria_locacao.registrada`, `fornecedor.sla_violado`; do SRV, `conexao_empresa.ativada`, `conexao_empresa.encerrada`, `vinculo_os.sincronizado`, `vinculo_os.erro`, RN-SRV-065; da configuração por segmento, `ativo.colocado_em_operacao`, `projeto.iniciado`, `projeto.concluido`, `projeto.cancelado`, `contrato_cliente.ativado`, `contrato_cliente.encerrado`, `contrato_cliente.sla_violado`, `medicao_contrato.fechada`) e são publicados depois do commit. | Sumário 3.4; ficha 0.3 | MVP (eventos de EST estendido e LOC na Fase 2) |
 
-### 29.15 MOB — App de campo
+### 32.15 MOB — App de campo
 
 | ID | Enunciado | Fonte | Fase |
 |---|---|---|---|
@@ -2858,7 +3330,7 @@ Fonte: "NR-12", "NR-13" e outras normas indicam o texto legal conforme verificad
 | RN-MOB-010 | Comando recusado nunca é descartado em silêncio: aparece nas pendências de sincronização do app e no painel do `gestor`, com o motivo. | Decisão de produto | MVP |
 | RN-MOB-011 | O pacote offline do perfil `prestador` contém só as OS atribuídas ao seu fornecedor, os ativos dessas OS e o almoxarifado `em_terceiro` desse fornecedor; o servidor reaplica o isolamento de RN-TER-012 em cada comando sincronizado. | Sumário 3.1; sumário, risco R4 | MVP |
 
-### 29.16 IA — Assistente
+### 32.16 IA — Assistente
 
 | ID | Enunciado | Fonte | Fase |
 |---|---|---|---|
@@ -2870,7 +3342,7 @@ Fonte: "NR-12", "NR-13" e outras normas indicam o texto legal conforme verificad
 | RN-IA-006 | Rascunho não confirmado expira em 7 dias; sua mídia é apagada ao fim do prazo de retenção. | Decisão de produto; LGPD | Fase 2 |
 | RN-IA-007 | Áudio e foto capturados offline ficam na fila e são processados quando houver conexão. | Decisão de produto | Fase 2 |
 
-### 29.17 SRV — Gestão de serviços do prestador
+### 32.17 SRV — Gestão de serviços do prestador
 
 | ID | Enunciado | Fonte | Fase |
 |---|---|---|---|
@@ -2935,51 +3407,98 @@ Fonte: "NR-12", "NR-13" e outras normas indicam o texto legal conforme verificad
 | RN-SRV-072 | "OS por cliente" conta as OS da conta da subcontratada por `cliente_servico`, com `data_abertura` no período, separadas por estado (em aberto, concluídas, encerradas, canceladas), tipo e origem (próprias ou vindas de cliente conectado). | Sumário 3.5 (relatório de serviços por cliente) | MVP |
 | RN-SRV-073 | Os indicadores da subcontratada usam só dados da própria conta, inclusive as cópias sincronizadas; nunca dados do cliente que não foram compartilhados. | RN-ADM-001; RN-SRV-047 | MVP |
 
-### 29.18 Resumo por módulo
+### 32.18 PRJ — Projetos e implantação
 
-| Módulo | Regras no catálogo | Novas na versão 0.2 | Novas na versão 0.3 | Substituídas | Prioritárias do estudo |
-|---|---|---|---|---|---|
-| ADM | 8 | 3 | — | — | — |
-| ATV | 10 | 4 | 1 (RN-ATV-010) | 1 (RN-ATV-009) | — |
-| MED | 9 | 1 | — | — | — |
-| SOL | 9 | 1 | — | — | — |
-| OS | 21 | 5 | 1 (RN-OS-021) | — | — |
-| PRE | 13 | — | — | — | — |
-| CHK | 7 | — | — | — | — |
-| EST | 39 | 25 | 3 (RN-EST-050, RN-EST-051, RN-EST-060) | 2 (RN-EST-024, RN-EST-041) | — |
-| TER | 24 | 22 | 2 (RN-TER-004, RN-TER-018) | — | — |
-| LOC | 24 | 22 | 2 (RN-LOC-008, RN-LOC-032) | — | — |
-| FRO | 20 | — | — | 4 | P-5 (RN-FRO-020) |
-| CON | 27 | 2 | — | — | P-1 (RN-CON-001), P-2 (RN-CON-030), P-3 (RN-CON-022), P-4 (RN-CON-021) |
-| IND | 8 | 1 | — | — | P-6 (RN-IND-001, RN-IND-002), P-7 (RN-IND-003) |
-| INT | 7 | 1 | — | — | — |
-| MOB | 11 | 1 | — | — | — |
-| IA | 7 | — | — | — | — |
-| SRV | 60 | — | 60 | — | — |
-| **Total** | **304** | **88** | **69** | **7** | 7 regras prioritárias em 8 IDs |
+| ID | Enunciado | Fonte | Fase |
+|---|---|---|---|
+| RN-PRJ-001 | `modelo_projeto` tem ao menos uma etapa (`modelo_etapa_projeto`) e no máximo 40 (parâmetro, proposta), predecessoras do mesmo modelo sem ciclo, pesos maiores ou iguais a zero com soma maior que zero e no máximo uma etapa de entrega. Editar gera versão nova; o projeto guarda a versão usada e não muda quando o modelo muda. Manter modelos exige `prj.gerenciar`. | RF-PRJ-001; sumário 3.6 | Fase 2 |
+| RN-PRJ-002 | O projeto só aceita as transições da tabela 30.2: `rascunho` → `em_andamento` → `concluido`, `em_andamento` ↔ `suspenso` com motivo, `cancelado` a partir de `rascunho`, `em_andamento` ou `suspenso` com motivo. Todas exigem `prj.gerenciar` (padrão `administrador`, `gestor` e `planejador`). Projeto `concluido` ou `cancelado` não é editado. Número `PJ-<AAAA>-<NNNNNN>`. Eventos `projeto.iniciado`, `projeto.concluido` e `projeto.cancelado`, depois do commit. | Sumário 3.3, 3.4 e 3.6; RF-PRJ-002 | Fase 2 |
+| RN-PRJ-003 | O projeto nasce de um modelo ativo, com as etapas copiadas em `pendente` (executor, peso, exigências, valor de referência) e as datas previstas calculadas pelo início previsto, pelas durações e pelas dependências: cada etapa começa no maior fim previsto das suas predecessoras. Ativos e localização são incluídos e retirados só em `rascunho`. Um ativo está em no máximo um projeto que não esteja `concluido` nem `cancelado` (proposta). Ativo `em_operacao` só entra em projeto de reinstalação (RN-ATV-015). | RF-PRJ-002 | Fase 2 |
+| RN-PRJ-004 | Iniciar exige ao menos um ativo ou uma localização e o responsável; grava a data real de início e torna `disponivel` cada etapa sem predecessoras. | RF-PRJ-002 | Fase 2 |
+| RN-PRJ-005 | A etapa `pendente` passa a `disponivel` quando o projeto está `em_andamento` e todas as predecessoras estão `concluida` ou `dispensada`; o responsável é notificado. Etapa que gera OS cria, nesse momento, as OS `implantacao` (parâmetro do modelo, padrão ligado, proposta): uma por ativo do projeto quando a etapa se repete por ativo, senão uma (proposta). | Sumário 3.3 e 3.6; RF-PRJ-003, RF-PRJ-004 | Fase 2 |
+| RN-PRJ-006 | A etapa `disponivel` passa a `em_andamento` quando a primeira OS da etapa grava `data_inicio`, ou por ação do responsável em etapa sem OS. Pausar ou cancelar OS não devolve a etapa a `disponivel`. | RF-PRJ-003 | Fase 2 |
+| RN-PRJ-007 | Concluir a etapa (responsável da etapa, `planejador` ou `gestor`) exige as OS da etapa `encerrada` ou `cancelada`, com ao menos uma `encerrada` quando a etapa gera OS, os documentos exigidos válidos (RN-PRJ-008) e os campos exigidos preenchidos. Grava a data real de fim e reavalia as sucessoras (RN-PRJ-005). A etapa `concluida` não volta: correção posterior é nova OS `implantacao` no ativo ainda `em_implantacao`, ou OS corretiva depois da entrada em operação. | Sumário 3.3; RF-PRJ-003 | Fase 2 |
+| RN-PRJ-008 | Documento exigido pela etapa é um `documento_vencimento` do tipo exigido registrado em cada ativo do projeto, com emissão igual ou posterior ao dia em que a etapa passou a `em_andamento` (proposta) e validade vigente na conclusão. Campo exigido é o valor do campo extra numa OS `encerrada` da etapa, ou registrado na própria etapa quando ela não gera OS. Projeto só com localização não usa modelo com etapa que exige documento (proposta). | RF-PRJ-003; decisão de produto | Fase 2 |
+| RN-PRJ-009 | Dispensar a etapa só a partir de `pendente` ou `disponivel`, com motivo e a permissão `prj.dispensar_etapa` (padrão `administrador` e `gestor`). A etapa de entrega não é dispensada (proposta). As OS da etapa, ainda não iniciadas, são canceladas pelo Sistema com motivo "etapa dispensada". A etapa `dispensada` conta no avanço físico, não tem custo, não entra na medição do prestador e reavalia as sucessoras. | Sumário 3.3 e 3.6; RF-PRJ-003, RF-PRJ-006, RF-PRJ-007 | Fase 2 |
+| RN-PRJ-010 | "Atrasada" é condição calculada, não estado: projeto `em_andamento`, etapa nem `concluida` nem `dispensada` e data prevista de fim anterior a hoje no fuso da unidade. Pode disparar a condição `etapa_projeto_atrasada` (RN-ADM-010). Desvio de prazo da etapa = data real de fim (ou hoje) − data prevista de fim, em dias. | RF-PRJ-003, RF-PRJ-005 | Fase 2 |
+| RN-PRJ-011 | Suspender e retomar exigem motivo. Projeto `suspenso` não torna etapas disponíveis, não conclui etapas e não conta atraso; as OS seguem como estão e o `planejador` decide sobre cada uma. Ao retomar, as datas previstas das etapas não concluídas nem dispensadas são deslocadas pela duração da suspensão (proposta) e as etapas são reavaliadas. | RF-PRJ-002 | Fase 2 |
+| RN-PRJ-012 | Cancelar exige motivo e nenhuma OS do projeto em `em_execucao` (pausar antes, como em RN-OS-004). As OS em `aberta`, `planejada`, `programada` ou `pausada` são canceladas pelo Sistema com motivo "projeto cancelado" (proposta); as `concluida` seguem para a liberação. Os ativos `em_implantacao` não são apagados: para cada um, o usuário escolhe manter em implantação ou baixar (RF-ATV-011), com motivo. | RF-PRJ-002; RN-OS-004 | Fase 2 |
+| RN-PRJ-013 | A OS da etapa tem `tipo = implantacao`, `origem = projeto`, a etapa de origem, o ativo ou a localização do projeto, as tarefas do procedimento da etapa e o executor da etapa; segue o Fluxo 02 e os campos extras da OS (RN-OS-024). Atribuída a fornecedor com conta conectada (Fluxo 26), chega à outra conta só a OS: a etapa de projeto da OS nunca é compartilhada no lançamento. | Sumário 3.6 (origem `projeto`, campos não compartilhados); RF-PRJ-004 | Fase 2 |
+| RN-PRJ-014 | Avanço físico = Σ pesos das etapas `concluida` e `dispensada` / Σ pesos × 100. Custo realizado = Σ custo das OS `implantacao` do projeto, apropriado pela data de cada lançamento, inclusive de OS abertas (RN-IND-010), + lançamentos avulsos do projeto; a etapa `dispensada` não tem custo. Os números mostram "como calculamos" (RN-IND-004). | RF-PRJ-005 | Fase 2 |
+| RN-PRJ-015 | A medição de etapas do prestador lista, por fornecedor e período, as etapas `concluida` executadas por ele com data real de fim no período; etapa `dispensada` não entra e cada etapa entra numa única medição (proposta). O valor padrão é o valor da etapa no projeto, vindo do modelo ou do contrato de prestação (RN-TER-020). Ajustar uma linha exige motivo e `prj.ajustar_medicao`. A Tenaz não paga: o valor vai para o ERP. | Sumário 3.6; RF-PRJ-006 | Fase 2 |
+| RN-PRJ-016 | Concluir o projeto exige todas as etapas `concluida` ou `dispensada`, a de entrega `concluida`, e o termo de entrega gerado e assinado pelo responsável (RN-CON-005). Na mesma transação, executa `colocar_em_operacao` (RN-ATV-013) em todos os ativos do projeto ainda `em_implantacao`, com a data real de fim da etapa de entrega como `data_entrada_operacao`; se um ativo falha numa validação, nada é gravado e o Sistema lista os ativos e os motivos (proposta). Com contrato com cliente no projeto, os ativos entram como itens a partir da `data_entrada_operacao` (RN-CTR-003, proposta). | RF-PRJ-007; RF-ATV-013 | Fase 2 |
 
-Regras em vigor: 297 (304 IDs no catálogo menos 7 substituídas). Além das regras novas, a versão 0.3 atualizou a fonte (sumário 3.6) de RN-SOL-008, RN-LOC-001, RN-LOC-004, RN-LOC-006, RN-LOC-010 e RN-LOC-031, sem mudar o que elas determinam, e acrescentou os eventos do SRV à lista de exemplos de RN-INT-007.
+### 32.19 CTR — Contratos com clientes
+
+| ID | Enunciado | Fonte | Fase |
+|---|---|---|---|
+| RN-CTR-001 | O contrato com cliente só aceita `rascunho` → `vigente` (`ativar`) → `encerrado` (`encerrar`, com motivo se antecipado) e `rascunho` → `cancelado`. Criar, ativar, encerrar, cancelar e manter itens exigem `ctr.gerenciar` (padrão `administrador` e `gestor`). Ativar exige ao menos um item, meta, calendário de apuração e faixas válidas (RN-CTR-002). `encerrado` e `cancelado` não são editados; a medição do último período segue até o fechamento. Número `CT-<AAAA>-<NNNNNN>`. Eventos `contrato_cliente.ativado` e `contrato_cliente.encerrado`. Alertas de fim de vigência em D-60, D-30 e D-7 (proposta). | Sumário 3.3, 3.4 e 3.6; RF-CTR-001 | Fase 2 |
+| RN-CTR-002 | A meta do contrato fica entre 0 e 100. As faixas (`faixa_desconto_contrato`) são intervalos `[de, até)` em % de disponibilidade, com desconto em % do valor do item, contíguos e sem sobreposição: a primeira tem `até` igual à meta e as demais seguem para baixo. Disponibilidade maior ou igual à meta aplicável não tem desconto; abaixo do `de` da última faixa vale o desconto da última faixa. Com meta própria do item acima da meta do contrato, a disponibilidade entre as duas metas recebe o desconto da primeira faixa (proposta). | RF-CTR-001, RF-CTR-002; decisão de produto | Fase 2 |
+| RN-CTR-003 | Item coberto (`item_contrato_cliente`) é ativo `proprio`, `de_terceiro` ou `de_cliente`, não `inativo` na inclusão, salvo `em_implantacao`; um ativo está em no máximo um contrato com cliente vigente no mesmo período. A janela do item no período vai de max(inclusão, `data_entrada_operacao`, início da vigência) a min(exclusão, fim da vigência). Meta própria do item, quando houver, substitui a do contrato. Depois de `vigente`, inclusão e exclusão só por aditivo, com data (proposta). | RF-CTR-002 | Fase 2 |
+| RN-CTR-004 | Baixar, vender ou pôr em reserva (RF-ATV-011) um ativo com item vigente exige excluir antes o item, com data (proposta), para que o tempo `inativo` não se confunda com parada. A reinstalação de item coberto (RN-ATV-015) conta como parada na medição, salvo exclusão `aprovada` com causa `solicitacao_cliente`. | Decisão de produto | Fase 2 |
+| RN-CTR-005 | O calendário de apuração é `continuo_24x7` (todas as horas) ou o calendário do contrato (dias da semana e faixas de horário; feriados só se cadastrados nele, proposta), aplicado no fuso da unidade de cada item (RN-ADM-004). Só as horas dentro do calendário contam como requeridas e como paradas. O regime de operação do ativo não é usado na medição. | RF-CTR-001, RF-CTR-004 | Fase 2 |
+| RN-CTR-006 | Os prazos de atendimento e de solução por prioridade valem para as OS corretivas dos itens cobertos (proposta). O relógio começa em `data_abertura` da OS, ou da solicitação que a originou; o atendimento termina em `data_inicio` e a solução na última `data_conclusao`, contados dentro do calendário de apuração e descontadas só as pausas `aguardando_aprovacao` (proposta, como RN-SRV-070). O estouro gera `contrato_cliente.sla_violado` e notifica o `gestor`. | RF-CTR-001; decisão de produto | Fase 2 |
+| RN-CTR-007 | OS de item coberto com `causa_externa` aceita pelo contrato é candidata a exclusão e nasce com `decisao_exclusao = pendente`; causa fora da lista aceita aparece como "causa não aceita" e conta como parada. Com evidência obrigatória no contrato (padrão ligado, proposta), candidata sem evidência só pode ser `recusada`. A causa externa não muda status, MTTR, MTBF nem disponibilidade técnica (RN-IND-011). | Sumário 3.6; RF-CTR-003 | Fase 2 |
+| RN-CTR-008 | Há uma `medicao_contrato` por contrato e período mensal (mês civil, cada item no fuso da sua unidade), aberta pelo Sistema em `em_apuracao` no dia 1 do mês seguinte (proposta) e recalculada a cada fato até o fechamento. Contrato vigente em parte do mês tem a medição só da parte vigente. | Sumário 3.3; RF-CTR-004 | Fase 2 |
+| RN-CTR-009 | Disponibilidade contratual do item = (HR − HPne) / HR × 100, com horas requeridas (HR), horas paradas não excluídas (HPne) e o corte das paradas definidos na seção 33.9: intervalos cortados na janela do item, nos limites do período e no calendário; intervalos sobrepostos contam uma vez; instante com ao menos uma causa não excluída conta como parado. Parada operacional manual de item coberto conta como parada (proposta). O valor é arredondado a duas casas, meio para cima, antes da comparação com a meta e as faixas (proposta). Item sem horas requeridas no período fica fora, sem desconto. | RF-CTR-004; decisão de produto | Fase 2 |
+| RN-CTR-010 | `decisao_exclusao` vai de `pendente` para `aprovada` ou `recusada` (com motivo), por quem tem `ctr.fechar_medicao` (padrão `administrador` e `gestor`). A decisão é da OS e vale para todos os períodos que a parada atravessa; só muda por reabertura da medição (RN-CTR-012). A exclusão `aprovada` tira da medição o intervalo da OS, do início da parada à última `data_conclusao`, e, quando houver, o do bloqueio de regra originado por ela (RN-CTR-014). | Sumário 3.6; RF-CTR-003, RF-CTR-004 | Fase 2 |
+| RN-CTR-011 | Fechar a medição exige `ctr.fechar_medicao` e nenhuma candidata do período com `decisao_exclusao = pendente`. O fechamento grava a memória de cálculo (intervalos, cortes, decisões, parâmetros, HR, HPne, disponibilidade, meta, faixa, desconto em % e em valor por item e o total) e torna a medição imutável. Desconto em valor = desconto da faixa × valor mensal do item × HR da janela do item / HR do mês inteiro no calendário (proposta). Evento `medicao_contrato.fechada`. A Tenaz não fatura: o valor com desconto vai para o ERP. | Sumário 3.3 e 3.6; RF-CTR-004 | Fase 2 |
+| RN-CTR-012 | Reabrir uma medição `fechada` exige motivo e `ctr.reabrir_medicao`. A medição volta a `em_apuracao`, é recalculada com os dados atuais e mostra as divergências contra a memória do fechamento anterior, que fica guardada como versão. Novo fechamento gera nova versão e novo evento. | Sumário 3.3; RF-CTR-004 | Fase 2 |
+| RN-CTR-013 | Mudança em OS, parada, bloqueio ou item depois do fechamento não altera a medição `fechada`: aparece como divergência no painel do contrato e na reabertura. | RF-CTR-004 | Fase 2 |
+| RN-CTR-014 | O bloqueio de origem `regra` disparado por uma OS (condição `os_concluida_com_campo`) herda, para a medição, a causa externa e a `decisao_exclusao` dessa OS (proposta): o tempo até a nova verificação, causado pelo vandalismo, é excluído junto com a parada se a exclusão for `aprovada`. Bloqueio de regra disparado por documento vencido nunca é excluído. | Decisão de produto | Fase 2 |
+| RN-CTR-015 | O painel do contrato usa o mesmo cálculo da medição, com o período até o instante atual, ordena os itens pelo impacto no desconto e lista as candidatas com `decisao_exclusao = pendente`. O acesso do cliente final depende de P10; até lá, a medição sai em PDF e XLSX. | RF-CTR-005; sumário, pendência P10 | Fase 2 |
+
+### 32.20 Resumo por módulo
+
+| Módulo | Regras no catálogo | Novas na versão 0.2 | Novas na versão 0.3 | Novas na versão 0.4 | Substituídas | Prioritárias do estudo |
+|---|---|---|---|---|---|---|
+| ADM | 16 | 3 | — | 8 (RN-ADM-009 a RN-ADM-016) | — | — |
+| ATV | 15 | 4 | 1 (RN-ATV-010) | 5 (RN-ATV-011 a RN-ATV-015) | 2 (RN-ATV-003, RN-ATV-009) | — |
+| MED | 9 | 1 | — | — | — | — |
+| SOL | 9 | 1 | — | — | — | — |
+| OS | 26 | 5 | 1 (RN-OS-021) | 5 (RN-OS-022 a RN-OS-026) | — | — |
+| PRE | 13 | — | — | — | — | — |
+| CHK | 7 | — | — | — | — | — |
+| EST | 39 | 25 | 3 (RN-EST-050, RN-EST-051, RN-EST-060) | — | 2 (RN-EST-024, RN-EST-041) | — |
+| TER | 24 | 22 | 2 (RN-TER-004, RN-TER-018) | — | — | — |
+| LOC | 24 | 22 | 2 (RN-LOC-008, RN-LOC-032) | — | — | — |
+| FRO | 20 | — | — | — | 4 | P-5 (RN-FRO-020) |
+| CON | 32 | 2 | — | 5 (RN-CON-040 a RN-CON-044) | — | P-1 (RN-CON-001), P-2 (RN-CON-030), P-3 (RN-CON-022), P-4 (RN-CON-021) |
+| IND | 11 | 1 | — | 3 (RN-IND-009 a RN-IND-011) | — | P-6 (RN-IND-001, RN-IND-002), P-7 (RN-IND-003) |
+| INT | 7 | 1 | — | — | — | — |
+| MOB | 11 | 1 | — | — | — | — |
+| IA | 7 | — | — | — | — | — |
+| SRV | 60 | — | 60 | — | — | — |
+| PRJ | 16 | — | — | 16 (RN-PRJ-001 a RN-PRJ-016) | — | — |
+| CTR | 15 | — | — | 15 (RN-CTR-001 a RN-CTR-015) | — | — |
+| **Total** | **361** | **88** | **69** | **57** | **8** | 7 regras prioritárias em 8 IDs |
+
+Regras em vigor: 353 (361 IDs no catálogo menos 8 substituídas). A versão 0.4 substituiu RN-ATV-003 por RN-ATV-012 (ativo em implantação), acrescentou à lista de exemplos de RN-INT-007 os eventos da configuração por segmento e atualizou as referências de seção de RN-IND-005, sem mudar o que essas regras determinam.
+
+Na versão 0.3, além das regras novas, o catálogo atualizou a fonte (sumário 3.6) de RN-SOL-008, RN-LOC-001, RN-LOC-004, RN-LOC-006, RN-LOC-010 e RN-LOC-031, sem mudar o que elas determinam, e acrescentou os eventos do SRV à lista de exemplos de RN-INT-007.
 
 ---
 
-## 30. Cálculo dos indicadores
+## 33. Cálculo dos indicadores
 
-### 30.1 Definições comuns
+### 33.1 Definições comuns
 
 | Termo | Definição |
 |---|---|
 | Período `P` | Intervalo `[início, fim)` no fuso da unidade. Painéis consolidados de várias unidades usam o fuso de cada unidade para os seus registros |
 | Regime de operação | Campos `horas_operacao_dia` e `dias_operacao_semana` do ativo (padrão da classe; sem padrão, 24 h e 7 dias) (RN-ATV-010) |
-| Tempo requerido `TR` | Horas do regime dentro de `P`, menos intervalos em `inativo` e em parada operacional (RN-ATV-002) |
-| Indisponibilidade de manutenção `TI` | União dos intervalos em `em_manutencao` e em `parado` por causa de manutenção (solicitação ou OS com parada, bloqueio de conformidade, item crítico de checklist), cortada a `P` e ao regime. Intervalos sobrepostos contam uma vez. O intervalo de uma OS termina em `data_conclusao`, não no encerramento: o tempo em `concluida` aguardando liberação fica fora de `TI` e é medido como "tempo de liberação" (RN-ATV-006) |
+| Tempo requerido `TR` | Horas do regime dentro de `P`, menos intervalos em `inativo` (inclusive em implantação, `fase_ciclo_vida = em_implantacao`), em parada operacional (RN-ATV-002) e mantidos por OS `implantacao` em ativo `em_operacao` (reinstalação, RN-IND-009). Para o ativo que entrou em operação dentro de `P`, conta a partir de `data_entrada_operacao` (RN-ATV-014) |
+| Indisponibilidade de manutenção `TI` | União dos intervalos em `em_manutencao` e em `parado` por causa de manutenção (solicitação ou OS com parada, `bloqueio_ativo` de qualquer origem, inclusive `regra`, item crítico de checklist), cortada a `P` e ao regime. Intervalos mantidos por OS `implantacao` não entram (RN-IND-009). Intervalos sobrepostos contam uma vez. O intervalo de uma OS termina em `data_conclusao`, não no encerramento: o tempo em `concluida` aguardando liberação fica fora de `TI` e é medido como "tempo de liberação" (RN-ATV-006) |
 | Falha | OS `corretiva_planejada` ou `corretiva_emergencial` com "parou o ativo" = sim, não cancelada (RN-IND-006). Início = instante da parada; fim = `data_conclusao` |
 | Tempo de reparo de uma OS | `(data_conclusao − data_inicio) − Σ pausas cujo motivo está no conjunto excluído (RN-IND-001)`. Com liberação recusada, vale a última `data_conclusao` |
-| Custo considerado | Só `responsavel_custo = empresa` nos painéis de custo da empresa; demais responsáveis em visões separadas (RN-IND-008) |
+| Custo considerado | Só `responsavel_custo = empresa` nos painéis de custo da empresa; demais responsáveis em visões separadas (RN-IND-008). Custo de OS `implantacao` nunca é custo de manutenção (RN-IND-010) |
+| OS e ativo em implantação | Fora de todos os indicadores de manutenção; ver 33.8 (RN-IND-009) |
+| Causa externa | Não muda nada nesta seção: a parada por causa externa conta em `TI`, e a falha por vandalismo é falha. Só a disponibilidade contratual (33.9) desconta a parada, depois de aprovada (RN-IND-011) |
 | Corte no período | Intervalo que cruza a fronteira de `P` é cortado nos limites de `P` (RN-IND-005) |
 
 Todos os painéis mostram "como calculamos" (RN-IND-004) e, quando houver, o benchmark com a fonte (RN-IND-003).
 
-### 30.2 Disponibilidade e confiabilidade
+### 33.2 Disponibilidade e confiabilidade
 
 **MTTR**
 
@@ -3052,7 +3571,7 @@ DF = (horas calendário de P − horas em manutenção em P) / horas calendário
 
 - Horas em manutenção = `TI` sem o corte pelo regime de operação.
 
-### 30.3 Preventiva e programação
+### 33.3 Preventiva e programação
 
 **PM compliance (aderência da preventiva)**
 
@@ -3060,7 +3579,7 @@ DF = (horas calendário de P − horas em manutenção em P) / horas calendário
 PM compliance = cumpridas / devidas × 100
 ```
 
-- Devidas em `P`: OS de `preventiva` geradas por plano com data de vencimento em `P`, mais os vencimentos perdidos em `P` (RN-PRE-007). `inspecao_legal` tem indicador próprio com a mesma fórmula; a empresa pode somá-los. Preventivas de ativo tomado executadas pelo locador formam um indicador separado (RN-LOC-043).
+- Devidas em `P`: OS de `preventiva` geradas por plano com data de vencimento em `P` (OS `implantacao` nunca é gerada por plano, e o ativo em implantação tem os planos suspensos, RN-IND-009), mais os vencimentos perdidos em `P` (RN-PRE-007). `inspecao_legal` tem indicador próprio com a mesma fórmula; a empresa pode somá-los. Preventivas de ativo tomado executadas pelo locador formam um indicador separado (RN-LOC-043).
 - Cumpridas: concluídas dentro da janela `[V − T_antes, V + T_depois]` gravada na OS (RN-IND-002). Para gatilho por medidor, a janela é avaliada em unidades do medidor com a leitura da conclusão.
 - Execução antes da janela: conta como cumprida por padrão; configurável.
 - Canceladas: contam como não cumpridas, salvo exclusões de RN-PRE-008 (saem do denominador).
@@ -3079,21 +3598,24 @@ Schedule compliance = HH apontadas na semana em OS da programação congelada / 
 **Backlog (semanas)**
 
 ```
-Backlog = Σ HH restantes das OS em aberta, planejada, programada, em_execucao e pausada no instante fim de P
+Backlog = Σ HH restantes das OS de manutenção (tipo diferente de implantacao) em aberta, planejada, programada, em_execucao e pausada no instante fim de P
           / HH disponíveis por semana
 ```
 
 - HH restantes = máximo(0, HH estimadas − HH apontadas). OS sem estimativa usam o padrão por tipo de OS (parâmetro) e são contadas à parte. OS com executor `fornecedor` ficam fora do backlog da equipe interna e aparecem em "backlog de terceiros", por fornecedor.
 - HH disponíveis por semana = Σ horas semanais dos técnicos ativos da unidade (cadastro).
+- As OS `implantacao` formam o "backlog de implantação", com a mesma fórmula, exibido à parte (RN-IND-009).
 - É uma fotografia no fim do período, não uma média.
 
 **% de trabalho planejado**
 
 ```
-% planejada = HH apontadas em OS de tipo diferente de corretiva_emergencial / HH totais apontadas em P × 100
+% planejada = HH apontadas em OS de tipo diferente de corretiva_emergencial e de implantacao
+             / HH apontadas em P em OS de tipo diferente de implantacao × 100
 ```
 
 - Entra por data do apontamento, inclusive em OS ainda abertas.
+- HH de OS `implantacao` saem do numerador e do denominador (RN-IND-009).
 - Benchmark: ≥ 85% (referência de mercado).
 
 **First-time fix**
@@ -3112,11 +3634,12 @@ Wrench time = HH apontadas em execução / HH pagas × 100
 
 - Benchmark: 50% a 55% (referência de mercado).
 
-### 30.4 Custos
+### 33.4 Custos
 
 | Indicador | Fórmula | Regras |
 |---|---|---|
-| Custo de manutenção | Mão de obra (horas apontadas × custo-hora do técnico) + peças (saídas − devoluções, a custo médio) + terceiros (notas ou custo estimado, RN-TER-016) | Apropriado pela data de cada lançamento, inclusive de OS abertas. O painel separa "custo de OS encerradas" e "custo em andamento". Só `responsavel_custo = empresa`; os demais responsáveis em visão separada (RN-IND-008) |
+| Custo de manutenção | Mão de obra (horas apontadas × custo-hora do técnico) + peças (saídas − devoluções, a custo médio) + terceiros (notas ou custo estimado, RN-TER-016), das OS de tipo diferente de `implantacao` | Apropriado pela data de cada lançamento, inclusive de OS abertas. O painel separa "custo de OS encerradas" e "custo em andamento". Só `responsavel_custo = empresa`; os demais responsáveis em visão separada (RN-IND-008). Custo/RAV, CMF e custo por km usam este custo e por isso também excluem a implantação (RN-IND-010) |
+| Custo de implantação | Mesma composição, só das OS `implantacao`, mais lançamentos avulsos do projeto | Por projeto, unidade e fornecedor; comparado ao orçamento do projeto (RN-PRJ-014). Nunca somado ao custo de manutenção (RN-IND-010) |
 | Custo / RAV | Custo de manutenção anual (12 meses móveis) / `valor_reposicao` do ativo × 100 | Ativo sem `valor_reposicao` fica fora e é listado. Benchmark: 1% a 3% (referência de mercado) |
 | Custo de reparo de peças | Σ custo das ordens de reparo retornadas em P / Σ custo de reposição das peças reparadas | Mostra a economia do reparo frente à compra (Fluxo 20) |
 | CMF | Custo de manutenção / faturamento bruto do período × 100 | Faturamento informado pela empresa por mês. Benchmark: até 4% (ABRAMAN 2022) |
@@ -3124,7 +3647,7 @@ Wrench time = HH apontadas em execução / HH pagas × 100
 | CPK do pneu | (compra + recapagens + consertos − residual) / km do pneu | Fluxo 11 |
 | Consumo | Σ km dos ciclos encerrados em P / Σ litros desses ciclos | Fluxo 12 |
 
-### 30.5 Benchmarks exibidos
+### 33.5 Benchmarks exibidos
 
 | KPI | Valor exibido | Fonte exibida (RN-IND-003) |
 |---|---|---|
@@ -3134,7 +3657,7 @@ Wrench time = HH apontadas em execução / HH pagas × 100
 | Wrench time | 50% a 55% | Referência de mercado |
 | Custo / RAV | 1% a 3% | Referência de mercado |
 
-### 30.6 Terceiros e locação (Fase 2)
+### 33.6 Terceiros e locação (Fase 2)
 
 | Indicador | Fórmula | Regras |
 |---|---|---|
@@ -3146,7 +3669,7 @@ Wrench time = HH apontadas em execução / HH pagas × 100
 | Cobrança ao locatário | Σ custo das OS com `responsavel_custo = locatario` + valor dos excedentes de franquia, por contrato e período | Base do relatório de cobrança (RN-LOC-013) |
 | Violação do SLA de substituição | Horas acima do SLA de substituição por contrato tomado em P | RN-LOC-041 |
 
-### 30.7 Serviços do prestador (SRV)
+### 33.7 Serviços do prestador (SRV)
 
 Calculados na conta da subcontratada, só com dados dela, inclusive as cópias sincronizadas (RN-SRV-073). Os filtros padrão são cliente, técnico, especialidade, tipo de OS e origem (próprias ou vindas de cliente conectado).
 
@@ -3194,9 +3717,68 @@ solução            = data_conclusao (última) − data_abertura − Σ pausas 
 | Retrabalho por cliente | OS encerradas em P com retrabalho vinculado em 30 dias / OS encerradas em P × 100 | RN-OS-012 aplicada na conta da subcontratada; provisório até a janela fechar (RN-IND-007) |
 | Saúde da sincronização | Vínculos em `erro`, idade do erro mais antigo e eventos pendentes, por conexão | Operacional; não é KPI de desempenho (RN-SRV-063) |
 
+### 33.8 Implantação fora dos indicadores de manutenção
+
+A OS `implantacao` e o ativo `em_implantacao` ficam fora de MTBF, MTTR, disponibilidade, % planejada, cumprimento de preventiva e backlog de manutenção (RF-OS-002, RN-IND-009). O custo de implantação é separado do custo de manutenção (RN-IND-010).
+
+| Indicador | Ativo `em_implantacao` | OS `implantacao` |
+|---|---|---|
+| MTBF, MKBF, MTBF em horas de motor | Fora: `inativo` sai de `TR`, km e horas do período não contam | Não é falha (RN-IND-006, RN-OS-022) |
+| MTTR, tempo de restabelecimento, MTTA, first-time fix | Fora | Fora: não é corretiva |
+| Ai, Ao, disponibilidade física | Fora do denominador | Intervalo mantido por ela sai de `TR` e não entra em `TI` (reinstalação) |
+| % de trabalho planejado | — | HH fora do numerador e do denominador |
+| PM compliance e indicador de inspeção legal | Planos suspensos: nada é devido | Nunca gerada por plano |
+| Backlog de manutenção | — | Fora; aparece no backlog de implantação |
+| Custo de manutenção, Custo/RAV, CMF, custo por km | — | Fora; custo de implantação (33.4) |
+| Schedule compliance, wrench time | — | Incluídas: medem a programação e a produtividade da equipe (proposta) |
+| Veículos cobrados | Fora: `inativo` | — |
+
+O ativo passa a contar a partir de `data_entrada_operacao` (RN-ATV-014). Indicadores de implantação: avanço físico, custo realizado contra o orçamento, desvio de prazo e etapas atrasadas, por projeto e na carteira (RN-PRJ-010, RN-PRJ-014).
+
+### 33.9 Disponibilidade contratual da medição (CTR, Fase 2)
+
+Calculada por item do contrato com cliente e por período mensal (RN-CTR-008, RN-CTR-009). Usa as mesmas paradas dos indicadores técnicos, com outro denominador e com as exclusões aprovadas; **não altera** a disponibilidade técnica (RN-IND-011).
+
+```
+J(i, P)  = P ∩ [ max(inclusão, data_entrada_operacao, início da vigência), min(exclusão, fim da vigência) )
+C(i)     = calendário de apuração do contrato, no fuso da unidade do item
+HR(i, P) = horas de C(i) dentro de J(i, P)
+
+U(i, P)  = ⋃ intervalos de indisponibilidade do item, cada um cortado a J(i, P) e a C(i)
+N(i, P)  = ⋃ dos mesmos intervalos, só os que não têm decisao_exclusao = aprovada
+HPne     = medida de N(i, P)          horas paradas não excluídas
+HPex     = medida de U(i, P) − HPne   horas excluídas, exibidas à parte
+
+DC(i, P) = (HR − HPne) / HR × 100     arredondada a duas casas, meio para cima
+meta(i)  = meta própria do item, se houver; senão a meta do contrato
+```
+
+- **Intervalos de indisponibilidade do item:** os mesmos de `TI` (33.1), sem o corte pelo regime de operação: solicitação ou OS com parada (do início da parada à última `data_conclusao`, não ao encerramento), OS de retirada programada (de `data_inicio` à última `data_conclusao`), `bloqueio_ativo` de qualquer origem (da criação ao levantamento) e parada manual de manutenção. Diferente de `TI`, entram também a parada operacional manual (proposta) e o intervalo de OS `implantacao` de reinstalação (RN-CTR-004).
+- **Sobreposição:** intervalos sobrepostos contam uma vez. Um instante coberto ao mesmo tempo por uma causa excluída e por outra não excluída conta como parado, porque está em `N`.
+- **Parada que cruza o início ou o fim do período:** é cortada nos limites de `P` (RN-IND-005). A parte anterior pertence à medição do mês anterior; a parada ainda aberta no fim de `P` conta até `fim` e o restante entra no período seguinte. A `decisao_exclusao` é da OS e vale nos dois períodos (RN-CTR-010).
+- **Calendário de apuração:** `continuo_24x7` conta todas as horas; o calendário do contrato conta só os dias e horários dele (feriados só se cadastrados, proposta). Parada fora do calendário não conta como parada nem como requerida (RN-CTR-005).
+- **Exclusão:** só para OS com `causa_externa` aceita no contrato e `decisao_exclusao = aprovada`; o bloqueio de regra disparado pela mesma OS herda a decisão (RN-CTR-014, proposta). Causa não aceita, decisão `recusada` ou bloqueio por documento vencido contam como parada.
+- **Item sem horas requeridas** (`HR = 0`): fora da medição, sem desconto, listado.
+
+**Faixa e desconto**
+
+```
+se DC ≥ meta(i):                 desconto = 0
+senão:                           faixa f com f.de ≤ DC < f.até
+                                 DC abaixo da última faixa: a última faixa
+                                 DC acima da primeira faixa (meta própria maior): a primeira faixa
+V(i, P)        = valor mensal do item × HR(i, P) / horas de C(i) no mês inteiro
+desconto valor = f.desconto % × V(i, P)
+```
+
+- **Meta própria do item:** substitui a do contrato na comparação; as faixas são as do contrato (RN-CTR-002).
+- **Total do contrato:** Σ desconto valor dos itens. A disponibilidade agregada do contrato, Σ (HR − HPne) / Σ HR × 100, é informativa e não define desconto.
+- **Diferenças para a Ao:** o denominador é o calendário de apuração, não o regime de operação; a parada operacional e a reinstalação contam; as paradas com exclusão aprovada saem. A Ao, o MTTR e o MTBF do mesmo ativo continuam iguais (exemplo em 31.6).
+- **Como calculamos:** a memória de cálculo mostra, por item, `J`, `HR`, cada intervalo com causa, corte e decisão, `HPne`, `HPex`, `DC`, meta, faixa e desconto (RN-IND-004, RN-CTR-011).
+
 ---
 
-## 31. Parâmetros configuráveis
+## 34. Parâmetros configuráveis
 
 | Parâmetro | Padrão | Escopo | Regra |
 |---|---|---|---|
@@ -3238,8 +3820,8 @@ solução            = data_conclusao (última) − data_abertura − Σ pausas 
 | Matriz de responsabilidade | Definida em cada contrato | Contrato | RN-LOC-010 |
 | Motivos de pausa excluídos do MTTR | `aguardando_peca`, `fim_turno` | Empresa | RN-IND-001 |
 | Execução antecipada no PM compliance | Conta como cumprida | Empresa | RN-IND-002 |
-| Congelamento da programação semanal | Segunda-feira 00:00 | Unidade | Seção 30.3 |
-| Regime de operação (`horas_operacao_dia`, `dias_operacao_semana`) | 24 h, 7 dias | Classe ou ativo | RN-ATV-010, seção 30.1 |
+| Congelamento da programação semanal | Segunda-feira 00:00 | Unidade | Seção 33.3 |
+| Regime de operação (`horas_operacao_dia`, `dias_operacao_semana`) | 24 h, 7 dias | Classe ou ativo | RN-ATV-010, seção 33.1 |
 | Aviso de app sem sincronizar | 72 h | Empresa | RN-MOB-009 |
 | Expiração de rascunho de IA | 7 dias | Empresa | RN-IA-006 |
 | Alerta de remessa em trânsito sem confirmação de recebimento | 5 dias | Empresa | RN-EST-051 |
@@ -3255,12 +3837,24 @@ solução            = data_conclusao (última) − data_abertura − Σ pausas 
 | Novas tentativas da sincronização | 1, 5, 15 e 60 min; depois a cada 6 h até 24 h | Plataforma | RN-SRV-062 |
 | Lacuna máxima na sequência de eventos de um vínculo | 1 h | Plataforma | RN-SRV-061 |
 | Alerta ao administrador por vínculo em erro sem ação | 24 h | Empresa | RN-SRV-063 |
+| Regras ativas por empresa | 50 (proposta) | Empresa | RN-ADM-009 |
+| Horário da rotina diária das regras | 06:00 no fuso da unidade | Plataforma | RN-ADM-010 |
+| Antecedência de `documento_a_vencer` | Definida em cada regra | Regra | RN-ADM-010 |
+| Faixa de `leitura_fora_faixa` | Mínimo e máximo definidos em cada regra (proposta) | Regra | Tabela 29.2 |
+| Campos extras ativos por tipo de OS e classe | 30 (proposta) | Empresa | RN-OS-023 |
+| Etapas por modelo de projeto | 40 (proposta) | Plataforma | RN-PRJ-001 |
+| Geração das OS da etapa ao ficar disponível | Ligado (proposta) | Modelo de projeto | RN-PRJ-005 |
+| Calendário de apuração | `continuo_24x7` | Contrato com cliente | RN-CTR-005 |
+| Evidência obrigatória para exclusão por causa externa | Ligado (proposta) | Contrato com cliente | RN-CTR-007 |
+| Abertura automática da medição | Dia 1 do mês seguinte (proposta) | Plataforma | RN-CTR-008 |
+| Alertas de fim de vigência do contrato com cliente | D-60, D-30, D-7 (proposta) | Contrato com cliente | RN-CTR-001 |
+| Arredondamento da disponibilidade contratual | Duas casas, meio para cima (proposta) | Plataforma | RN-CTR-009 |
 
 ---
 
-## 32. Lacunas e pendências
+## 35. Lacunas e pendências
 
-### 32.1 Lacunas da versão 0.1 resolvidas pelo sumário 0.3
+### 35.1 Lacunas da versão 0.1 resolvidas pelo sumário 0.3
 
 | # | Lacuna | Como o sumário 0.3 resolveu | Onde está aplicado |
 |---|---|---|---|
@@ -3271,13 +3865,13 @@ solução            = data_conclusao (última) − data_abertura − Σ pausas 
 | L-05 | As origens de leitura não incluíam checklist | Origem `manual` inclui checklist e abastecimento digitado; `importacao` inclui CSV e API de integrador; `iot` na Fase 3 | Fluxo 04; RN-MED-009, RN-CHK-006 |
 | L-06 | Não havia entidade para pessoa sem usuário | Entidade `pessoa`, com ou sem `usuario`; CNH, ASO e capacitações ligados à pessoa | RN-ADM-006; Fluxos 09 e 13 |
 | L-07 | Não havia perfil para PLH, comprador nem liberador | Perfis `plh` e `comprador`; liberação é a permissão `os.encerrar`, padrão em `gestor` e `planejador`; dados de saúde com `pessoa.saude.ler` | RN-ADM-007, RN-ADM-008; Fluxos 07 e 10 |
-| L-08 | O ativo não tinha valor de reposição nem regime de operação | Campos `valor_reposicao`, `horas_operacao_dia`, `dias_operacao_semana` | RN-ATV-009 (substituída por RN-ATV-010); seção 30 |
+| L-08 | O ativo não tinha valor de reposição nem regime de operação | Campos `valor_reposicao`, `horas_operacao_dia`, `dias_operacao_semana` | RN-ATV-009 (substituída por RN-ATV-010); seção 33 |
 | L-09 | Códigos de falha só no Profissional | Catálogo padrão no Essencial e no MVP; personalizável no Profissional (Fase 2) | RN-OS-018 |
 | L-10 | "Veículo ativo" não estava definido | Veículo cobrado = ativo `veiculo` com status diferente de `inativo`; maior número diário do ciclo | RN-ATV-003 |
 
 Também ficou resolvida a dúvida do documento 7 (item 13.2) sobre a corretiva planejada em execução: falha que parou o ativo mantém `parado` até o encerramento; retirada programada sem falha fica `em_manutencao` durante a execução (seção 0.6).
 
-### 32.2 Lacunas resolvidas pelo sumário 0.4
+### 35.2 Lacunas resolvidas pelo sumário 0.4
 
 As lacunas L-11 a L-13 e L-15 a L-20 da versão 0.2 foram fechadas pelas decisões do sumário 3.6.
 
@@ -3295,7 +3889,7 @@ As lacunas L-11 a L-13 e L-15 a L-20 da versão 0.2 foram fechadas pelas decisõ
 
 O sumário 0.4 também fixou a permissão `os.encerrar`, a ação `assumir` (RN-OS-021), os valores de `origem` da OS, os escopos de acesso externo, o token do link no fragmento da URL (RN-TER-018), os papéis `posto_combustivel` e `seguradora` (RN-TER-004), a entidade `bloqueio_energia` e o locatário só no portal web (RN-LOC-032).
 
-### 32.3 Lacunas abertas
+### 35.3 Lacunas abertas
 
 | # | Lacuna | Como este documento tratou | Ação sugerida |
 |---|---|---|---|
@@ -3310,10 +3904,21 @@ O sumário 0.4 também fixou a permissão `os.encerrar`, a ação `assumir` (RN-
 | L-28 | O sumário fala de "peça em trânsito", mas o saldo de item não serializado não tem campo para o trânsito | Quantidade em trânsito separada do físico (proposto `quantidade_em_transito`) (RN-EST-050) | Confirmar no documento 2 |
 | L-29 | Ligação da OS que trafega entre contas: o documento 2 escolhe entre uma linha de `vinculo_os` em cada conta ou um registro na plataforma | Este documento só exige que o vínculo tenha estado de sincronização e, quando desfeito, instante e motivo (proposto `data_desvinculo`, `motivo_desvinculo`) (Fluxo 26) | Confirmar no documento 2 |
 | L-30 | O convite de conexão só parte do cliente | A subcontratada não pede conexão no MVP (RN-SRV-041) | Avaliar pedido de conexão pela subcontratada depois do lançamento |
+| L-31 | RF-ATV-013 fala de reinstalação "com OS `implantacao` ou projeto" em ativo já em operação, mas RF-OS-002 só aceita a OS `implantacao` em ativo `em_implantacao` ou ligada a etapa de projeto, e o PRJ é da Fase 2 | RN-OS-022 segue RF-OS-002: sem projeto, a OS `implantacao` só em ativo `em_implantacao`. No MVP não há reinstalação como implantação (RN-ATV-015) | Decidir se a reinstalação sem projeto (MVP) aceita OS `implantacao` em ativo `em_operacao` ligada a uma transferência |
+| L-32 | A condição `leitura_fora_faixa` não define a faixa (RF-ADM-016 cita só o medidor) | Faixa mínima e máxima de valor ou de uso diário nos parâmetros da regra (proposta, tabela 29.2) | Confirmar no documento 1 e no sumário 3.7 |
+| L-33 | O sumário 3.6 diz "emissão posterior ao fato que disparou a regra", mas a emissão é uma data sem hora e, nas condições de documento, o fato é o vencimento: a verificação feita na véspera do vencimento e registrada depois não levantaria o bloqueio | Mesmo dia vale; nas condições de documento, a referência é a emissão do documento que venceu (RN-CON-042, proposta) | Confirmar a interpretação no sumário 3.6 |
+| L-34 | A causa externa só pode ser marcada até o encerramento (OS encerrada é imutável, RN-OS-008), mas a parada costuma ser revisada na medição, depois do encerramento | Não se marca causa em OS encerrada (RN-OS-026) | Decidir se a medição aceita marcar causa externa em OS encerrada como exceção auditada a RN-OS-008, enquanto a medição estiver `em_apuracao` |
+| L-35 | RF-OS-002 lista os KPIs de que a OS `implantacao` fica fora, mas não cita schedule compliance nem wrench time | Incluídas, porque medem programação e produtividade da equipe (RN-IND-009, proposta) | Confirmar no documento 1 |
+| L-36 | Critérios de cálculo da medição que o documento 1 não fixa | Valor do desconto proporcional à janela do item, arredondamento a duas casas, parada operacional contando como parada, meta própria acima da do contrato recebendo a primeira faixa, bloqueio de regra herdando a decisão da OS que o disparou (RN-CTR-002, RN-CTR-009, RN-CTR-011, RN-CTR-014, propostas) | Validar com o dono do produto e com um contrato real de fiscalização eletrônica |
+| L-37 | RF-ADM-016 fala de "quem tem a permissão de bloqueio" para levantar o bloqueio de regra, e o sumário 3.6 não nomeia essa permissão | Padrão `gestor` (RN-CON-041, RN-CON-043) | Nomear a permissão no sumário 3.6 (formato `<módulo>.<ação>`) |
+| L-38 | Nomes usados pelo documento 1 e por este documento que não estão no sumário: situação da regra (`ativa`, `inativa`), calendário `continuo_24x7`, tipos de campo extra (`texto`, `numero`, `data`, `lista`, `sim_nao`), momento da obrigatoriedade (`nenhum`, `abertura`, `conclusao`) e os eventos `ativo.colocado_em_operacao`, `projeto.iniciado`, `projeto.concluido`, `projeto.cancelado`, `contrato_cliente.ativado`, `contrato_cliente.encerrado`, `contrato_cliente.sla_violado`, `medicao_contrato.fechada` | Usados como no documento 1 | Incluir no sumário 3.6 |
+| L-39 | Campo extra que dispara regra no cliente (ex.: "Rompeu lacre?") não chega quando a OS é executada por subcontratada conectada, porque os campos extras não trafegam na conexão (ponto 38 do documento 1) | A condição `os_concluida_com_campo` não dispara com dados da subcontratada; os campos obrigatórios na conclusão do cliente não impedem a conclusão sincronizada (RN-ADM-015, RN-OS-024) | Decidir no sumário entre as opções do documento 1: grupo novo da conexão, confirmação pelo cliente na liberação ou regra restrita a OS sem conexão |
 
-### 32.4 Nomes propostos, a incluir no sumário
+As lacunas L-21, L-22, L-23, L-24, L-28 e L-30 já têm decisão no sumário 3.6 (`cliente_conectado`, `tag_cliente`, lista de ativos escolhida pelo cliente no MVP, veículo `de_cliente` não cobrado, `quantidade_em_transito`, só o cliente convida). A baixa formal delas, com a retirada da marca "(proposto)" nos Fluxos 10, 19, 23, 24 e 26, fica para a próxima revisão deste documento.
 
-Os nomes que o sumário 0.3 e o sumário 0.4 tornaram canônicos saíram desta lista (seção 0.4).
+### 35.4 Nomes propostos, a incluir no sumário
+
+Os nomes que os sumários 0.3, 0.4 e 0.5 tornaram canônicos saíram desta lista (seção 0.4). A versão 0.4 deste documento não propõe nomes novos: usa os do sumário 0.5 e, onde ele ainda não tem nome, os do documento 1 (lacuna L-38).
 
 | Conceito | Nome proposto | Usado em |
 |---|---|---|
@@ -3330,7 +3935,7 @@ Os nomes que o sumário 0.3 e o sumário 0.4 tornaram canônicos saíram desta l
 | Vínculo de OS desfeito | `data_desvinculo`, `motivo_desvinculo` | Fluxo 26 |
 | Origem da auditoria gravada pela sincronização | `conexao` | Seção 0.2; Fluxo 28 |
 
-### 32.5 Pendências do sumário que afetam regras
+### 35.5 Pendências do sumário que afetam regras
 
 | Pendência | Regras afetadas | Comportamento até a resolução |
 |---|---|---|
@@ -3343,7 +3948,17 @@ Os nomes que o sumário 0.3 e o sumário 0.4 tornaram canônicos saíram desta l
 | P4 — Validação de preço (plano Serviços e desconto de canal) | RN-SRV-002 (lacuna L-27) | Técnico cobrado conforme o sumário 2.2; desconto de canal sem regra até a decisão |
 | R5 — Sincronização copia dado além do permitido ou para a conta errada | RN-SRV-042, RN-SRV-043, RN-SRV-047, RN-SRV-061 | Lista fechada de campos, papel de banco próprio, transações separadas por conta, auditoria nos dois lados, conferência de CNPJ no aceite, teste automatizado com três contas em todo build |
 | R6 — SRV no MVP aumenta o escopo | Fluxos 23 a 28 | O SRV reaproveita OS, apontamento, ativos, estoque básico e app; nenhuma regra nova muda a máquina de estados da OS |
+| P9 — Regras metrológicas de medidores de velocidade (verificação, reparo que exige nova verificação, lacres) | RN-ADM-016, RN-CON-042, RN-PRJ-008 (aferição) | O pacote `fiscalizacao_eletronica` entrega as regras inativas e a validade da verificação é digitada; a empresa ativa depois de revisar (Fluxos 29 e 30) |
+| P10 — Acesso do cliente final do contrato | RN-CTR-015 | Painel interno; a medição sai em PDF e XLSX (Fluxo 31) |
+| R7 — A configuração virar um sistema "faça você mesmo" | RN-ADM-009, RN-ADM-011 | Catálogos fechados de condição e efeito, combinações da tabela 29.4, estados e fórmulas fixos; condição ou efeito novo só por requisito com teste |
 
 ---
 
-*Fluxos de Processo e Regras de Negócio — Tenaz | Versão 0.3 | 12/11/2026*
+**Histórico de versões**
+
+- v0.1 (12/11/2026): primeira versão, em elaboração.
+- v0.2 (12/11/2026): alinhada ao sumário executivo 0.3. Transições da OS e da solicitação, status do ativo, Fluxos 18 a 22 de TER, EST e LOC; catálogo (23), indicadores (24), parâmetros (25), lacunas (26).
+- v0.3 (12/11/2026): alinhada ao sumário executivo 0.4. Módulo SRV, Fluxos 23 a 28, RN-SRV-001 a RN-SRV-073; catálogo (29), indicadores (30), parâmetros (31), lacunas (32).
+- v0.4 (12/11/2026): alinhada ao sumário executivo 0.5. Configuração por segmento: Fluxos 29 (regras configuráveis), 30 (implantação por projeto) e 31 (medição do contrato com cliente); RN-ADM-009 a RN-ADM-016, RN-ATV-011 a RN-ATV-015 (RN-ATV-003 substituída por RN-ATV-012), RN-OS-022 a RN-OS-026, RN-CON-040 a RN-CON-044, RN-IND-009 a RN-IND-011, RN-PRJ-001 a RN-PRJ-016, RN-CTR-001 a RN-CTR-015; implantação fora dos KPIs de manutenção e disponibilidade contratual (33.8 e 33.9); 31 fluxos e 361 IDs (353 em vigor); catálogo (32), indicadores (33), parâmetros (34), lacunas (35).
+
+*Fluxos de Processo e Regras de Negócio — Tenaz | Versão 0.4 | 12/11/2026*

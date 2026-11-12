@@ -1,0 +1,13 @@
+# Monorepo JavaScript da Tenaz.
+#
+# A web e o app compartilham os pacotes de `pacotes/`: tipos gerados do
+# contrato OpenAPI, regras de domínio que existem nos dois lados, tokens da
+# marca e textos (seção 7 de docs/5_ARQUITETURA_SOFTWARE.md).
+
+packages:
+  - web
+  - app
+  - pacotes/*
+
+# O Metro do Expo tem dificuldade com a árvore de módulos isolada do pnpm.
+# Se aparecer erro de resolução no app, trocar para node-linker=hoisted.
