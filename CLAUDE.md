@@ -7,7 +7,7 @@ Este arquivo é o prompt inicial do projeto. Vale para toda sessão de trabalho,
 Sistema SaaS multiempresa de gestão de manutenção de equipamentos e frota para o mercado brasileiro: transportadoras, indústrias, comércio, serviços, locadoras e subcontratadas de manutenção. Slogan: **Cada ativo pronto para operar.**
 
 - Estado atual: concepção concluída (marca, estudo de mercado, documentação). Ainda não há código.
-- Repositório: `github.com/gustavoflandal/tenaz-manutencao`, branch principal `main`.
+- Repositório: `github.com/gustavoflandal/Projeto-Tenaz-Manutencao`, branch principal `main`.
 - Idioma de tudo (interface, documentação, commits, código de domínio): **português do Brasil**.
 
 ## 2. Fontes da verdade

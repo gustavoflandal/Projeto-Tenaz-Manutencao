@@ -49,3 +49,4 @@ O que ficou em aberto e onde está registrado.
 | 007 | 2026-11-12 | release | [Primeiro commit no GitHub](007_2026-11-12_primeiro-commit.md) |
 | 008 | 2026-11-12 | decisão | [Prompt inicial e regras de documentação](008_2026-11-12_prompt-e-regras-de-documentacao.md) |
 | 009 | 2026-11-12 | decisão | [Plano de execução, equipe de agentes e skills](009_2026-11-12_equipe-de-agentes-e-skills.md) |
+| 010 | 2026-11-12 | release | [Troca de repositório no GitHub](010_2026-11-12_troca-de-repositorio.md) |
