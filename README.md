@@ -20,15 +20,28 @@ Fase de pesquisa e documentação. Ainda não há código.
 |---|---|
 | Nome e identidade visual | Aprovados em 12/11/2026 |
 | Pesquisa de mercado e benchmarking | Concluída em 12/11/2026 ([estudo](docs/pesquisa/reports/)) |
-| Documentação do projeto | Em elaboração ([índice](docs/README.md)) |
+| Documentação do projeto | Versão alinhada ao sumário executivo 0.4 ([índice](docs/README.md)) |
+| Registro de etapas | [docs/etapas/](docs/etapas/README.md) |
 
 ## Estrutura
 
 ```
+CLAUDE.md       prompt inicial do projeto: contexto, fontes da verdade e regras obrigatórias
+CHANGELOG.md    histórico de versões
 marca/          identidade visual: brandbook, logos SVG e PNG
-docs/           documentação do projeto
+docs/           documentação do projeto (índice em docs/README.md)
+docs/etapas/    registro de todas as etapas do projeto
+docs/pdf/       versões em PDF dos documentos
 docs/pesquisa/  estudo de mercado: notas de pesquisa e relatório final
-ferramentas/    utilitários (conversão de Markdown para PDF)
+ferramentas/    conversão de Markdown para PDF e verificador da documentação
+```
+
+## Regras de documentação
+
+Toda etapa é registrada em `docs/etapas/`, e toda correção ou implementação atualiza a documentação no mesmo commit. As regras estão em [CLAUDE.md](CLAUDE.md), seção 3. Antes de concluir qualquer etapa:
+
+```bash
+python ferramentas/verificar_docs.py
 ```
 
 ## Gerar PDF de um documento

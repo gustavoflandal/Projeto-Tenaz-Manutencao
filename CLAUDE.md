@@ -1,0 +1,108 @@
+# Tenaz — instruções do projeto
+
+Este arquivo é o prompt inicial do projeto. Vale para toda sessão de trabalho, humana ou de IA, neste repositório. Leia-o inteiro antes de começar.
+
+## 1. O que é a Tenaz
+
+Sistema SaaS multiempresa de gestão de manutenção de equipamentos e frota para o mercado brasileiro: transportadoras, indústrias, comércio, serviços, locadoras e subcontratadas de manutenção. Slogan: **Cada ativo pronto para operar.**
+
+- Estado atual: concepção concluída (marca, estudo de mercado, documentação). Ainda não há código.
+- Repositório: `github.com/gustavoflandal/tenaz-manutencao`, branch principal `main`.
+- Idioma de tudo (interface, documentação, commits, código de domínio): **português do Brasil**.
+
+## 2. Fontes da verdade
+
+Em caso de conflito, vale esta ordem:
+
+1. Pedido explícito do dono do produto na sessão.
+2. [docs/0_SUMARIO_EXECUTIVO.md](docs/0_SUMARIO_EXECUTIVO.md): módulos, planos, **vocabulário canônico** (nomes de entidades, campos, estados), decisões (seções 3.3 a 3.6) e pendências.
+3. O documento dono de cada assunto:
+
+| Assunto | Documento dono |
+|---|---|
+| Requisitos `RF-<MÓD>-NNN` e `RNF-NNN` | [docs/1_ESPECIFICACAO_REQUISITOS.md](docs/1_ESPECIFICACAO_REQUISITOS.md) |
+| Modelo de dados, SQL, isolamento, sincronização | [docs/2_ARQUITETURA_BANCO_DADOS.md](docs/2_ARQUITETURA_BANCO_DADOS.md) |
+| Endpoints, eventos de webhook, códigos de erro | [docs/3_ESPECIFICACAO_APIS.md](docs/3_ESPECIFICACAO_APIS.md) |
+| Fluxos e regras `RN-<MÓD>-NNN` | [docs/4_FLUXOS_PROCESSO.md](docs/4_FLUXOS_PROCESSO.md) |
+| Arquitetura, ADRs, versionamento, testes | [docs/5_ARQUITETURA_SOFTWARE.md](docs/5_ARQUITETURA_SOFTWARE.md) |
+| Prazos, sprints, equipe, riscos de cronograma | [docs/6_ROADMAP.md](docs/6_ROADMAP.md) |
+| Interface, tokens, componentes, contrastes | [docs/7_PADROES_DESIGN.md](docs/7_PADROES_DESIGN.md) e [marca/README.md](marca/README.md) |
+| Segurança, LGPD, SLA, recuperação de desastre | [docs/9_SEGURANCA_CONFIABILIDADE.md](docs/9_SEGURANCA_CONFIABILIDADE.md) |
+| Histórico de versões do produto | [CHANGELOG.md](CHANGELOG.md) |
+| Histórico de etapas do projeto | [docs/etapas/](docs/etapas/) |
+
+Um ID (`RF-`, `RNF-`, `RN-`, `ADR-`) só é **criado** no documento dono. Os outros documentos apenas o citam.
+
+## 3. Regras obrigatórias de documentação
+
+### 3.1 Toda etapa é registrada
+
+Toda etapa do projeto (pesquisa, decisão, mudança de escopo, implementação, correção, release, revisão) gera um registro em `docs/etapas/`, no formato definido em [docs/etapas/README.md](docs/etapas/README.md): `NNN_AAAA-MM-DD_titulo-curto.md`, numeração sequencial, nunca reaproveitada. O registro diz o que foi pedido, o que foi decidido e por quê, o que mudou (arquivos e IDs), como foi verificado e o que ficou pendente.
+
+### 3.2 Nenhuma mudança sem documentação atualizada
+
+Toda correção ou implementação atualiza, **no mesmo commit ou pull request**:
+
+1. Os documentos afetados em `docs/` (requisito, modelo de dados, API, fluxo, regra, design, segurança, roadmap), subindo a versão e acrescentando uma linha no histórico do documento.
+2. O [CHANGELOG.md](CHANGELOG.md), na seção `[Não lançado]`, com a referência ao requisito (`RF-`/`RNF-`) ou ao chamado da correção (RNF-040).
+3. O registro da etapa em `docs/etapas/`.
+4. O sumário executivo, quando a mudança afetar módulo, plano, vocabulário, estado ou pendência.
+
+Uma mudança de comportamento que não aparece na documentação é tratada como defeito.
+
+### 3.3 Integridade e referência cruzada
+
+- Use exatamente os nomes canônicos do sumário (entidades, campos, estados, permissões `<módulo>.<ação>`, rotas `/v1/...`, eventos `<entidade>.<fato>`). Nome novo entra primeiro no sumário.
+- Cite sempre por ID e por link relativo: `RF-OS-012 em [1_ESPECIFICACAO_REQUISITOS.md](docs/1_ESPECIFICACAO_REQUISITOS.md)`.
+- IDs não são renumerados nem reaproveitados. Requisito ou regra que muda de módulo ou é abandonado fica com nota "movido para" ou "substituída por".
+- Ao mudar um assunto, procure todas as citações dele nos outros documentos e atualize-as junto.
+- Divergência encontrada e não resolvida vai para a seção de inconsistências/pendências do documento e para o registro da etapa. Nunca fica só na conversa.
+- Antes de concluir qualquer etapa, rode o verificador e corrija o que ele apontar:
+
+```bash
+python ferramentas/verificar_docs.py
+```
+
+### 3.4 PDFs
+
+Cada documento tem versão em PDF em `docs/pdf/`, gerada a partir do Markdown (o Markdown é a fonte; o PDF nunca é editado à mão):
+
+```bash
+python ferramentas/md2pdf.py docs/<arquivo>.md docs/pdf/<arquivo>.pdf
+```
+
+Regere o PDF de todo documento alterado. O conversor precisa de internet para desenhar os diagramas Mermaid. Em diagramas de sequência, não use `;` nem `#` no texto das mensagens.
+
+## 4. Decisões já tomadas
+
+- **Produto:** SaaS multiempresa, foco inicial em empresas de 50 a 2.000 ativos; módulos e planos no sumário, seções 2 e 2.2.
+- **Stack:** Go (monólito modular) + React/TypeScript (web) + React Native/Expo (app offline-first, SQLite) + PostgreSQL com Row-Level Security; Docker. Ver ADR-001 a ADR-009 no documento 5.
+- **Isolamento:** coluna `empresa_id` em toda tabela de negócio, RLS forçado, escopos `interno`, `prestador`, `locatario`, `link`; conexão entre contas (SRV) só pelo processo de sincronização.
+- **Versionamento:** SemVer `MAJOR.MINOR.PATCH` vindo da tag `vX.Y.Z`; versão sempre visível no canto inferior direito da tela principal e do login (RNF-039); `CHANGELOG.md` sempre atualizado (RNF-040).
+- **Marca:** cores Aço `#14202E` e Sinal `#FF6A13`; Archivo Expanded, Inter, JetBrains Mono; regras de contraste em [marca/README.md](marca/README.md). Texto sobre Sinal é sempre Aço.
+
+## 5. Pendências que dependem do dono do produto
+
+Consulte a seção 6 do sumário. Principais: P1 (ICP-Brasil na NR-1), P4 (preços), P5 (INPI), P7 (local da cópia de recuperação de desastre), P8 (CFOPs), tamanho do time do MVP. Não decida essas questões sozinho: apresente as opções.
+
+## 6. Como trabalhar
+
+- Antes de propor ou alterar algo, leia o sumário e o documento dono do assunto.
+- Mudança de escopo pedida pelo dono do produto: atualize primeiro o sumário, depois os documentos donos, depois os que citam, e registre a etapa.
+- Quando houver código: testes junto com a funcionalidade, inclusive o teste de vazamento entre empresas, prestadores, locatários e contas conectadas (R2, R4, R5).
+- Commits em português, mensagem curta no imperativo ou descritiva, citando os IDs afetados.
+- Faça commit e push somente quando o dono do produto pedir.
+
+## 7. Estrutura do repositório
+
+```
+CLAUDE.md               este prompt inicial
+CHANGELOG.md            histórico de versões do produto (RNF-040)
+README.md               apresentação do projeto
+marca/                  identidade visual (brandbook, logos, regras)
+docs/                   documentação do projeto (0 a 9)
+docs/etapas/            registro de todas as etapas do projeto
+docs/pdf/               PDFs gerados dos documentos
+docs/pesquisa/          estudo de mercado e notas de pesquisa
+ferramentas/            md2pdf.py e verificar_docs.py
+```

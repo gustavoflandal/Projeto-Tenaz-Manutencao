@@ -26,6 +26,9 @@ Fase de concepção. Ainda não há versão do software publicada.
 - Módulo de gestão de serviços do prestador (SRV, "Tenaz Serviços"): conta própria da subcontratada com cadastro de técnicos, clientes e equipamentos de clientes, OS vinculada a equipamento e técnico com serviço a realizar, componentes substituídos e horas, app do técnico e conexão com as contas de clientes que usam a Tenaz.
 - Requisito de versão visível no canto inferior direito da tela principal (RNF-039) e deste histórico de versões (RNF-040).
 - Ferramenta de conversão de documentos Markdown para PDF com a identidade da marca em `ferramentas/md2pdf.py`.
+- Prompt inicial do projeto em `CLAUDE.md`, com as regras obrigatórias de documentação.
+- Registro de etapas do projeto em `docs/etapas/`, com as etapas 001 a 008.
+- Verificador de integridade e referências cruzadas da documentação em `ferramentas/verificar_docs.py` (links, IDs RF/RNF/RN/ADR, versões, registro de etapas, PDFs desatualizados).
 
 ### Alterado
 

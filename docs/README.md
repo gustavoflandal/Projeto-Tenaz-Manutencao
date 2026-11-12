@@ -24,5 +24,22 @@ Este conjunto de documentos especifica a **Tenaz**, sistema SaaS de gestão de m
 | 8 | Manual de operação | Reservado; escrito quando houver telas | — |
 | 9 | [9_SEGURANCA_CONFIABILIDADE.md](9_SEGURANCA_CONFIABILIDADE.md) | Segurança, LGPD, SLA, backup, recuperação de desastre, observabilidade | Em elaboração |
 | — | [../CHANGELOG.md](../CHANGELOG.md) | Histórico de versões: todas as implementações e correções de cada versão | Sempre atualizado |
+| — | [etapas/](etapas/README.md) | Registro de todas as etapas do projeto: pedido, decisões, mudanças, verificação, pendências | Sempre atualizado |
+| — | [pdf/](pdf/) | Versões em PDF dos documentos, geradas do Markdown | Regeradas a cada mudança |
+
+## Regras de documentação
+
+As regras completas estão em [CLAUDE.md](../CLAUDE.md), seção 3. Em resumo:
+
+1. **Toda etapa é registrada** em [etapas/](etapas/README.md), um arquivo por etapa, com índice.
+2. **Nenhuma correção ou implementação sem documentação atualizada:** no mesmo commit entram os documentos afetados (com versão e histórico), o [CHANGELOG](../CHANGELOG.md), o registro da etapa e, quando couber, o sumário executivo.
+3. **Integridade e referência cruzada:** nomes canônicos do sumário; IDs criados só no documento dono e nunca renumerados; citações por ID e link relativo; divergência não resolvida vai para a seção de pendências.
+4. **Verificação obrigatória** antes de concluir uma etapa:
+
+```bash
+python ferramentas/verificar_docs.py
+```
+
+5. **PDFs** regerados do Markdown para todo documento alterado.
 
 O manual de operação, o roteiro de implantação, a homologação e o treinamento entram depois, quando houver telas implementadas.
