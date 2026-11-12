@@ -77,9 +77,27 @@ Defeitos encontrados pelos próprios testes e corrigidos nesta etapa:
 ## Pendências
 
 - **Infraestrutura de nuvem e build de loja passam para a fase de produção**, por decisão do dono do produto tomada ao fim desta etapa: o trabalho segue em ambiente de **desenvolvimento**, sobre o compose local de [infra/docker/](../../infra/docker/). `infra/tofu/` não é escrito agora. O ajuste está registrado em [docs/prompts/E00_fundacao-tecnica.md](../prompts/E00_fundacao-tecnica.md), seção "Ajustes durante a etapa". Nenhum outro item do portão foi afrouxado.
-- **O CI foi escrito mas ainda não executou no GitHub.** A primeira execução real acontece no próximo push; até lá, a verificação é só local.
+- ~~**O CI foi escrito mas ainda não executou no GitHub.**~~ Resolvido; ver a correção abaixo.
 - **`pg_partman`:** a seção 4.1 do documento 2 a lista entre as extensões iniciais, mas ela não acompanha a imagem oficial do PostgreSQL. Decidir, antes de `leitura_medidor`, entre imagem própria de desenvolvimento, extensão oferecida pelo provedor gerenciado ou particionamento sem a extensão. Dono: `tenaz-plataforma-sre` com `tenaz-banco-dados`.
 - **MinIO:** fixar uma release concreta da imagem antes de o módulo de anexos entrar, ou trocar por outro serviço compatível com S3 em desenvolvimento.
 - **`app.escopo_id()`:** o documento 5 passou a citar esta função depois do alinhamento de nomes, mas o documento 2 define `app.fornecedor_atual()` e `app.locatario_atual()` separadamente, sem uma função única de identificador de escopo. A função foi citada e **não** existe na migração. Fechar o nome no documento 2 antes da política `escopo_externo` de E09. Dono: `tenaz-banco-dados` com `tenaz-isolamento`.
 - **Telas:** nenhuma tela de negócio existe ainda, então não há captura em [docs/screenshots/](../screenshots/). A pasta `E00_fundacao-tecnica/` recebe a evidência do pipeline verde e do app instalado quando as duas pendências de conta externa estiverem resolvidas.
 - **P7** (local da cópia de recuperação de desastre) segue aberta e afeta a infraestrutura de backup. Prazo do roadmap: semana 20.
+
+---
+
+## Correção em 2026-11-12 — primeira execução do CI
+
+A pendência "o CI foi escrito mas ainda não executou no GitHub" foi resolvida no mesmo dia, depois do push.
+
+**A primeira execução falhou**, com `Permission denied` em todos os passos que chamam `ferramentas/tarefas.sh` e `ferramentas/versao.sh`. Causa: o `chmod +x` foi feito na máquina de desenvolvimento, mas o Git no Windows não rastreia o bit de executável por padrão, e os dois arquivos foram commitados como `100644`. É uma falha que nenhuma verificação local poderia pegar, porque localmente o bit existe no sistema de arquivos.
+
+Correção, em três camadas:
+
+1. Bit de executável acrescentado ao índice, de `100644` para `100755`.
+2. Os passos do CI passam a invocar os scripts por `bash`, o que os torna imunes ao modo do arquivo — a camada que impede o problema de voltar.
+3. Verificação nova no CI recusa qualquer `.sh` sem o bit no índice, para a regressão não voltar em silêncio.
+
+**Resultado da segunda execução:** sucesso nos quatro trabalhos que rodam em push — esteira de versão (RNF-039), documentação, backend com a suíte de isolamento, e web e app com a fila offline. O trabalho do CHANGELOG (RNF-040) é pulado em push, por desenho: ele só se aplica a pull request.
+
+Lição que fica para as etapas seguintes: a esteira só está provada depois de executar no CI. "Verde na minha máquina" não é verde.
