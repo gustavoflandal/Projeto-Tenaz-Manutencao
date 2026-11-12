@@ -27,6 +27,18 @@ Este conjunto de documentos especifica a **Tenaz**, sistema SaaS de gestão de m
 | — | [etapas/](etapas/README.md) | Registro de todas as etapas do projeto: pedido, decisões, mudanças, verificação, pendências | Sempre atualizado |
 | — | [pdf/](pdf/) | Versões em PDF dos documentos, geradas do Markdown | Regeradas a cada mudança |
 
+## Execução
+
+Como o projeto sai da concepção e vira software: o modelo de trabalho, a equipe de agentes especializados, as skills e as etapas.
+
+| Documento | Conteúdo |
+|---|---|
+| [execucao/](execucao/README.md) | Plano de execução: modelo de trabalho, equipe de 16 agentes, 12 skills, etapas E00 a E12 do MVP |
+| [prompts/](prompts/README.md) | O prompt de cada etapa, escrito antes do trabalho e versionado |
+| [screenshots/](screenshots/README.md) | Evidência visual de cada tela entregue, usada no aceite e na documentação |
+
+Os agentes e as skills estão definidos em [../.claude/agents/](../.claude/agents/) e [../.claude/skills/](../.claude/skills/).
+
 ## Regras de documentação
 
 As regras completas estão em [CLAUDE.md](../CLAUDE.md), seção 3. Em resumo:

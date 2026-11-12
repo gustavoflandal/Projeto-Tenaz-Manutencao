@@ -30,6 +30,7 @@ Em caso de conflito, vale esta ordem:
 | Segurança, LGPD, SLA, recuperação de desastre | [docs/9_SEGURANCA_CONFIABILIDADE.md](docs/9_SEGURANCA_CONFIABILIDADE.md) |
 | Histórico de versões do produto | [CHANGELOG.md](CHANGELOG.md) |
 | Histórico de etapas do projeto | [docs/etapas/](docs/etapas/) |
+| Como o trabalho acontece: agentes, skills, etapas | [docs/execucao/](docs/execucao/README.md) |
 
 Um ID (`RF-`, `RNF-`, `RN-`, `ADR-`) só é **criado** no documento dono. Os outros documentos apenas o citam.
 
@@ -87,6 +88,9 @@ Consulte a seção 6 do sumário. Principais: P1 (ICP-Brasil na NR-1), P4 (preç
 
 ## 6. Como trabalhar
 
+- **Comece pela skill `tenaz-contexto`**, em [.claude/skills/](.claude/skills/). Ela orienta qualquer tarefa: fontes da verdade, documento dono, vocabulário canônico, pendências e qual agente chamar.
+- **Use o agente especializado do assunto**, em [.claude/agents/](.claude/agents/). O catálogo, com a divisão de trabalho e quem revisa quem, está em [docs/execucao/2_EQUIPE_AGENTES.md](docs/execucao/2_EQUIPE_AGENTES.md).
+- **Toda etapa segue o ciclo de sete passos** de [docs/execucao/1_MODELO_EXECUCAO.md](docs/execucao/1_MODELO_EXECUCAO.md): prompt, plano, execução, verificação, evidência, registro, aceite. O prompt da etapa é escrito **antes** do trabalho, em [docs/prompts/](docs/prompts/).
 - Antes de propor ou alterar algo, leia o sumário e o documento dono do assunto.
 - Mudança de escopo pedida pelo dono do produto: atualize primeiro o sumário, depois os documentos donos, depois os que citam, e registre a etapa.
 - Quando houver código: testes junto com a funcionalidade, inclusive o teste de vazamento entre empresas, prestadores, locatários e contas conectadas (R2, R4, R5).
@@ -102,7 +106,12 @@ README.md               apresentação do projeto
 marca/                  identidade visual (brandbook, logos, regras)
 docs/                   documentação do projeto (0 a 9)
 docs/etapas/            registro de todas as etapas do projeto
+docs/execucao/          plano de execução: modelo de trabalho, agentes, skills, etapas
+docs/prompts/           o prompt de cada etapa, escrito antes do trabalho
+docs/screenshots/       evidência visual das telas entregues
 docs/pdf/               PDFs gerados dos documentos
 docs/pesquisa/          estudo de mercado e notas de pesquisa
 ferramentas/            md2pdf.py e verificar_docs.py
+.claude/agents/         os 16 agentes especializados do projeto
+.claude/skills/         as 12 skills com os procedimentos obrigatórios
 ```

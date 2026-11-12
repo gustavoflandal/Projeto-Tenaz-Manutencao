@@ -26,6 +26,9 @@ Fase de concepção. Ainda não há versão do software publicada.
 - Módulo de gestão de serviços do prestador (SRV, "Tenaz Serviços"): conta própria da subcontratada com cadastro de técnicos, clientes e equipamentos de clientes, OS vinculada a equipamento e técnico com serviço a realizar, componentes substituídos e horas, app do técnico e conexão com as contas de clientes que usam a Tenaz.
 - Requisito de versão visível no canto inferior direito da tela principal (RNF-039) e deste histórico de versões (RNF-040).
 - Ferramenta de conversão de documentos Markdown para PDF com a identidade da marca em `ferramentas/md2pdf.py`.
+- Plano de execução do projeto em `docs/execucao/`: modelo de trabalho com ciclo de sete passos por etapa, catálogo de 16 agentes especializados correspondentes aos papéis do time de 15 pessoas do roadmap, catálogo de 12 skills com os procedimentos obrigatórios, e as etapas E00 a E12 do MVP com entrega, agentes, portão de saída e evidência de cada uma.
+- Equipe de agentes especializados em `.claude/agents/` e skills do projeto em `.claude/skills/`, com os portões de isolamento entre empresas (RNF-013), de acesso externo (RNF-037, RNF-038), entre contas conectadas (RNF-041, RNF-042), de operação offline (RNF-010), de acessibilidade (RNF-025) e de versão visível (RNF-039) embutidos nos procedimentos.
+- Pasta `docs/prompts/` com o prompt de cada etapa do MVP e o modelo, e pasta `docs/screenshots/` com a convenção de evidência visual das telas entregues.
 - Prompt inicial do projeto em `CLAUDE.md`, com as regras obrigatórias de documentação.
 - Registro de etapas do projeto em `docs/etapas/`, com as etapas 001 a 008.
 - Verificador de integridade e referências cruzadas da documentação em `ferramentas/verificar_docs.py` (links, IDs RF/RNF/RN/ADR, versões, registro de etapas, PDFs desatualizados).

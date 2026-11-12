@@ -48,3 +48,4 @@ O que ficou em aberto e onde está registrado.
 | 006 | 2026-11-12 | escopo | [Gestão de serviços do prestador e alinhamento 0.4](006_2026-11-12_gestao-servicos-prestador.md) |
 | 007 | 2026-11-12 | release | [Primeiro commit no GitHub](007_2026-11-12_primeiro-commit.md) |
 | 008 | 2026-11-12 | decisão | [Prompt inicial e regras de documentação](008_2026-11-12_prompt-e-regras-de-documentacao.md) |
+| 009 | 2026-11-12 | decisão | [Plano de execução, equipe de agentes e skills](009_2026-11-12_equipe-de-agentes-e-skills.md) |
