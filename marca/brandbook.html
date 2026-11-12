@@ -1,0 +1,735 @@
+<title>Brandbook Tenaz</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: ficha técnica de equipamento — trilho de rótulo à esquerda, conteúdo à direita; faixas em Aço abrem e fecham o livro. */
+:root {
+  /* marca (fixas, independem do tema) */
+  --aco: #14202E;
+  --sinal: #FF6A13;
+  --nevoa: #F2F4F6;
+  --concreto: #9AA6B2;
+  /* tema claro */
+  --bg: #F2F4F6;
+  --surface: #FFFFFF;
+  --ink: #14202E;
+  --ink-2: #4A5868;
+  --ink-3: #5F6C7B;
+  --chip-text: #14202E;
+  --line: #D9DFE6;
+  --accent-text: #B54500;
+  --band: #14202E;
+  --band-ink: #EEF2F6;
+  --band-ink-2: #A9B6C3;
+  --band-line: #2B3A4C;
+  --grid: #C9D2DB;
+  --ok: #1E9E6A; --plan: #2F6FDB; --warn: #C98C00; --stop: #D33A2C; --off: #7E8A97;
+  --ok-bg: #E3F4EC; --plan-bg: #E4ECFB; --warn-bg: #FBF1D9; --stop-bg: #FBE5E2; --off-bg: #ECEFF2;
+  /* tipografia */
+  --f-display: 'Archivo', 'Arial Black', 'Helvetica Neue', Arial, sans-serif;
+  --f-text: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --f-data: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --wrap: 1120px;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0E151E; --surface: #16202C; --ink: #E8EDF2; --ink-2: #A9B5C2; --ink-3: #8592A0;
+    --line: #263241; --accent-text: #FF8A45; --band: #182330; --band-ink: #EEF2F6; --band-ink-2: #A9B6C3;
+    --band-line: #2B3A4C; --grid: #2B3A4C;
+    --ok: #3CC28B; --plan: #6E9BF0; --warn: #F0B83A; --stop: #F06A5C; --off: #97A3B0;
+    --ok-bg: #12301F; --plan-bg: #17264A; --warn-bg: #3A2D0C; --stop-bg: #3D1714; --off-bg: #222C37;
+    --chip-text: initial;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0E151E; --surface: #16202C; --ink: #E8EDF2; --ink-2: #A9B5C2; --ink-3: #8592A0;
+  --line: #263241; --accent-text: #FF8A45; --band: #182330; --band-ink: #EEF2F6; --band-ink-2: #A9B6C3;
+  --band-line: #2B3A4C; --grid: #2B3A4C;
+  --ok: #3CC28B; --plan: #6E9BF0; --warn: #F0B83A; --stop: #F06A5C; --off: #97A3B0;
+  --ok-bg: #12301F; --plan-bg: #17264A; --warn-bg: #3A2D0C; --stop-bg: #3D1714; --off-bg: #222C37;
+  --chip-text: initial;
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-text); font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+h1, h2, h3 { font-family: var(--f-display); font-stretch: 125%; letter-spacing: -0.01em; line-height: 1.1; margin: 0; text-wrap: balance; color: var(--ink); }
+h2 { font-size: clamp(1.7rem, 3.2vw, 2.4rem); font-weight: 800; }
+h3 { font-size: 1.1rem; font-weight: 700; }
+p { margin: 0; }
+.mono { font-family: var(--f-data); font-variant-numeric: tabular-nums; }
+.wrap { max-width: var(--wrap); margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; border-radius: 4px; }
+
+/* ---------- Hero ---------- */
+.hero { background: var(--band); color: var(--band-ink); position: relative; overflow: hidden; }
+.hero .pattern { position: absolute; inset: 0; width: 100%; height: 100%; color: var(--band-ink); opacity: .06; pointer-events: none; }
+.hero .wrap { position: relative; padding-block: 56px 40px; display: grid; gap: 40px; }
+.hero-top { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; font-family: var(--f-data); font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; color: var(--band-ink-2); }
+.hero-logo { --knock: var(--band); --dot: var(--sinal); color: var(--band-ink); width: min(560px, 100%); height: auto; display: block; }
+.hero-lead { display: grid; gap: 14px; max-width: 60ch; }
+.hero-lead .tag { font-family: var(--f-display); font-stretch: 125%; font-weight: 800; font-size: clamp(1.6rem, 4vw, 2.6rem); line-height: 1.1; color: #fff; text-wrap: balance; }
+.hero-lead p { color: var(--band-ink-2); font-size: 1.05rem; }
+.ticker { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); border-top: 1px solid var(--band-line); }
+.ticker div { padding: 14px 16px 4px 0; display: grid; gap: 2px; }
+.ticker span { font-family: var(--f-data); font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--band-ink-2); }
+.ticker b { font-family: var(--f-data); font-size: 1.4rem; font-weight: 600; color: #fff; font-variant-numeric: tabular-nums; }
+.ticker b i { font-style: normal; color: var(--sinal); }
+.ticker-note { font-size: .78rem; color: var(--band-ink-2); }
+
+/* ---------- Seções ---------- */
+.sec { padding-block: 72px; border-bottom: 1px solid var(--line); }
+.sec .wrap { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 32px 48px; }
+@media (max-width: 820px) { .sec .wrap { grid-template-columns: minmax(0, 1fr); } .sec { padding-block: 52px; } }
+.rail { font-family: var(--f-data); font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); display: grid; gap: 4px; align-content: start; }
+.rail b { color: var(--accent-text); font-weight: 600; }
+.body { display: grid; gap: 28px; min-width: 0; }
+.lede { font-size: 1.12rem; color: var(--ink-2); max-width: 64ch; }
+.lede strong { color: var(--ink); }
+
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 22px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.card p { color: var(--ink-2); }
+.kicker { font-family: var(--f-data); font-size: .74rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+
+/* Nome */
+.name-hero { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px 28px; }
+.name-hero .word { font-family: var(--f-display); font-stretch: 125%; font-weight: 900; font-size: clamp(3rem, 9vw, 5.5rem); line-height: 1; letter-spacing: -0.02em; }
+.name-hero .phon { font-family: var(--f-data); color: var(--ink-3); font-size: .95rem; }
+.def { display: grid; gap: 6px; }
+.def .pos { font-family: var(--f-data); font-size: .8rem; color: var(--accent-text); }
+.alt-table { width: 100%; border-collapse: collapse; font-size: .95rem; min-width: 620px; }
+.alt-table th, .alt-table td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.alt-table th { font-family: var(--f-data); font-weight: 600; font-size: .74rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+.alt-table td:first-child { font-family: var(--f-display); font-stretch: 125%; font-weight: 800; white-space: nowrap; }
+.alt-table tr.pick td { background: var(--surface); }
+.pill-pick { display: inline-block; font-family: var(--f-data); font-size: .68rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; background: var(--sinal); color: var(--aco); padding: 2px 8px; border-radius: 4px; margin-left: 8px; vertical-align: middle; font-stretch: 100%; }
+.scroll-x { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r); }
+.notice { border-left: 3px solid var(--sinal); padding: 4px 0 4px 16px; color: var(--ink-2); font-size: .95rem; max-width: 70ch; }
+
+/* Personalidade */
+.traits { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+.trait { border-top: 2px solid var(--ink); padding-top: 12px; display: grid; gap: 6px; }
+.trait h3 { font-size: 1.05rem; }
+.trait p { color: var(--ink-2); font-size: .95rem; }
+.segs { display: flex; flex-wrap: wrap; gap: 8px; }
+.segs span { border: 1px solid var(--line); background: var(--surface); padding: 6px 12px; border-radius: 999px; font-size: .9rem; }
+.voice { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.voice .card ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+.voice li { font-size: .95rem; padding-left: 26px; position: relative; color: var(--ink); }
+.voice li::before { position: absolute; left: 0; top: 0; font-family: var(--f-data); font-weight: 600; }
+.voice .do li::before { content: "✓"; color: var(--ok); }
+.voice .dont li::before { content: "✕"; color: var(--stop); }
+.voice .dont li { color: var(--ink-2); }
+
+/* Logo */
+.logo-stage { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }
+@media (max-width: 760px) { .logo-stage { grid-template-columns: minmax(0, 1fr); } }
+.construct { padding: 24px; border-right: 1px solid var(--line); display: grid; place-items: center; }
+@media (max-width: 760px) { .construct { border-right: 0; border-bottom: 1px solid var(--line); } }
+.construct svg { width: min(340px, 100%); height: auto; --knock: var(--surface); --dot: var(--sinal); color: var(--ink); }
+.construct .g { stroke: var(--grid); stroke-width: .15; fill: none; }
+.construct .gd { stroke: var(--accent-text); stroke-width: .25; fill: none; stroke-dasharray: 1 .8; }
+.construct text { font-family: var(--f-data); font-size: 2.2px; fill: var(--ink-3); }
+.construct text.a { fill: var(--accent-text); }
+.meaning { padding: 24px; display: grid; gap: 18px; align-content: center; }
+.meaning div { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 14px; align-items: start; }
+.meaning svg { width: 44px; height: 44px; }
+.meaning h3 { font-size: 1rem; margin-bottom: 2px; }
+.meaning p { color: var(--ink-2); font-size: .93rem; }
+
+.versions { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.ver { border-radius: var(--r); overflow: hidden; border: 1px solid var(--line); display: grid; grid-template-rows: 1fr auto; min-width: 0; }
+.ver .art { min-height: 170px; display: grid; place-items: center; padding: 28px; background: var(--tile-bg); color: var(--tile-ink); }
+.ver .art svg { max-width: 100%; height: auto; }
+.ver .cap { background: var(--surface); padding: 10px 14px; font-size: .85rem; color: var(--ink-2); display: flex; justify-content: space-between; gap: 8px; border-top: 1px solid var(--line); }
+.ver .cap b { color: var(--ink); font-weight: 600; }
+.t-pos { --tile-bg: #F2F4F6; --tile-ink: #14202E; --knock: #F2F4F6; --dot: #FF6A13; }
+.t-neg { --tile-bg: #14202E; --tile-ink: #F2F4F6; --knock: #14202E; --dot: #FF6A13; }
+.t-mono { --tile-bg: #FFFFFF; --tile-ink: #14202E; --knock: #FFFFFF; --dot: #14202E; }
+.t-sinal { --tile-bg: #FF6A13; --tile-ink: #14202E; --knock: #FF6A13; --dot: #F2F4F6; }
+
+.rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.clear { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 22px; display: grid; gap: 14px; }
+.clear-box { position: relative; border: 1px dashed var(--accent-text); padding: 28px; justify-self: start; max-width: 100%; --knock: var(--surface); --dot: var(--sinal); color: var(--ink); }
+.clear-box svg { display: block; width: 220px; max-width: 100%; height: auto; }
+.clear-box .x { position: absolute; width: 14px; height: 14px; background: var(--accent-text); opacity: .25; }
+.sizes { display: flex; align-items: flex-end; gap: 22px; flex-wrap: wrap; --knock: var(--surface); --dot: var(--sinal); color: var(--ink); }
+.sizes figure { margin: 0; display: grid; gap: 6px; justify-items: center; }
+.sizes figcaption { font-family: var(--f-data); font-size: .72rem; color: var(--ink-3); }
+
+.donts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.dont-item { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; display: grid; gap: 10px; justify-items: center; text-align: center; --knock: var(--surface); --dot: var(--sinal); color: var(--ink); }
+.dont-item .box { height: 76px; display: grid; place-items: center; width: 100%; position: relative; }
+.dont-item .box::after { content: ""; position: absolute; inset: 6px 22%; background: linear-gradient(to top right, transparent calc(50% - 1px), var(--stop) calc(50% - 1px), var(--stop) calc(50% + 1px), transparent calc(50% + 1px)); opacity: .8; }
+.dont-item p { font-size: .82rem; color: var(--ink-2); }
+
+/* Cores */
+.swatches { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+.sw { border-radius: var(--r); overflow: hidden; border: 1px solid var(--line); background: var(--surface); display: grid; }
+.sw .chip { height: 128px; padding: 14px; display: flex; flex-direction: column; justify-content: space-between; }
+.sw .chip b { font-family: var(--f-display); font-stretch: 125%; font-weight: 800; font-size: 1.15rem; }
+.sw .chip span { font-family: var(--f-data); font-size: .8rem; }
+.sw .info { padding: 12px 14px; display: grid; gap: 4px; font-size: .88rem; color: var(--ink-2); }
+.sw .row { display: flex; justify-content: space-between; gap: 8px; font-family: var(--f-data); font-size: .78rem; color: var(--ink-3); }
+.copy { all: unset; cursor: pointer; font-family: var(--f-data); font-size: .78rem; color: var(--accent-text); border-bottom: 1px dotted currentColor; }
+.copy:focus-visible { outline: 2px solid var(--sinal); outline-offset: 2px; }
+.ratio { display: flex; height: 44px; border-radius: var(--r); overflow: hidden; border: 1px solid var(--line); }
+.ratio div { display: flex; align-items: center; padding: 0 12px; font-family: var(--f-data); font-size: .76rem; white-space: nowrap; overflow: hidden; }
+.ramp { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border-radius: var(--r); overflow: hidden; border: 1px solid var(--line); }
+.ramp div { height: 64px; padding: 8px; font-family: var(--f-data); font-size: .68rem; display: flex; flex-direction: column; justify-content: flex-end; }
+.status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.st { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; display: grid; gap: 8px; }
+.st p { font-size: .85rem; color: var(--ink-2); }
+.chip-st { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 8px; border-radius: 6px; font-size: .82rem; font-weight: 600; justify-self: start; }
+.chip-st { color: var(--chip-text, var(--st)); }
+.chip-st svg { width: 14px; height: 14px; color: var(--st); }
+/* Tema claro: texto Aço e ícone na cor do status (AA). Tema escuro: texto e ícone na cor do status. */
+.c-ok { background: var(--ok-bg); --st: var(--ok); } .c-plan { background: var(--plan-bg); --st: var(--plan); }
+.c-warn { background: var(--warn-bg); --st: var(--warn); } .c-stop { background: var(--stop-bg); --st: var(--stop); }
+.c-off { background: var(--off-bg); --st: var(--off); }
+
+/* Tipografia */
+.specimen { display: grid; gap: 16px; }
+.spec { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 24px; display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 16px 28px; align-items: center; }
+@media (max-width: 640px) { .spec { grid-template-columns: minmax(0, 1fr); } }
+.spec .meta { display: grid; gap: 4px; }
+.spec .meta b { font-size: 1rem; }
+.spec .meta span { font-family: var(--f-data); font-size: .74rem; color: var(--ink-3); }
+.s-display { font-family: var(--f-display); font-stretch: 125%; font-weight: 800; font-size: clamp(1.8rem, 4.2vw, 3rem); line-height: 1.05; letter-spacing: -0.015em; text-wrap: balance; }
+.s-text { color: var(--ink-2); max-width: 62ch; }
+.s-data { font-family: var(--f-data); font-size: clamp(.9rem, 1.8vw, 1.05rem); display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.s-data span { white-space: nowrap; }
+.s-data em { font-style: normal; color: var(--ink-3); margin-right: 6px; font-size: .78em; text-transform: uppercase; letter-spacing: .06em; }
+.scale { width: 100%; border-collapse: collapse; min-width: 560px; }
+.scale td { padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.scale td:first-child, .scale td:last-child { font-family: var(--f-data); font-size: .76rem; color: var(--ink-3); white-space: nowrap; }
+
+/* Ícones */
+.icons { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 12px; }
+.ic { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 10px; display: grid; justify-items: center; gap: 8px; text-align: center; }
+.ic svg { width: 32px; height: 32px; stroke: var(--ink); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ic span { font-size: .78rem; color: var(--ink-2); }
+
+/* Aplicações */
+.apps { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; align-items: start; }
+.asset { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 20px; display: grid; gap: 16px; }
+.asset-head { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
+.asset-head h3 { font-family: var(--f-text); font-stretch: 100%; font-size: 1.05rem; font-weight: 700; letter-spacing: 0; }
+.asset-head p { font-family: var(--f-data); font-size: .8rem; color: var(--ink-3); }
+.kv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.kv div { display: grid; gap: 2px; }
+.kv span { font-size: .74rem; color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; font-family: var(--f-data); }
+.kv b { font-family: var(--f-data); font-weight: 600; font-variant-numeric: tabular-nums; }
+.next { border: 1px solid var(--line); border-radius: 8px; padding: 12px; display: grid; gap: 4px; font-size: .9rem; }
+.next small { color: var(--ink-3); font-family: var(--f-data); font-size: .74rem; text-transform: uppercase; letter-spacing: .06em; }
+.bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.bar i { display: block; height: 100%; width: 97.4%; background: var(--ok); }
+.btns { display: flex; gap: 10px; flex-wrap: wrap; }
+.btn { font: 600 .92rem var(--f-text); padding: 10px 16px; border-radius: 8px; border: 1px solid transparent; cursor: pointer; }
+.btn-cta { background: var(--sinal); color: var(--aco); }
+.btn-cta:hover { filter: brightness(1.06); }
+.btn-sec { background: transparent; color: var(--ink); border-color: var(--line); }
+.btn-sec:hover { border-color: var(--ink-3); }
+
+.label-wrap { display: grid; gap: 16px; }
+.label { background: #FFFFFF; color: #14202E; border: 1px solid #C9D2DB; border-radius: 6px; aspect-ratio: 70 / 40; max-width: 100%; width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; overflow: hidden; box-shadow: 0 1px 2px rgba(20,32,46,.08), 0 8px 24px rgba(20,32,46,.10); --knock: #FFFFFF; --dot: #FF6A13; }
+.label .l-main { padding: 6% 6%; display: flex; flex-direction: column; justify-content: space-between; min-width: 0; }
+.label .l-main svg { width: 46%; height: auto; color: #14202E; }
+.label .tagno { font-family: var(--f-data); font-weight: 600; font-size: clamp(1rem, 3.4vw, 1.5rem); letter-spacing: .02em; }
+.label .desc { font-size: clamp(.66rem, 1.7vw, .8rem); color: #4A5868; line-height: 1.35; }
+.label .l-qr { background: #FFFFFF; padding: 8% 8% 8% 0; display: grid; align-content: center; justify-items: center; gap: 4px; }
+.label .l-qr svg { width: clamp(76px, 22vw, 116px); height: auto; }
+.label .l-qr span { font-family: var(--f-data); font-size: .6rem; color: #4A5868; }
+.label-strip { height: 6px; background: #FF6A13; grid-column: 1 / -1; }
+
+.icons-app { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 20px; display: flex; gap: 22px; align-items: flex-end; flex-wrap: wrap; }
+.appicon { width: 96px; height: 96px; border-radius: 22px; background: #14202E; display: grid; place-items: center; --knock: #14202E; --dot: #FF6A13; color: #F2F4F6; box-shadow: 0 6px 18px rgba(20,32,46,.25); }
+.appicon svg { width: 64%; height: auto; }
+.appicon.sm { width: 56px; height: 56px; border-radius: 13px; }
+.fav { display: flex; align-items: center; gap: 8px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px 8px 0 0; padding: 8px 12px; font-size: .8rem; color: var(--ink-2); --knock: var(--bg); --dot: var(--sinal); }
+.fav svg { width: 16px; height: 16px; color: var(--ink); }
+
+/* Encerramento */
+.close { background: var(--band); color: var(--band-ink); }
+.close .wrap { padding-block: 64px; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 32px 48px; }
+.close h2 { color: #fff; }
+.close p, .close li { color: var(--band-ink-2); }
+.close ol { margin: 0; padding-left: 20px; display: grid; gap: 10px; }
+.close li b { color: #fff; font-weight: 600; }
+.close .check { list-style: none; padding: 0; }
+.close .check li { padding-left: 28px; position: relative; }
+.close .check li::before { content: ""; position: absolute; left: 0; top: 4px; width: 14px; height: 14px; border: 2px solid var(--sinal); border-radius: 3px; }
+.foot { font-family: var(--f-data); font-size: .74rem; color: var(--band-ink-2); letter-spacing: .06em; text-transform: uppercase; border-top: 1px solid var(--band-line); }
+.foot .wrap { padding-block: 18px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .hero .dot-pulse { animation: pulse 2.4s ease-in-out infinite; transform-origin: 50px 13px; transform-box: view-box; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+}
+</style>
+
+<!-- Sprite: símbolo, wordmark, lockups -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="tz-sym" viewBox="0 0 64 64">
+      <path d="M60 32 L46 56.25 L18 56.25 L4 32 L18 7.75 L46 7.75 Z" fill="currentColor" stroke="currentColor" stroke-width="6" stroke-linejoin="round"/>
+      <rect x="19" y="20" width="26" height="7" fill="var(--knock)"/>
+      <rect x="28.5" y="20" width="7" height="25" fill="var(--knock)"/>
+      <circle cx="50" cy="13" r="6.5" fill="var(--dot)" stroke="var(--knock)" stroke-width="3"/>
+    </symbol>
+    <symbol id="tz-word" viewBox="0 0 204 40">
+      <path fill="currentColor" fill-rule="evenodd" d="M0 0H36V9H22.5V40H13.5V9H0ZM43 0H73V9H52V15.5H69V24.5H52V31H73V40H43ZM80 0H91L107 25.6V0H116V40H105L89 14.4V40H80ZM137 0H149L164 40H155L152.4 33H133.6L131 40H122ZM143 8L149.4 25H136.6ZM170 0H204V9L181 31H204V40H170V31L193 9H170Z"/>
+    </symbol>
+    <symbol id="tz-h" viewBox="0 0 224 64">
+      <use href="#tz-sym" x="0" y="0" width="64" height="64"/>
+      <use href="#tz-word" x="80" y="18" width="142.8" height="28"/>
+    </symbol>
+    <symbol id="tz-v" viewBox="0 0 160 112">
+      <use href="#tz-sym" x="48" y="0" width="64" height="64"/>
+      <use href="#tz-word" x="8.6" y="80" width="142.8" height="28"/>
+    </symbol>
+  </defs>
+</svg>
+
+<header class="hero">
+  <svg class="pattern" aria-hidden="true">
+    <defs>
+      <pattern id="nuts" width="96" height="84" patternUnits="userSpaceOnUse">
+        <path d="M38 21 L31 33.1 L17 33.1 L10 21 L17 8.9 L31 8.9 Z" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M86 63 L79 75.1 L65 75.1 L58 63 L65 50.9 L79 50.9 Z" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      </pattern>
+    </defs>
+    <rect width="100%" height="100%" fill="url(#nuts)"/>
+  </svg>
+  <div class="wrap">
+    <div class="hero-top"><span>Brandbook · v0.1 para validação</span><span>Nov 2026</span></div>
+    <svg class="hero-logo" viewBox="0 0 224 64" role="img" aria-label="Tenaz">
+      <use href="#tz-sym" x="0" y="0" width="64" height="64"/>
+      <circle class="dot-pulse" cx="50" cy="13" r="6.5" fill="var(--sinal)"/>
+      <use href="#tz-word" x="80" y="18" width="142.8" height="28"/>
+    </svg>
+    <div class="hero-lead">
+      <p class="tag">Cada ativo pronto para operar.</p>
+      <p>Gestão de manutenção de equipamentos e frota para transportadoras, indústrias, comércio e serviços. Preventiva, preditiva e corretiva, ordens de serviço, estoque de peças, custos e indicadores em um só sistema.</p>
+    </div>
+    <div>
+      <div class="ticker" aria-label="Exemplo de indicadores exibidos pelo sistema">
+        <div><span>Disponibilidade</span><b>97,4<i>%</i></b></div>
+        <div><span>MTBF</span><b>412<i> h</i></b></div>
+        <div><span>MTTR</span><b>3,2<i> h</i></b></div>
+        <div><span>Preventivas no prazo</span><b>94<i>%</i></b></div>
+        <div><span>OS abertas</span><b>18</b></div>
+      </div>
+      <p class="ticker-note">Valores ilustrativos: os indicadores que o produto acompanha.</p>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- 01 NOME -->
+  <section class="sec" id="nome">
+    <div class="wrap">
+      <div class="rail"><b>01</b><span>Nome</span></div>
+      <div class="body">
+        <div class="name-hero">
+          <span class="word">Tenaz</span>
+          <span class="phon">/te·NÁZ/ · 5 letras · 2 sílabas</span>
+        </div>
+        <div class="two">
+          <div class="card def">
+            <span class="pos">adj. · tenaz</span>
+            <h3>Firme, persistente, que não cede</h3>
+            <p>É o que se espera de quem cuida de ativos críticos: constância na preventiva, rigor no registro, presença quando a máquina para.</p>
+          </div>
+          <div class="card def">
+            <span class="pos">subst. · a tenaz</span>
+            <h3>Ferramenta de pegar e segurar</h3>
+            <p>A tenaz é instrumento de oficina e de forja. O nome carrega o chão de fábrica e a oficina mecânica sem precisar dizer "manutenção".</p>
+          </div>
+        </div>
+        <p class="lede">Uma palavra só, em português, curta e fácil de pronunciar ao telefone, no rádio do pátio ou numa reunião de diretoria. Funciona igual para uma transportadora com 400 caminhões, uma planta com 2.000 equipamentos e uma rede de lojas com câmaras frias e geradores, porque fala de <strong>atitude</strong>, não de um tipo de ativo.</p>
+        <div class="card">
+          <span class="kicker">Como escrever</span>
+          <p><strong style="color:var(--ink)">Tenaz</strong> no texto corrido, com inicial maiúscula. Caixa alta só no logotipo. Assinatura completa: <strong style="color:var(--ink)">Tenaz · Gestão de Manutenção e Frota</strong>. Módulos levam o nome na frente: Tenaz Frota, Tenaz Planta, Tenaz Mobile.</p>
+        </div>
+        <div class="scroll-x">
+          <table class="alt-table">
+            <thead><tr><th>Nome</th><th>Leitura</th><th>A favor</th><th>Contra</th></tr></thead>
+            <tbody>
+              <tr class="pick"><td>Tenaz<span class="pill-pick">Recomendado</span></td><td>Firme e persistente; ferramenta de oficina</td><td>Dupla leitura, curto, português, fala de confiabilidade</td><td>Precisa de checagem no INPI e de domínio</td></tr>
+              <tr><td>Aptus</td><td>Latim: apto, pronto para uso</td><td>Liga direto à disponibilidade do ativo</td><td>Soa genérico; "apto" lembra apartamento</td></tr>
+              <tr><td>Zelo</td><td>Cuidado diligente</td><td>Caloroso, fácil de lembrar</td><td>Suave demais para frota pesada e indústria</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="notice">Antes de fechar o nome: busca de anterioridade no INPI nas classes 9 e 42 (software e SaaS), disponibilidade de domínio (.com.br e .app) e de perfis em redes. Não fiz essa verificação ainda.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 02 POSICIONAMENTO -->
+  <section class="sec" id="posicionamento">
+    <div class="wrap">
+      <div class="rail"><b>02</b><span>Posicionamento</span></div>
+      <div class="body">
+        <h2>Robusto como um sistema de grande porte, direto como uma ferramenta de oficina.</h2>
+        <p class="lede">A Tenaz compete com os sistemas de manutenção de referência do mercado. A marca precisa transmitir que aguenta operação 24/7, auditoria e milhares de ativos, sem a cara pesada e antiga dos sistemas corporativos tradicionais.</p>
+        <div class="segs" aria-label="Segmentos atendidos">
+          <span>Transportadoras e frotas</span><span>Indústria</span><span>Comércio e varejo</span><span>Construção e mineração</span><span>Agronegócio</span><span>Hospitais e facilities</span><span>Locadoras de equipamentos</span>
+        </div>
+        <div class="traits">
+          <div class="trait"><h3>Robusta</h3><p>Formas sólidas, peso tipográfico alto, nada frágil ou decorativo.</p></div>
+          <div class="trait"><h3>Precisa</h3><p>Números em fonte de dados, unidades sempre explícitas: km, h, R$, dias.</p></div>
+          <div class="trait"><h3>Direta</h3><p>Diz o que fazer e quando. Um alerta é uma frase, não um parágrafo.</p></div>
+          <div class="trait"><h3>Confiável</h3><p>Cores de status consistentes em toda tela, todo relatório, toda etiqueta.</p></div>
+        </div>
+        <div class="voice">
+          <div class="card do">
+            <span class="kicker">Tom de voz · assim</span>
+            <ul>
+              <li>Preventiva do FRT-0112 vence em 2.300 km.</li>
+              <li>OS-2026-004812 encerrada. Ativo liberado para operação.</li>
+              <li>3 peças abaixo do estoque mínimo. Gerar requisição?</li>
+            </ul>
+          </div>
+          <div class="card dont">
+            <span class="kicker">Tom de voz · evite</span>
+            <ul>
+              <li>ATENÇÃO!!! Seu veículo precisa urgentemente de manutenção!</li>
+              <li>Sucesso! Tudo certo por aqui 🎉</li>
+              <li>Ocorreu um erro inesperado. Tente novamente mais tarde.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 03 LOGO -->
+  <section class="sec" id="logo">
+    <div class="wrap">
+      <div class="rail"><b>03</b><span>Logo</span></div>
+      <div class="body">
+        <h2>Uma porca, um T e uma luz de status.</h2>
+        <div class="logo-stage">
+          <div class="construct">
+            <svg viewBox="-2 -2 68 68" role="img" aria-label="Construção do símbolo Tenaz sobre grade">
+              <g class="g">
+                <path d="M0 4H64M0 8H64M0 12H64M0 16H64M0 20H64M0 24H64M0 28H64M0 32H64M0 36H64M0 40H64M0 44H64M0 48H64M0 52H64M0 56H64M0 60H64"/>
+                <path d="M4 0V64M8 0V64M12 0V64M16 0V64M20 0V64M24 0V64M28 0V64M32 0V64M36 0V64M40 0V64M44 0V64M48 0V64M52 0V64M56 0V64M60 0V64"/>
+              </g>
+              <use href="#tz-sym" x="0" y="0" width="64" height="64"/>
+              <circle class="gd" cx="32" cy="32" r="28"/>
+              <path class="gd" d="M32 2V62M2 32H62"/>
+              <circle class="gd" cx="50" cy="13" r="9.5"/>
+              <text x="1" y="63">hexágono · lados a 60°</text>
+              <text x="41" y="63">grade 4u</text>
+              <text class="a" x="36.5" y="40">x</text>
+              <text class="a" x="46.5" y="25.6">x</text>
+            </svg>
+          </div>
+          <div class="meaning">
+            <div>
+              <svg viewBox="0 0 44 44" aria-hidden="true"><path d="M41 22 L31.5 38.5 L12.5 38.5 L3 22 L12.5 5.5 L31.5 5.5 Z" fill="none" stroke="var(--ink)" stroke-width="2.5" stroke-linejoin="round"/></svg>
+              <p><b style="color:var(--ink)">A porca sextavada</b> é a peça comum a caminhão, prensa, empilhadeira e gerador. Um só sinal para todos os segmentos.</p>
+            </div>
+            <div>
+              <svg viewBox="0 0 44 44" aria-hidden="true"><rect x="8" y="8" width="28" height="7" fill="var(--ink)"/><rect x="18.5" y="8" width="7" height="28" fill="var(--ink)"/></svg>
+              <p><b style="color:var(--ink)">O T vazado</b> é a inicial e também o desenho de uma chave T vista de frente. A barra e a haste têm a mesma espessura <span class="mono">x</span>.</p>
+            </div>
+            <div>
+              <svg viewBox="0 0 44 44" aria-hidden="true"><circle cx="22" cy="22" r="11" fill="var(--sinal)"/></svg>
+              <p><b style="color:var(--ink)">O ponto laranja</b> é a luz de status do painel: o ativo está ligado, monitorado. É o único elemento de cor do símbolo.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="versions">
+          <figure class="ver t-pos" style="margin:0"><div class="art"><svg viewBox="0 0 224 64" width="220" role="img" aria-label="Tenaz, versão positiva"><use href="#tz-h"/></svg></div><figcaption class="cap"><b>Principal positiva</b><span>fundos claros</span></figcaption></figure>
+          <figure class="ver t-neg" style="margin:0"><div class="art"><svg viewBox="0 0 224 64" width="220" role="img" aria-label="Tenaz, versão negativa"><use href="#tz-h"/></svg></div><figcaption class="cap"><b>Principal negativa</b><span>fundos escuros</span></figcaption></figure>
+          <figure class="ver t-pos" style="margin:0"><div class="art"><svg viewBox="0 0 160 112" width="140" role="img" aria-label="Tenaz, versão vertical"><use href="#tz-v"/></svg></div><figcaption class="cap"><b>Vertical</b><span>espaços quadrados</span></figcaption></figure>
+          <figure class="ver t-neg" style="margin:0"><div class="art"><svg viewBox="0 0 64 64" width="88" role="img" aria-label="Símbolo Tenaz"><use href="#tz-sym"/></svg></div><figcaption class="cap"><b>Símbolo</b><span>ícone, avatar, adesivo</span></figcaption></figure>
+          <figure class="ver t-mono" style="margin:0"><div class="art"><svg viewBox="0 0 224 64" width="220" role="img" aria-label="Tenaz, versão monocromática"><use href="#tz-h"/></svg></div><figcaption class="cap"><b>Monocromática</b><span>gravação a laser, carimbo</span></figcaption></figure>
+          <figure class="ver t-sinal" style="margin:0"><div class="art"><svg viewBox="0 0 224 64" width="220" role="img" aria-label="Tenaz sobre fundo laranja"><use href="#tz-h"/></svg></div><figcaption class="cap"><b>Sobre Sinal</b><span>ponto vira Névoa</span></figcaption></figure>
+        </div>
+
+        <div class="rules">
+          <div class="clear">
+            <span class="kicker">Área de proteção</span>
+            <div class="clear-box">
+              <span class="x" style="left:7px;top:7px"></span><span class="x" style="right:7px;bottom:7px"></span>
+              <svg viewBox="0 0 224 64" role="img" aria-label="Logo com área de proteção"><use href="#tz-h"/></svg>
+            </div>
+            <p style="color:var(--ink-2);font-size:.92rem">Margem mínima de <span class="mono">2x</span> em todos os lados, onde <span class="mono">x</span> é a espessura da barra do T.</p>
+          </div>
+          <div class="clear">
+            <span class="kicker">Tamanho mínimo</span>
+            <div class="sizes">
+              <figure><svg viewBox="0 0 64 64" width="16" height="16" aria-hidden="true"><use href="#tz-sym"/></svg><figcaption>16 px</figcaption></figure>
+              <figure><svg viewBox="0 0 64 64" width="24" height="24" aria-hidden="true"><use href="#tz-sym"/></svg><figcaption>24 px</figcaption></figure>
+              <figure><svg viewBox="0 0 64 64" width="32" height="32" aria-hidden="true"><use href="#tz-sym"/></svg><figcaption>32 px</figcaption></figure>
+              <figure><svg viewBox="0 0 224 64" width="112" height="32" aria-hidden="true"><use href="#tz-h"/></svg><figcaption>112 px · 25 mm</figcaption></figure>
+            </div>
+            <p style="color:var(--ink-2);font-size:.92rem">Símbolo a partir de 16 px. Logo horizontal a partir de 112 px na tela e 25 mm no impresso. Abaixo disso, use só o símbolo.</p>
+          </div>
+        </div>
+
+        <div>
+          <span class="kicker">Usos incorretos</span>
+          <div class="donts" style="margin-top:12px">
+            <div class="dont-item"><div class="box"><svg viewBox="0 0 224 64" width="150" style="transform:scaleX(1.35)" aria-hidden="true"><use href="#tz-h"/></svg></div><p>Distorcer</p></div>
+            <div class="dont-item" style="--dot:#2F6FDB"><div class="box"><svg viewBox="0 0 224 64" width="150" aria-hidden="true"><use href="#tz-h"/></svg></div><p>Trocar a cor do ponto</p></div>
+            <div class="dont-item"><div class="box"><svg viewBox="0 0 224 64" width="140" style="transform:rotate(-12deg)" aria-hidden="true"><use href="#tz-h"/></svg></div><p>Girar</p></div>
+            <div class="dont-item"><div class="box" style="display:flex;justify-content:center;align-items:center;gap:8px"><svg viewBox="0 0 64 64" width="40" aria-hidden="true"><use href="#tz-sym"/></svg><span style="font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:1.7rem">Tenaz</span></div><p>Redesenhar com outra fonte</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 04 CORES -->
+  <section class="sec" id="cores">
+    <div class="wrap">
+      <div class="rail"><b>04</b><span>Cores</span></div>
+      <div class="body">
+        <h2>Aço para a base, Sinal para chamar a atenção.</h2>
+        <p class="lede">Duas cores carregam a marca. O Aço é escuro, sóbrio, de painel de máquina. O Sinal vem do laranja de segurança usado em equipamentos e sinalização viária, e aparece pouco: no ponto do símbolo e nas ações principais.</p>
+        <div class="swatches">
+          <div class="sw">
+            <div class="chip" style="background:#14202E;color:#F2F4F6"><b>Aço</b><span>Primária</span></div>
+            <div class="info"><div class="row"><button class="copy" data-hex="#14202E">#14202E</button><span>RGB 20 32 46</span></div><div class="row"><span>CMYK 90 74 52 64</span><span>Pantone 2965 C</span></div><span>Logo, títulos, menus, faixas.</span></div>
+          </div>
+          <div class="sw">
+            <div class="chip" style="background:#FF6A13;color:#14202E"><b>Sinal</b><span>Destaque</span></div>
+            <div class="info"><div class="row"><button class="copy" data-hex="#FF6A13">#FF6A13</button><span>RGB 255 106 19</span></div><div class="row"><span>CMYK 0 70 95 0</span><span>Pantone 1585 C</span></div><span>Ponto do símbolo, botão de ação principal.</span></div>
+          </div>
+          <div class="sw">
+            <div class="chip" style="background:#F2F4F6;color:#14202E;box-shadow:inset 0 -1px 0 #D9DFE6"><b>Névoa</b><span>Fundo</span></div>
+            <div class="info"><div class="row"><button class="copy" data-hex="#F2F4F6">#F2F4F6</button><span>RGB 242 244 246</span></div><div class="row"><span>CMYK 3 1 0 3</span><span>Cool Gray 1 C</span></div><span>Fundo de telas e documentos.</span></div>
+          </div>
+          <div class="sw">
+            <div class="chip" style="background:#9AA6B2;color:#14202E"><b>Concreto</b><span>Apoio</span></div>
+            <div class="info"><div class="row"><button class="copy" data-hex="#9AA6B2">#9AA6B2</button><span>RGB 154 166 178</span></div><div class="row"><span>CMYK 13 7 0 30</span><span>Cool Gray 6 C</span></div><span>Linhas e elementos decorativos. Nunca como cor de texto.</span></div>
+          </div>
+        </div>
+        <p style="font-size:.85rem;color:var(--ink-3)">CMYK e Pantone são referências aproximadas. Confirmar em prova de cor antes da primeira impressão.</p>
+        <div>
+          <span class="kicker">Proporção de uso</span>
+          <div class="ratio" style="margin-top:10px" role="img" aria-label="Névoa 60 por cento, Aço 28 por cento, Concreto 8 por cento, Sinal 4 por cento">
+            <div style="flex:60;background:#F2F4F6;color:#14202E">Névoa 60%</div>
+            <div style="flex:28;background:#14202E;color:#F2F4F6">Aço 28%</div>
+            <div style="flex:8;background:#9AA6B2;color:#14202E">8%</div>
+            <div style="flex:4;background:#FF6A13;color:#14202E"></div>
+          </div>
+        </div>
+        <div>
+          <span class="kicker">Escala do Aço para interface</span>
+          <div class="ramp" style="margin-top:10px">
+            <div style="background:#14202E;color:#F2F4F6">900<br>#14202E</div>
+            <div style="background:#2B3A4C;color:#F2F4F6">700<br>#2B3A4C</div>
+            <div style="background:#4A5868;color:#F2F4F6">500<br>#4A5868</div>
+            <div style="background:#9AA6B2;color:#14202E">300<br>#9AA6B2</div>
+            <div style="background:#D9DFE6;color:#14202E">100<br>#D9DFE6</div>
+            <div style="background:#F2F4F6;color:#14202E">50<br>#F2F4F6</div>
+          </div>
+        </div>
+        <div>
+          <span class="kicker">Cores de status do ativo · semânticas, não são cores da marca</span>
+          <div class="status-grid" style="margin-top:12px">
+            <div class="st"><span class="chip-st c-ok"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3 3 7-7"/></svg>Operando</span><p>Disponível e dentro dos planos.</p></div>
+            <div class="st"><span class="chip-st c-plan"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2.5" y="3.5" width="11" height="10" rx="1.5"/><path d="M2.5 7h11M5.5 2v3M10.5 2v3"/></svg>Preventiva</span><p>Parada programada, em execução.</p></div>
+            <div class="st"><span class="chip-st c-warn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2l6.5 11.5h-13z"/><path d="M8 6.5v3M8 11.6v.1"/></svg>Atenção</span><p>Plano vencendo ou leitura fora da faixa.</p></div>
+            <div class="st"><span class="chip-st c-stop"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5"/></svg>Parado</span><p>Corretiva aberta, ativo indisponível.</p></div>
+            <div class="st"><span class="chip-st c-off"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M4 8h8"/></svg>Inativo</span><p>Baixado, vendido ou em reserva.</p></div>
+          </div>
+          <p class="notice" style="margin-top:16px">Status sempre com ícone e texto, nunca só pela cor, para quem tem daltonismo e para impressão em preto e branco. No tema claro o texto do chip é Aço e só o ícone leva a cor do status, porque a cor do status sobre o próprio fundo não atinge o contraste AA. O laranja Sinal não é usado como status, texto nem contorno de foco.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 05 TIPOGRAFIA -->
+  <section class="sec" id="tipografia">
+    <div class="wrap">
+      <div class="rail"><b>05</b><span>Tipografia</span></div>
+      <div class="body">
+        <h2>Três vozes: título, texto e dado.</h2>
+        <div class="specimen">
+          <div class="spec">
+            <div class="meta"><b>Archivo Expanded</b><span>Títulos · 700–900</span><span>Google Fonts · OFL</span></div>
+            <p class="s-display">Preventiva em dia, frota na estrada.</p>
+          </div>
+          <div class="spec">
+            <div class="meta"><b>Inter</b><span>Texto e interface · 400–700</span><span>Google Fonts · OFL</span></div>
+            <p class="s-text">A ordem de serviço reúne o defeito relatado, o diagnóstico, as peças consumidas e as horas de mão de obra. Ao encerrar, o custo vai para o centro de custo do ativo e o histórico fica disponível para auditoria.</p>
+          </div>
+          <div class="spec">
+            <div class="meta"><b>JetBrains Mono</b><span>Dados e códigos · 400–600</span><span>Google Fonts · OFL</span></div>
+            <div class="s-data">
+              <span><em>OS</em>OS-2026-004812</span>
+              <span><em>Placa</em>RTZ4F82</span>
+              <span><em>Horímetro</em>12.480 h</span>
+              <span><em>Hodômetro</em>248.315 km</span>
+              <span><em>TAG</em>CMP-0347</span>
+              <span><em>Custo</em>R$ 3.418,90</span>
+            </div>
+          </div>
+        </div>
+        <div class="scroll-x">
+          <table class="scale">
+            <tbody>
+              <tr><td>Display</td><td><span style="font-family:var(--f-display);font-stretch:125%;font-weight:800;font-size:2.4rem;line-height:1">Frota</span></td><td>48 / 52 · 800</td></tr>
+              <tr><td>H1</td><td><span style="font-family:var(--f-display);font-stretch:125%;font-weight:800;font-size:1.75rem">Painel de manutenção</span></td><td>32 / 38 · 800</td></tr>
+              <tr><td>H2</td><td><span style="font-family:var(--f-display);font-stretch:125%;font-weight:700;font-size:1.3rem">Planos preventivos</span></td><td>22 / 28 · 700</td></tr>
+              <tr><td>Corpo</td><td><span style="font-size:1rem">Troca de óleo e filtros a cada 20.000 km ou 6 meses.</span></td><td>16 / 24 · 400</td></tr>
+              <tr><td>Legenda</td><td><span style="font-size:.8rem;color:var(--ink-2)">Atualizado há 4 min pelo app de campo</span></td><td>13 / 18 · 500</td></tr>
+              <tr><td>Dado</td><td><span class="mono" style="font-size:.9rem">MTBF 412 h · MTTR 3,2 h</span></td><td>14 / 20 · mono</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 06 ÍCONES -->
+  <section class="sec" id="icones">
+    <div class="wrap">
+      <div class="rail"><b>06</b><span>Iconografia</span></div>
+      <div class="body">
+        <p class="lede">Traço de 2 px em grade de 24, cantos arredondados, sem preenchimento. Mesmo peso visual do T do símbolo quando ampliado.</p>
+        <div class="icons">
+          <div class="ic"><svg viewBox="0 0 24 24"><path d="M2 6h11v10H2z"/><path d="M13 9h4.5l3.5 3.5V16h-8z"/><circle cx="6.5" cy="17.5" r="2"/><circle cx="17" cy="17.5" r="2"/></svg><span>Frota</span></div>
+          <div class="ic"><svg viewBox="0 0 24 24"><path d="M3 21V10l6 4V10l6 4V5h6v16z"/><path d="M7 17h2M12 17h2M17 17h1"/></svg><span>Planta</span></div>
+          <div class="ic"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94z"/></svg><span>Ordem de serviço</span></div>
+          <div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4M9 15l2 2 4-4"/></svg><span>Preventiva</span></div>
+          <div class="ic"><svg viewBox="0 0 24 24"><path d="M3.34 19a10 10 0 1 1 17.32 0"/><path d="M12 14l4-4"/></svg><span>Medição</span></div>
+          <div class="ic"><svg viewBox="0 0 24 24"><path d="M21 12 L16.5 19.8 L7.5 19.8 L3 12 L7.5 4.2 L16.5 4.2 Z"/><circle cx="12" cy="12" r="3"/></svg><span>Peças</span></div>
+          <div class="ic"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3v2h6V3M8.5 11l1.5 1.5 3-3M8.5 16.5h7"/></svg><span>Checklist</span></div>
+          <div class="ic"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 6-6"/></svg><span>Indicadores</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 07 APLICAÇÕES -->
+  <section class="sec" id="aplicacoes">
+    <div class="wrap">
+      <div class="rail"><b>07</b><span>Aplicações</span></div>
+      <div class="body">
+        <h2>A marca no sistema, no campo e no ativo.</h2>
+        <div class="apps">
+          <article class="asset" aria-label="Exemplo de cartão de ativo na interface">
+            <div class="asset-head">
+              <div><h3>Cavalo mecânico 6x2</h3><p>FRT-0112 · Placa RTZ4F82</p></div>
+              <span class="chip-st c-ok"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3 3 7-7"/></svg>Operando</span>
+            </div>
+            <div class="kv">
+              <div><span>Hodômetro</span><b>248.315 km</b></div>
+              <div><span>Custo/km 90d</span><b>R$ 0,41</b></div>
+              <div><span>Última OS</span><b>OS-2026-004812</b></div>
+              <div><span>Base</span><b>Contagem/MG</b></div>
+            </div>
+            <div class="next">
+              <small>Próxima preventiva</small>
+              <span>Troca de óleo e filtros em <b class="mono">2.300 km</b> (cerca de 9 dias)</span>
+            </div>
+            <div style="display:grid;gap:6px">
+              <div style="display:flex;justify-content:space-between;font-size:.82rem;color:var(--ink-2)"><span>Disponibilidade 30 dias</span><b class="mono" style="color:var(--ink)">97,4%</b></div>
+              <div class="bar"><i></i></div>
+            </div>
+            <div class="btns"><button class="btn btn-cta" type="button">Abrir OS</button><button class="btn btn-sec" type="button">Ver histórico</button></div>
+          </article>
+
+          <div class="label-wrap">
+            <div class="label" role="img" aria-label="Etiqueta de patrimônio Tenaz, 70 por 40 milímetros, com TAG CMP-0347 e QR code">
+              <div class="l-main">
+                <svg viewBox="0 0 224 64" aria-hidden="true"><use href="#tz-h"/></svg>
+                <div>
+                  <div class="tagno">CMP-0347</div>
+                  <div class="desc">Compressor de parafuso 30 HP<br>Linha 2 · Planta Contagem</div>
+                </div>
+              </div>
+              <div class="l-qr"><svg id="qr" viewBox="0 0 25 25" shape-rendering="crispEdges" aria-hidden="true"></svg><span>abrir OS · checklist</span></div>
+              <div class="label-strip"></div>
+            </div>
+            <p style="font-size:.85rem;color:var(--ink-2)">Etiqueta de patrimônio 70 × 40 mm em poliéster com laminação. O QR abre o ativo no app para registrar falha, checklist ou leitura de horímetro.</p>
+          </div>
+
+          <div class="icons-app">
+            <div style="display:grid;gap:8px;justify-items:center"><div class="appicon"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#tz-sym"/></svg></div><span class="kicker">App · 96</span></div>
+            <div style="display:grid;gap:8px;justify-items:center"><div class="appicon sm"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#tz-sym"/></svg></div><span class="kicker">56</span></div>
+            <div style="display:grid;gap:8px;flex:1;min-width:180px">
+              <div class="fav"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#tz-sym"/></svg><span>Tenaz · Painel</span></div>
+              <span class="kicker">Favicon · 16</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<section class="close" id="validacao">
+  <div class="wrap">
+    <div style="display:grid;gap:16px;align-content:start">
+      <h2>Para validar</h2>
+      <ul class="check" style="display:grid;gap:10px;margin:0">
+        <li><b>Nome:</b> Tenaz, ou uma das alternativas (Aptus, Zelo).</li>
+        <li><b>Símbolo:</b> porca, T vazado e ponto de status.</li>
+        <li><b>Paleta:</b> Aço e Sinal, com status semânticos à parte.</li>
+        <li><b>Tipografia:</b> Archivo Expanded, Inter e JetBrains Mono.</li>
+        <li><b>Assinatura:</b> "Cada ativo pronto para operar."</li>
+      </ul>
+    </div>
+    <div style="display:grid;gap:16px;align-content:start">
+      <h2>Depois da aprovação</h2>
+      <ol>
+        <li><b>Arquivos finais:</b> SVG e PNG de todas as versões, favicon e ícones de app.</li>
+        <li><b>Pesquisa:</b> benchmarking dos sistemas de referência em manutenção e frota, normas e indicadores do setor.</li>
+        <li><b>Documentação:</b> visão do produto, módulos, requisitos, regras de negócio e arquitetura.</li>
+      </ol>
+    </div>
+  </div>
+  <div class="foot"><div class="wrap"><span>Tenaz · Gestão de Manutenção e Frota</span><span>Brandbook v0.1</span></div></div>
+</section>
+
+<script>
+(function () {
+  // QR ilustrativo (não codifica dados): padrões de posição + módulos pseudoaleatórios
+  var svg = document.getElementById('qr');
+  if (svg) {
+    var n = 25, seed = 347, cells = [];
+    function rnd() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
+    function inFinder(x, y) { return (x < 8 && y < 8) || (x > n - 9 && y < 8) || (x < 8 && y > n - 9); }
+    var out = '<rect width="25" height="25" fill="#FFFFFF"/>';
+    for (var y = 0; y < n; y++) for (var x = 0; x < n; x++) {
+      if (inFinder(x, y)) continue;
+      if (rnd() > 0.52) out += '<rect x="' + x + '" y="' + y + '" width="1" height="1" fill="#14202E"/>';
+    }
+    [[0, 0], [n - 7, 0], [0, n - 7]].forEach(function (p) {
+      out += '<rect x="' + p[0] + '" y="' + p[1] + '" width="7" height="7" fill="#14202E"/>' +
+             '<rect x="' + (p[0] + 1) + '" y="' + (p[1] + 1) + '" width="5" height="5" fill="#FFFFFF"/>' +
+             '<rect x="' + (p[0] + 2) + '" y="' + (p[1] + 2) + '" width="3" height="3" fill="#14202E"/>';
+    });
+    out += '<rect x="16" y="16" width="5" height="5" fill="#14202E"/><rect x="17" y="17" width="3" height="3" fill="#FFFFFF"/><rect x="18" y="18" width="1" height="1" fill="#14202E"/>';
+    svg.innerHTML = out;
+  }
+  // Copiar HEX
+  document.querySelectorAll('.copy').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var hex = b.getAttribute('data-hex');
+      var done = function () { var t = b.textContent; b.textContent = 'Copiado'; setTimeout(function () { b.textContent = t; }, 1200); };
+      try {
+        navigator.clipboard.writeText(hex).then(done, function () { selectText(b); });
+      } catch (e) { selectText(b); }
+    });
+  });
+  function selectText(el) { try { var r = document.createRange(); r.selectNodeContents(el); var s = getSelection(); s.removeAllRanges(); s.addRange(r); } catch (e) {} }
+})();
+</script>
