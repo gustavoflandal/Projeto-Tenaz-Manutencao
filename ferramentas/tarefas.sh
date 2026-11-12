@@ -55,7 +55,7 @@ migrar_situacao() {
 compilar() {
   titulo "Compilando com a versão injetada pela tag"
   mkdir -p bin
-  (cd backend && go build -ldflags "$("$RAIZ/ferramentas/versao.sh" --ldflags)" -o ../bin/tenaz ./cmd/tenaz)
+  (cd backend && go build -ldflags "$(bash "$RAIZ/ferramentas/versao.sh" --ldflags)" -o ../bin/tenaz ./cmd/tenaz)
   verde "bin/tenaz"
 }
 
@@ -150,7 +150,7 @@ tipos_js() {
 
 compilar_web() {
   titulo "Compilando a web com a versão injetada"
-  eval "$("$RAIZ/ferramentas/versao.sh" --export)"
+  eval "$(bash "$RAIZ/ferramentas/versao.sh" --export)"
   (cd web && TENAZ_VERSAO="$TENAZ_VERSAO" TENAZ_COMMIT="$TENAZ_COMMIT"      TENAZ_DATA_BUILD="$TENAZ_DATA_BUILD" "${PNPM[@]}" exec vite build)
   verde "web/dist"
 }
@@ -162,7 +162,7 @@ conferir_docs() {
   python ferramentas/verificar_docs.py
 }
 
-versao() { "$RAIZ/ferramentas/versao.sh"; }
+versao() { bash "$RAIZ/ferramentas/versao.sh"; }
 
 # ------------------------------------------------------------------- conjuntos
 

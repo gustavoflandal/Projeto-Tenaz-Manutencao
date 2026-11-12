@@ -42,6 +42,27 @@ jobs:
       - name: Verificador de documentação
         run: python ferramentas/verificar_docs.py
 
+      # O Git no Windows não rastreia o bit de executável por padrão, e a
+      # primeira execução deste CI falhou com "Permission denied" por isso.
+      # Os passos passaram a invocar os scripts por `bash`, o que os torna
+      # imunes; esta verificação impede que o bit se perca em silêncio e
+      # quebre quem executa o script direto.
+      - name: Scripts com bit de executável
+        run: |
+          set -euo pipefail
+          faltando=""
+          while read -r modo _ _ caminho; do
+            if [[ "$modo" != "100755" ]]; then
+              faltando="$faltando $caminho"
+            fi
+          done < <(git ls-files -s '*.sh')
+          if [[ -n "$faltando" ]]; then
+            echo "::error::script sem bit de executável no índice:$faltando"
+            echo "corrija com: git update-index --chmod=+x$faltando"
+            exit 1
+          fi
+          echo "todos os scripts com bit de executável"
+
   changelog:
     name: CHANGELOG atualizado (RNF-040)
     runs-on: ubuntu-latest
@@ -98,15 +119,15 @@ jobs:
           go mod verify
 
       - name: Formato
-        run: ferramentas/tarefas.sh conferir-formato
+        run: bash ferramentas/tarefas.sh conferir-formato
 
       - name: Análise estática
-        run: ferramentas/tarefas.sh vet
+        run: bash ferramentas/tarefas.sh vet
 
       # O contrato é gerado dos tipos Go. Se o arquivo versionado difere do
       # gerado, alguém mudou a API sem regenerar (seção 2.5).
       - name: Contrato OpenAPI em dia
-        run: ferramentas/tarefas.sh conferir-contrato
+        run: bash ferramentas/tarefas.sh conferir-contrato
 
       - name: Testes unitários
         working-directory: backend
@@ -137,12 +158,12 @@ jobs:
       - name: Versão derivada da tag e injetada no binário
         run: |
           set -euo pipefail
-          esperada="$(ferramentas/versao.sh --versao)"
-          commit_esperado="$(ferramentas/versao.sh --commit)"
+          esperada="$(bash ferramentas/versao.sh --versao)"
+          commit_esperado="$(bash ferramentas/versao.sh --commit)"
           echo "Versão esperada: $esperada"
 
           cd backend
-          go build -ldflags "$(cd .. && ferramentas/versao.sh --ldflags)" -o /tmp/tenaz ./cmd/tenaz
+          go build -ldflags "$(cd .. && bash ferramentas/versao.sh --ldflags)" -o /tmp/tenaz ./cmd/tenaz
 
           obtida="$(/tmp/tenaz versao | sed -n 's/^versao=//p')"
           commit_obtido="$(/tmp/tenaz versao | sed -n 's/^commit=//p')"
@@ -172,7 +193,7 @@ jobs:
           corpo="$(curl -fsS http://127.0.0.1:8080/v1/versao)"
           echo "Resposta: $corpo"
 
-          esperada="$(ferramentas/versao.sh --versao)"
+          esperada="$(bash ferramentas/versao.sh --versao)"
           echo "$corpo" | grep -q "\"versao\":\"$esperada\"" || {
             echo "::error::GET /v1/versao não devolveu a versão do build"; exit 1; }
 
@@ -213,7 +234,7 @@ jobs:
       - name: Build da web com a versão da tag
         run: |
           set -euo pipefail
-          eval "$(ferramentas/versao.sh --export)"
+          eval "$(bash ferramentas/versao.sh --export)"
           cd web
           TENAZ_VERSAO="$TENAZ_VERSAO" TENAZ_COMMIT="$TENAZ_COMMIT"             TENAZ_DATA_BUILD="$TENAZ_DATA_BUILD" pnpm exec vite build
           cat dist/versao.json
