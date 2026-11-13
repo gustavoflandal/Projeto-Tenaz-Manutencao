@@ -1,0 +1,31 @@
+# Chaves JWT do SeaweedFS de DESENVOLVIMENTO LOCAL (ADR-012, decisão 4a, em
+# docs/5_ARQUITETURA_SOFTWARE.md).
+#
+# Estão no repositório de propósito e não valem em nenhum outro ambiente: em
+# homologação e produção as chaves vêm do cofre, nunca deste arquivo.
+#
+# Por que o arquivo é obrigatório até no desenvolvimento: sem ele, a API HTTP do
+# filer (porta 8888) aceita um DELETE recursivo sem credencial nenhuma e apaga
+# o bucket inteiro, inclusive a versão em retenção de conformidade (ensaio do
+# ADR-012, HTTP 204). Com as chaves abaixo, o mesmo pedido recebe 401. A prova
+# roda em `ferramentas/tarefas.sh armazenamento-provar`.
+#
+# O SeaweedFS lê este arquivo de /etc/seaweedfs/security.toml (montado pelo
+# compose, só leitura). O gateway S3 roda no mesmo processo e assina com as
+# mesmas chaves os pedidos que faz ao filer e ao volume.
+
+# Escrita no servidor de volume.
+[jwt.signing]
+key = "04da4a69c6e8924e97477a8a2b51d0eae739e5466e867a82c03480fa02a1a26a"
+
+# Leitura no servidor de volume.
+[jwt.signing.read]
+key = "5a609400406bbf6ab9119e4ef1d0e95f34321c1f5a92fbcfd91979a7f05451c6"
+
+# Escrita e exclusão na API HTTP do filer.
+[jwt.filer_signing]
+key = "be99ae299adfecc2550a04ca856b5d1c3bca5f6d9375a4631ecb836012b0f5f7"
+
+# Leitura e listagem na API HTTP do filer.
+[jwt.filer_signing.read]
+key = "dca5002d3c4513653d8e0174381bff7b96240b6979c984f3e64413c98ce47464"

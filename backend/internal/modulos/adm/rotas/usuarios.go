@@ -20,7 +20,7 @@ type entradaListarUsuarios struct {
 
 type entradaRetirarPermissao struct {
 	ID        string `path:"id"`
-	Permissao string `path:"permissao" maxLength:"60" example:"pessoa.saude.ler"`
+	Permissao string `path:"permissao" maxLength:"60" example:"os.encerrar"`
 }
 
 func (r *rotas) registrarUsuarios(s *api.Servidor) {
@@ -290,8 +290,8 @@ func (r *rotas) registrarUsuarios(s *api.Servidor) {
 		ID: "concederPermissaoUsuario", Metodo: http.MethodPost, Caminho: "/v1/usuarios/{id}/permissoes", Status: http.StatusCreated, Permissoes: gerenciar,
 		Resumo: "Conceder permissão avulsa",
 		Descricao: "Permissão do catálogo de RF-ADM-005 concedida a este usuário (usuario_permissao), como " +
-			"pessoa.saude.ler. Ninguém concede a si mesmo; só concede quem tem a permissão, salvo as três que o " +
-			"administrador concede sem ter; usuário externo nunca recebe permissão vedada. A concessão vai para a trilha.",
+			"os.encerrar. Ninguém concede a si mesmo; só concede quem tem a permissão, salvo as duas que o " +
+			"administrador concede sem ter (os.encerrar e est.decidir_destino); usuário externo nunca recebe permissão vedada. A concessão vai para a trilha.",
 	}), func(ctx context.Context, in *entradaIDCorpo[EntradaPermissao]) (*saida[Usuario], error) {
 		svc, a, err := r.contexto(ctx)
 		if err != nil {

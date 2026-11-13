@@ -104,6 +104,9 @@ components:
         id:
           format: uuid
           type: string
+        mfa_obrigatorio:
+          description: "Segundo fator exigido de todos os usuários (RN-ADM-027): quem não o tem entra com sessão restrita à ativação"
+          type: boolean
         nome_fantasia:
           type:
             - string
@@ -142,6 +145,7 @@ components:
         - cnpj
         - plano
         - srv_habilitado
+        - mfa_obrigatorio
         - situacao
         - fuso_horario
         - retencao_auditoria_anos
@@ -340,7 +344,7 @@ components:
         permissao:
           description: Código do catálogo de RF-ADM-005
           examples:
-            - pessoa.saude.ler
+            - os.encerrar
           maxLength: 60
           type: string
       required:
@@ -898,6 +902,9 @@ components:
         fuso_horario:
           maxLength: 64
           type: string
+        mfa_obrigatorio:
+          description: Exige segundo fator de todos os usuários da empresa
+          type: boolean
         nome_fantasia:
           maxLength: 200
           type:
@@ -1249,7 +1256,6 @@ components:
           enum:
             - ativa
             - inativa
-            - desligada
           type: string
         telefone:
           type:
@@ -1512,7 +1518,6 @@ components:
           enum:
             - ativa
             - inativa
-            - desligada
           type: string
         unidade_id:
           format: uuid
@@ -1696,6 +1701,9 @@ components:
           type:
             - string
             - "null"
+        mfa_pendente:
+          description: "A empresa exige segundo fator e a pessoa ainda não o ativou: a sessão só serve para ler a sessão, sair, trocar de empresa e ativar o MFA; as demais rotas respondem 401 nao_autenticado com mfa_pendente (RN-ADM-027)"
+          type: boolean
         perfis:
           description: Códigos de origem dos perfis ativos
           items:
@@ -1722,6 +1730,7 @@ components:
         - perfis
         - permissoes
         - empresas
+        - mfa_pendente
       type: object
     SessoesEncerradas:
       additionalProperties: false
@@ -1799,6 +1808,9 @@ components:
           type:
             - string
             - "null"
+        mfa_pendente:
+          description: "A empresa exige segundo fator e a pessoa ainda não o ativou: a sessão só serve para ler a sessão, sair, trocar de empresa e ativar o MFA; as demais rotas respondem 401 nao_autenticado com mfa_pendente (RN-ADM-027)"
+          type: boolean
         perfis:
           description: Códigos de origem dos perfis ativos
           items:
@@ -1829,6 +1841,7 @@ components:
         - perfis
         - permissoes
         - empresas
+        - mfa_pendente
       type: object
     Turno:
       additionalProperties: false
@@ -1980,7 +1993,7 @@ components:
             - array
             - "null"
         permissoes_avulsas:
-          description: Permissões concedidas a este usuário além dos perfis, como pessoa.saude.ler
+          description: Permissões concedidas a este usuário além dos perfis, como os.encerrar
           items:
             type: string
           type:
@@ -2070,7 +2083,7 @@ components:
             - array
             - "null"
         permissoes_avulsas:
-          description: Permissões concedidas a este usuário além dos perfis, como pessoa.saude.ler
+          description: Permissões concedidas a este usuário além dos perfis, como os.encerrar
           items:
             type: string
           type:
@@ -2763,7 +2776,7 @@ paths:
       x-plano-minimo: E
   /v1/auth/mfa/desativar:
     post:
-      description: Exige um código válido. 401 mfa_codigo_invalido; 409 transicao_invalida se não está ativo.
+      description: "Exige um código válido. Código errado soma uma falha ao bloqueio progressivo, como no login, e código de um passo TOTP já usado vale como errado: 401 mfa_codigo_invalido. 409 transicao_invalida com estado_atual \"inativo\" se o segundo fator não está ativo, e com estado_atual \"exigido_pela_empresa\" enquanto a identidade tiver acesso a alguma empresa que exige MFA (RN-ADM-027)."
       operationId: desativarMFA
       requestBody:
         content:
@@ -3403,7 +3416,7 @@ paths:
         - adm.ler
       x-plano-minimo: E
     patch:
-      description: "JSON Merge Patch com If-Match. Plano e módulo SRV mudam pela cobrança (RF-ADM-009), não aqui: 422 campo_somente_leitura."
+      description: "JSON Merge Patch com If-Match. Plano e módulo SRV mudam pela cobrança (RF-ADM-009), não aqui: 422 campo_somente_leitura. mfa_obrigatorio liga o segundo fator obrigatório: quem não o tem passa a entrar com sessão restrita à ativação (RN-ADM-027)."
       operationId: alterarEmpresa
       parameters:
         - description: ETag lido do recurso; obrigatório
@@ -3903,7 +3916,6 @@ paths:
             enum:
               - ativa
               - inativa
-              - desligada
             type: string
         - explode: false
           in: query
@@ -4084,7 +4096,7 @@ paths:
       x-plano-minimo: E
   /v1/pessoas/{id}:
     delete:
-      description: "A pessoa nunca é apagada: é inativada (seção 2.12). Com If-Match."
+      description: "A pessoa nunca é apagada: é inativada (seção 2.12). Com If-Match. 409 transicao_invalida se a pessoa já está inativa ou se está ligada a usuário ativo ou convidado: o usuário é inativado antes (RN-ADM-021)."
       operationId: inativarPessoa
       parameters:
         - in: path
@@ -6254,7 +6266,7 @@ paths:
       x-plano-minimo: E
   /v1/usuarios/{id}/permissoes:
     post:
-      description: Permissão do catálogo de RF-ADM-005 concedida a este usuário (usuario_permissao), como pessoa.saude.ler. Ninguém concede a si mesmo; só concede quem tem a permissão, salvo as três que o administrador concede sem ter; usuário externo nunca recebe permissão vedada. A concessão vai para a trilha.
+      description: Permissão do catálogo de RF-ADM-005 concedida a este usuário (usuario_permissao), como os.encerrar. Ninguém concede a si mesmo; só concede quem tem a permissão, salvo as duas que o administrador concede sem ter (os.encerrar e est.decidir_destino); usuário externo nunca recebe permissão vedada. A concessão vai para a trilha.
       operationId: concederPermissaoUsuario
       parameters:
         - in: path
@@ -6356,7 +6368,7 @@ paths:
           required: true
           schema:
             examples:
-              - pessoa.saude.ler
+              - os.encerrar
             maxLength: 60
             type: string
       responses:

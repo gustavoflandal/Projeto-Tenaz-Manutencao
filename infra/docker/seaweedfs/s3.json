@@ -1,0 +1,24 @@
+{
+  "identities": [
+    {
+      "name": "tenaz_operacao",
+      "credentials": [
+        { "accessKey": "tenaz_operacao", "secretKey": "tenaz_operacao_dev_secreto" }
+      ],
+      "actions": ["Admin"]
+    },
+    {
+      "name": "tenaz_auditoria",
+      "credentials": [
+        { "accessKey": "tenaz_auditoria", "secretKey": "tenaz_auditoria_dev_secreto" }
+      ],
+      "actions": [
+        "Read:tenaz-auditoria",
+        "Write:tenaz-auditoria",
+        "List:tenaz-auditoria",
+        "GetObjectRetention:tenaz-auditoria",
+        "PutObjectRetention:tenaz-auditoria"
+      ]
+    }
+  ]
+}

@@ -1,23 +1,34 @@
 # Infraestrutura local de desenvolvimento da Tenaz.
 #
 # Sobe o que o backend precisa para rodar e para os testes de integração:
-# PostgreSQL com RLS, Valkey para cache, Mailpit para os e-mails e MinIO para
-# os anexos. O backend e a
-# web rodam no host, para o ciclo de edição ficar rápido (seção 7 de
-# docs/5_ARQUITETURA_SOFTWARE.md).
+# PostgreSQL com RLS, Valkey para cache, Mailpit para os e-mails e SeaweedFS
+# como armazenamento de objetos compatível com S3 (selo da trilha de auditoria
+# e, a partir de E02, anexos). O backend e a web rodam no host, para o ciclo de
+# edição ficar rápido (seção 7 de docs/5_ARQUITETURA_SOFTWARE.md).
 #
-#   docker compose -f infra/docker/compose.yaml up -d
-#   docker compose -f infra/docker/compose.yaml down -v
+# Use pelo script, que também cria o bucket e espera tudo ficar saudável:
 #
-# As credenciais aqui são de desenvolvimento local e estão no repositório de
-# propósito: não valem em nenhum outro ambiente. Segredo de verdade vive em
-# cofre, nunca em arquivo versionado.
+#   bash ferramentas/tarefas.sh infra
+#   bash ferramentas/tarefas.sh infra-limpar     # APAGA os dados
+#
+# Toda imagem é fixada por versão exata e digest: tag flutuante (`latest`,
+# `17-alpine`) muda de conteúdo sem mudar o arquivo, e a mesma linha deixa de
+# significar a mesma coisa em duas máquinas (ADR-012, decisão 2). Para atualizar,
+# troque a tag e o digest juntos, conferidos com `docker pull <imagem>:<tag>`.
+#
+# As credenciais e chaves aqui e em seaweedfs/ são de desenvolvimento local e
+# estão no repositório de propósito: não valem em nenhum outro ambiente.
+# Segredo de verdade vive em cofre, nunca em arquivo versionado.
 
 name: tenaz-dev
 
 services:
+  # PostgreSQL 17.11, o mesmo binário que já criou o volume postgres_dados
+  # (a tag `17-alpine` apontava para este digest em 13/11/2026). Versão menor
+  # nova do PostgreSQL não muda o formato em disco; versão maior exige
+  # pg_upgrade ou dump e restauração, nunca só a troca da tag.
   postgres:
-    image: postgres:17-alpine
+    image: postgres:17.11-alpine3.24@sha256:e5d2edd28b1f8d40a0a6c0c9cdc545b19b56a0d5d88f94bc11a97d970d4700d0
     container_name: tenaz-postgres
     environment:
       POSTGRES_USER: tenaz_migrador
@@ -48,8 +59,9 @@ services:
       timeout: 5s
       retries: 20
 
+  # Valkey 8.1.11 (BSD-3), cache sem persistência.
   valkey:
-    image: valkey/valkey:8-alpine
+    image: valkey/valkey:8.1.11-alpine3.24@sha256:2602ace2be6569bc2bbb06f873776516ab9089821525be34f4305c67eb9db02a
     container_name: tenaz-valkey
     command: ["valkey-server", "--save", "", "--appendonly", "no"]
     ports:
@@ -64,7 +76,7 @@ services:
   # e verificação de e-mail (token_email) sem entregar nada a ninguém. A caixa
   # fica em http://localhost:8025. Em produção o envio é por provedor real.
   mailpit:
-    image: axllent/mailpit:v1.27.0
+    image: axllent/mailpit:v1.27.0@sha256:fb84cfb1c3a33007cfdee8ba5a77b8c6c894de5b1a368372ddc5c965cf5c0b6d
     container_name: tenaz-mailpit
     ports:
       - "1025:1025"   # SMTP
@@ -75,32 +87,76 @@ services:
       timeout: 3s
       retries: 10
 
-  # Object storage para os anexos. Fica atrás do perfil "anexos" e não sobe no
-  # `up -d` comum, porque os anexos só aparecem a partir do cadastro de ativos
-  # e porque a MinIO deixou de publicar a tag `latest`: nem o Docker Hub nem o
-  # quay.io aceitam pull anônimo dela. A tag precisa ser fixada numa release
-  # concreta antes de o módulo de anexos entrar. Ver pendência da etapa.
+  # Armazenamento de objetos compatível com S3: SeaweedFS 4.53 (Apache-2.0),
+  # ADR-012 em docs/5_ARQUITETURA_SOFTWARE.md. Servidor único: master, volume,
+  # filer e gateway S3 num processo só (`weed server -s3`), como convém ao
+  # desenvolvimento numa única máquina.
   #
-  #   docker compose -f infra/docker/compose.yaml --profile anexos up -d
-  minio:
-    profiles: ["anexos"]
-    image: quay.io/minio/minio:latest
-    container_name: tenaz-minio
-    command: ["server", "/dados", "--console-address", ":9001"]
-    environment:
-      MINIO_ROOT_USER: tenaz_dev
-      MINIO_ROOT_PASSWORD: tenaz_dev_secreto
+  # Sobe no `up` comum, sem perfil: o bucket da trilha de auditoria, com
+  # bloqueio de objeto, é preparado já em E01, os anexos entram em E02 e o
+  # teste de integração do armazenamento (ADR-012, decisão 5) roda contra este
+  # contêiner. Atrás de um perfil, ele ficaria desligado justamente na máquina
+  # de quem precisa dele, e o defeito só apareceria tarde.
+  #
+  # Endurecimento obrigatório (ADR-012, decisão 4), que vale aqui também:
+  #   - seaweedfs/security.toml liga o JWT de volume e de filer. Sem ele, um
+  #     DELETE recursivo na API do filer, sem credencial, apaga o bucket com a
+  #     versão em retenção de conformidade.
+  #   - master, volume, filer e os gRPC deles escutam só em 127.0.0.1 DENTRO do
+  #     contêiner (-ip.bind): nem a rede do compose os alcança. Só o gateway S3
+  #     escuta na rede (-s3.ip.bind), e a 8333 é a única porta publicada. O gRPC
+  #     do gateway (18333) fica na rede do compose, sem porta no host.
+  #   - seaweedfs/s3.json tem uma identidade por uso, com as ações mínimas:
+  #     `tenaz_operacao` (Admin, só para as tarefas de operação, como criar o
+  #     bucket) e `tenaz_auditoria` (ler, gravar, listar e reter no bucket
+  #     tenaz-auditoria; sem bypass, sem mudar o bloqueio, sem apagar bucket).
+  #     A identidade dos anexos entra com os anexos, em E02.
+  #   - telemetria anônima do projeto desligada: nada sai da máquina.
+  #   - API IAM embutida e catálogos Iceberg e Lance desligados.
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.53@sha256:ccad23e18639c8b98cee17e7100b95830a06077b56d8e5b006d6dcf8ec5e94a0
+    container_name: tenaz-seaweedfs
+    # O entrypoint da imagem acrescenta -dir=/data, -volume.max=0 e
+    # -master.volumeSizeLimitMB=1024 ao modo `server`.
+    command:
+      - server
+      - -ip=127.0.0.1
+      - -ip.bind=127.0.0.1
+      - -s3
+      - -s3.ip.bind=0.0.0.0
+      - -s3.port=8333
+      - -s3.config=/etc/seaweedfs/s3.json
+      - -s3.iam=false
+      - -s3.port.iceberg=0
+      - -s3.port.lance=0
+      - -master.telemetry=false
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "8333:8333"   # S3; a única porta publicada
     volumes:
-      - minio_dados:/dados
+      - seaweedfs_dados:/data
+      - ./seaweedfs/security.toml:/etc/seaweedfs/security.toml:ro
+      - ./seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:8333/healthz"]
       interval: 5s
-      timeout: 5s
-      retries: 20
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
+  # Cliente S3 de linha de comando, só para as tarefas de desenvolvimento
+  # (criar o bucket, provar o bloqueio de objeto), sem instalar nada no host.
+  # Fica no perfil "ferramentas" e nunca sobe sozinho; é chamado por
+  # `docker compose run --rm s3-cli ...` dentro de ferramentas/tarefas.sh.
+  s3-cli:
+    profiles: ["ferramentas"]
+    image: amazon/aws-cli:2.40.2@sha256:acc32af784911165a8e78b63950625d174ba79b800a66a436c974689c87cd755
+    environment:
+      AWS_ENDPOINT_URL: http://seaweedfs:8333
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: tenaz_operacao
+      AWS_SECRET_ACCESS_KEY: tenaz_operacao_dev_secreto
+      AWS_PAGER: ""
 
 volumes:
   postgres_dados:
-  minio_dados:
+  seaweedfs_dados:

@@ -19,7 +19,7 @@ func TestFluxoContaLoginMFATrocaLogout(t *testing.T) {
 	c.post("/v1/empresas", map[string]any{
 		"cnpj": cnpjAleatorio(), "razao_social": "Segunda Empresa Ltda", "plano": "profissional",
 		"responsavel": map[string]any{"nome": "Ana", "email": em},
-		"unidade":     map[string]any{"codigo": "FIL", "nome": "Filial"},
+		"unidade":     map[string]any{"codigo": "FIL", "nome": "Filial", "turnos": turnoUtil},
 	}).ok(http.StatusCreated)
 	tok := caixa.token(t, em)
 	conv := c.post("/v1/auth/convites/consultar", map[string]any{"token": tok}).ok(http.StatusOK)
@@ -63,7 +63,9 @@ func TestFluxoContaLoginMFATrocaLogout(t *testing.T) {
 	if e["tentativas_restantes"] != float64(4) {
 		t.Fatalf("tentativas_restantes: %v", e)
 	}
-	r := anonimo(t).post("/v1/auth/mfa/verificar", map[string]any{"desafio_id": desafio, "codigo": codigoTOTP(t, segredo, time.Now())})
+	// O código do passo usado na confirmação não vale de novo (RFC 6238,
+	// seção 5.2): o login usa o do passo seguinte, ainda dentro da janela.
+	r := anonimo(t).post("/v1/auth/mfa/verificar", map[string]any{"desafio_id": desafio, "codigo": codigoTOTP(t, segredo, time.Now().Add(30*time.Second))})
 	s := r.ok(http.StatusOK)
 	web = &cliente{t: t, origem: origemWeb, cookie: cookieDaResposta(t, r), csrf: texto(s, "csrf_token")}
 	// Desafio gasto não vale de novo.

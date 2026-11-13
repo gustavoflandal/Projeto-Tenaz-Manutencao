@@ -178,7 +178,7 @@ export interface paths {
         put?: never;
         /**
          * Desativar o segundo fator
-         * @description Exige um código válido. 401 mfa_codigo_invalido; 409 transicao_invalida se não está ativo.
+         * @description Exige um código válido. Código errado soma uma falha ao bloqueio progressivo, como no login, e código de um passo TOTP já usado vale como errado: 401 mfa_codigo_invalido. 409 transicao_invalida com estado_atual "inativo" se o segundo fator não está ativo, e com estado_atual "exigido_pela_empresa" enquanto a identidade tiver acesso a alguma empresa que exige MFA (RN-ADM-027).
          */
         post: operations["desativarMFA"];
         delete?: never;
@@ -346,7 +346,7 @@ export interface paths {
         head?: never;
         /**
          * Alterar dados cadastrais
-         * @description JSON Merge Patch com If-Match. Plano e módulo SRV mudam pela cobrança (RF-ADM-009), não aqui: 422 campo_somente_leitura.
+         * @description JSON Merge Patch com If-Match. Plano e módulo SRV mudam pela cobrança (RF-ADM-009), não aqui: 422 campo_somente_leitura. mfa_obrigatorio liga o segundo fator obrigatório: quem não o tem passa a entrar com sessão restrita à ativação (RN-ADM-027).
          */
         patch: operations["alterarEmpresa"];
         trace?: never;
@@ -491,7 +491,7 @@ export interface paths {
         post?: never;
         /**
          * Inativar pessoa
-         * @description A pessoa nunca é apagada: é inativada (seção 2.12). Com If-Match.
+         * @description A pessoa nunca é apagada: é inativada (seção 2.12). Com If-Match. 409 transicao_invalida se a pessoa já está inativa ou se está ligada a usuário ativo ou convidado: o usuário é inativado antes (RN-ADM-021).
          */
         delete: operations["inativarPessoa"];
         options?: never;
@@ -782,7 +782,7 @@ export interface paths {
         put?: never;
         /**
          * Conceder permissão avulsa
-         * @description Permissão do catálogo de RF-ADM-005 concedida a este usuário (usuario_permissao), como pessoa.saude.ler. Ninguém concede a si mesmo; só concede quem tem a permissão, salvo as três que o administrador concede sem ter; usuário externo nunca recebe permissão vedada. A concessão vai para a trilha.
+         * @description Permissão do catálogo de RF-ADM-005 concedida a este usuário (usuario_permissao), como os.encerrar. Ninguém concede a si mesmo; só concede quem tem a permissão, salvo as duas que o administrador concede sem ter (os.encerrar e est.decidir_destino); usuário externo nunca recebe permissão vedada. A concessão vai para a trilha.
          */
         post: operations["concederPermissaoUsuario"];
         delete?: never;
@@ -953,6 +953,8 @@ export interface components {
             fuso_horario: string;
             /** Format: uuid */
             id: string;
+            /** @description Segundo fator exigido de todos os usuários (RN-ADM-027): quem não o tem entra com sessão restrita à ativação */
+            mfa_obrigatorio: boolean;
             nome_fantasia: string | null;
             /** @description essencial, profissional ou enterprise; nulo na conta só do plano Serviços */
             plano: string | null;
@@ -1049,7 +1051,7 @@ export interface components {
         EntradaPermissao: {
             /**
              * @description Código do catálogo de RF-ADM-005
-             * @example pessoa.saude.ler
+             * @example os.encerrar
              */
             permissao: string;
         };
@@ -1267,6 +1269,8 @@ export interface components {
             /** @description Com ou sem máscara */
             cnpj?: string;
             fuso_horario?: string;
+            /** @description Exige segundo fator de todos os usuários da empresa */
+            mfa_obrigatorio?: boolean;
             nome_fantasia?: string | null;
             razao_social?: string;
         };
@@ -1381,7 +1385,7 @@ export interface components {
             nome: string;
             registro_profissional: string | null;
             /** @enum {string} */
-            situacao: "ativa" | "inativa" | "desligada";
+            situacao: "ativa" | "inativa";
             telefone: string | null;
             /** Format: uuid */
             unidade_id: string;
@@ -1504,7 +1508,7 @@ export interface components {
             matricula: string | null;
             nome: string;
             /** @enum {string} */
-            situacao: "ativa" | "inativa" | "desligada";
+            situacao: "ativa" | "inativa";
             /** Format: uuid */
             unidade_id: string;
             /** Format: uuid */
@@ -1578,6 +1582,8 @@ export interface components {
              * @description Teto absoluto da sessão web (7 dias); a inatividade de 12 horas vence antes. Nulo fora do login e da troca de empresa
              */
             expira_em: string | null;
+            /** @description A empresa exige segundo fator e a pessoa ainda não o ativou: a sessão só serve para ler a sessão, sair, trocar de empresa e ativar o MFA; as demais rotas respondem 401 nao_autenticado com mfa_pendente (RN-ADM-027) */
+            mfa_pendente: boolean;
             /** @description Códigos de origem dos perfis ativos */
             perfis: string[] | null;
             /** @description Permissões efetivas, em ordem alfabética (perfis e permissões avulsas) */
@@ -1625,6 +1631,8 @@ export interface components {
              * @description Teto absoluto da sessão web (7 dias); a inatividade de 12 horas vence antes. Nulo fora do login e da troca de empresa
              */
             expira_em: string | null;
+            /** @description A empresa exige segundo fator e a pessoa ainda não o ativou: a sessão só serve para ler a sessão, sair, trocar de empresa e ativar o MFA; as demais rotas respondem 401 nao_autenticado com mfa_pendente (RN-ADM-027) */
+            mfa_pendente: boolean;
             /** @description Códigos de origem dos perfis ativos */
             perfis: string[] | null;
             /** @description Permissões efetivas, em ordem alfabética (perfis e permissões avulsas) */
@@ -1698,7 +1706,7 @@ export interface components {
             locatario_id: string;
             nome: string;
             perfis: components["schemas"]["PerfilAtribuido"][] | null;
-            /** @description Permissões concedidas a este usuário além dos perfis, como pessoa.saude.ler */
+            /** @description Permissões concedidas a este usuário além dos perfis, como os.encerrar */
             permissoes_avulsas: string[] | null;
             /** Format: uuid */
             pessoa_id: string;
@@ -1733,7 +1741,7 @@ export interface components {
             locatario_id: string;
             nome: string;
             perfis: components["schemas"]["PerfilAtribuido"][] | null;
-            /** @description Permissões concedidas a este usuário além dos perfis, como pessoa.saude.ler */
+            /** @description Permissões concedidas a este usuário além dos perfis, como os.encerrar */
             permissoes_avulsas: string[] | null;
             /** Format: uuid */
             pessoa_id: string;
@@ -3657,7 +3665,7 @@ export interface operations {
                 cursor?: string;
                 fornecedor_id?: string;
                 limite?: number;
-                situacao?: "ativa" | "inativa" | "desligada";
+                situacao?: "ativa" | "inativa";
                 unidade_id?: string;
             };
             header?: never;

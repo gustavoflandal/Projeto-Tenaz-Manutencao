@@ -13,7 +13,7 @@ func TestEscopoValido(t *testing.T) {
 	u, f := uuid.New(), uuid.New()
 	hash := strings.Repeat("ab", 32)
 	validos := []Escopo{
-		Interno(nil), Interno(&u), {Tipo: EscopoInterno, UsuarioID: &u, PodeLerSaude: true},
+		Interno(nil), Interno(&u), {Tipo: EscopoInterno, UsuarioID: &u},
 		{Tipo: EscopoPrestador, FornecedorID: &f, UsuarioID: &u},
 		{Tipo: EscopoLocatario, LocatarioID: &f, UsuarioID: &u},
 		{Tipo: EscopoLink, LinkHashHex: hash},
@@ -26,7 +26,6 @@ func TestEscopoValido(t *testing.T) {
 	invalidos := []Escopo{
 		{Tipo: ""}, {Tipo: "fornecedor"}, {Tipo: EscopoInterno, FornecedorID: &f},
 		{Tipo: EscopoPrestador, UsuarioID: &u}, {Tipo: EscopoPrestador, FornecedorID: &f},
-		{Tipo: EscopoPrestador, FornecedorID: &f, UsuarioID: &u, PodeLerSaude: true},
 		{Tipo: EscopoLink, LinkHashHex: "abc"}, {Tipo: EscopoLink, LinkHashHex: hash, UsuarioID: &u},
 	}
 	for _, e := range invalidos {

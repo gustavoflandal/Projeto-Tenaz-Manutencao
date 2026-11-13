@@ -112,6 +112,29 @@ func TestNaEmpresaNaoVazaContextoPeloPool(t *testing.T) {
 	}
 	semResto("uma transação de prestador")
 
+	// 4-b. Escopo que o Go aceita e o banco recusa: usuário de F1 com o
+	// fornecedor F2. Escopo.Valido() só confere a forma; quem compara com o
+	// cadastro é app.conferir_escopo(), chamada pelo NaEmpresa. Se o helper
+	// deixasse de chamá-la, o caso de uso rodaria com o escopo de F2.
+	fornecedorF2 := uuid.MustParse(f.F2)
+	divergente := db.Escopo{Tipo: db.EscopoPrestador, FornecedorID: &fornecedorF2, UsuarioID: &usuarioF1}
+	if err := divergente.Valido(); err != nil {
+		t.Fatalf("o escopo de prova deveria passar em Valido(), que só confere a forma: %v", err)
+	}
+	executou := false
+	errDivergente := banco.NaEmpresa(ctx, empresaA, divergente, func(c context.Context) error {
+		executou = true
+		return nil
+	})
+	if errDivergente == nil || executou {
+		t.Errorf("NaEmpresa aceitou o usuário de F1 com o fornecedor F2 (erro=%v, caso de uso executado=%v): "+
+			"app.conferir_escopo() não foi chamada ou não comparou com o cadastro", errDivergente, executou)
+	}
+	// E a recusa é a do banco (42501 de app.conferir_escopo), embrulhada pelo
+	// helper, e não um erro qualquer do Go.
+	exigirErro(t, "NaEmpresa com escopo divergente do cadastro", errDivergente, erroPrivilegio)
+	semResto("um escopo recusado por app.conferir_escopo()")
+
 	// 5. A empresa seguinte, na mesma conexão, não vê nada da anterior.
 	if err := banco.NaEmpresa(ctx, empresaB, db.Interno(nil), func(c context.Context) error {
 		tx, err := db.Tx(c)

@@ -312,7 +312,7 @@ func novaConta(t *testing.T, plano, emailAdm string) string {
 	c.post("/v1/empresas", map[string]any{
 		"cnpj": cnpjAleatorio(), "razao_social": "Transportes Teste Ltda", "plano": plano,
 		"responsavel": map[string]any{"nome": "Ana Administradora", "email": emailAdm},
-		"unidade":     map[string]any{"codigo": "MTZ", "nome": "Matriz"},
+		"unidade":     map[string]any{"codigo": "MTZ", "nome": "Matriz", "turnos": turnoUtil},
 	}).ok(http.StatusCreated)
 	tok := caixa.token(t, emailAdm)
 	c.post("/v1/auth/convites/aceitar", map[string]any{"token": tok, "senha": senhaBoa}).ok(http.StatusOK)

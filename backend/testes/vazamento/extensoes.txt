@@ -1,0 +1,20 @@
+# Extensões permitidas no banco e a impressão das funções de cada uma.
+#
+# As regras de função (SECURITY DEFINER aprovadas; nenhuma função fora de app e
+# plataforma) deixam passar as funções que são membros de extensão, porque
+# elas são código do PostgreSQL. Sem esta lista, uma função NOSSA anexada a uma
+# extensão (ALTER EXTENSION citext ADD FUNCTION ..., mutação m37) passaria por
+# código do PostgreSQL. A impressão fecha a lista: quantidade de funções e md5
+# de assinatura, SECURITY DEFINER, linguagem e md5 do corpo de cada uma.
+#
+# Muda quando a extensão muda de versão (atualização do PostgreSQL): a suíte
+# acusa, e a linha nova entra com revisão de isolamento, conferindo que
+# nenhuma função da extensão é SECURITY DEFINER.
+#
+# Formato: extensao  versao  funcoes  md5  # justificativa
+
+plpgsql     1.0  3    0b9afa29f579fac9b1665bcd4b2edb69  # linguagem das funções e triggers do esquema (pg_catalog)
+citext      1.6  47   a0c840ae336373ee67da0e678291fae7  # e-mail sem diferença de maiúsculas (00001)
+btree_gist  1.7  188  165f8870d4070f07a342381a5ea4b68d  # EXCLUDE com uuid e intervalo (00001)
+btree_gin   1.3  87   3cadc1b28c81e83fdc0f15475a6ae9b5  # GIN composto (empresa_id, texto) (00001)
+pg_trgm     1.6  31   7e45ba4f24fc10c1317636c4a359be2e  # busca por trecho em nome e descrição (00001)

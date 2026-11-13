@@ -12,4 +12,4 @@
 
 tenaz_sinc_conexao          tenaz_sinc          INHERIT,SET  # usuário de conexão do sincronizador (seção 2.10)
 tenaz_autenticacao_conexao  tenaz_autenticacao  INHERIT,SET  # usuário de conexão do pool das credenciais (ADR-011)
-tenaz_manutencao            tenaz_dono          INHERIT,SET  # DDL de partição e manutenção física (seção 2.7); a leitura de credencial que ela traz é o achado ISO-E01-08
+tenaz_manutencao            tenaz_dono          INHERIT,SET  # DDL de partição e manutenção física (seção 2.7). Desde o ISO-E01-08 não alcança credencial: as sete tabelas e as duas funções são de tenaz_credencial, que não tem a manutenção como membro (TestDonoDasCredenciaisSemMembroDeRuntime)

@@ -84,7 +84,6 @@ func Carregar(ctx context.Context, empresaID, usuarioID uuid.UUID) (Ator, error)
 		adicionar(perm)
 	}
 	slices.Sort(codigos)
-	escopo.PodeLerSaude = !externo && conj.Tem(PessoaSaudeLer)
 
 	return Ator{
 		EmpresaID:      empresaID,

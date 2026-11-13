@@ -46,9 +46,11 @@ import (
 	"tenaz/internal/plataforma/migracao"
 )
 
-// imagemPostgres acompanha a versão usada em desenvolvimento e em produção.
-// Testar RLS contra uma versão diferente da de produção não prova nada.
-const imagemPostgres = "postgres:17-alpine"
+// imagemPostgres é a mesma do compose de desenvolvimento, fixada por versão e
+// digest (ADR-012, decisão 2). Testar RLS contra uma versão diferente da de
+// produção não prova nada, e a impressão das extensões (extensoes.txt) depende
+// da versão exata. Mudar aqui é mudar junto o compose e o dbteste.go.
+const imagemPostgres = "postgres:17.11-alpine3.24@sha256:e5d2edd28b1f8d40a0a6c0c9cdc545b19b56a0d5d88f94bc11a97d970d4700d0"
 
 var (
 	pool     *pgxpool.Pool

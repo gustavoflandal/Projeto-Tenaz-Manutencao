@@ -48,40 +48,31 @@ func TestSemContextoNaoHaEmpresa(t *testing.T) {
 func TestPredicadoNuloNaoLiberaLinha(t *testing.T) {
 	ctx := context.Background()
 
-	const nome = "tabela_prova_predicado_nulo"
-
-	t.Cleanup(func() {
-		if _, err := pool.Exec(ctx, "DROP TABLE IF EXISTS app."+nome); err != nil {
-			t.Errorf("limpar tabela de prova: %v", err)
-		}
-	})
-
-	for _, comando := range []string{
-		"CREATE TABLE app." + nome + " (id int PRIMARY KEY, empresa_id uuid NOT NULL)",
-		"INSERT INTO app." + nome + " VALUES (1, gen_random_uuid())",
-		"ALTER TABLE app." + nome + " ENABLE ROW LEVEL SECURITY",
-		"ALTER TABLE app." + nome + " FORCE ROW LEVEL SECURITY",
-		"GRANT SELECT ON app." + nome + " TO tenaz_app",
+	const nome = "app.tabela_prova_predicado_nulo"
+	// Numa transação desfeita: a tabela de prova nunca existe para outra conexão.
+	tx := criarTabelasDeProva(t, ctx, []string{
+		"CREATE TABLE " + nome + " (id int PRIMARY KEY, empresa_id uuid NOT NULL)",
+		"INSERT INTO " + nome + " VALUES (1, gen_random_uuid())",
+		"ALTER TABLE " + nome + " ENABLE ROW LEVEL SECURITY",
+		"ALTER TABLE " + nome + " FORCE ROW LEVEL SECURITY",
+		"GRANT SELECT ON " + nome + " TO tenaz_app",
 		// Predicado que resulta em NULL sem contexto definido.
-		"CREATE POLICY isolamento_empresa ON app." + nome +
+		"CREATE POLICY isolamento_empresa ON " + nome +
 			" FOR ALL TO tenaz_app USING (empresa_id = app.empresa_atual()) WITH CHECK (empresa_id = app.empresa_atual())",
-	} {
-		if _, err := pool.Exec(ctx, comando); err != nil {
-			t.Fatalf("preparar prova (%s): %v", comando, err)
-		}
-	}
+	})
 
 	var visiveis int
-	err := pgx.BeginTxFunc(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, "SET LOCAL ROLE tenaz_app"); err != nil {
-			return err
-		}
-		return tx.QueryRow(ctx, "SELECT count(*) FROM app."+nome).Scan(&visiveis)
-	})
+	sub, err := tx.Begin(ctx)
 	if err != nil {
+		t.Fatalf("savepoint: %v", err)
+	}
+	defer func() { _ = sub.Rollback(ctx) }()
+	if _, err := sub.Exec(ctx, "SET LOCAL ROLE tenaz_app"); err != nil {
+		t.Fatalf("assumir tenaz_app: %v", err)
+	}
+	if err := sub.QueryRow(ctx, "SELECT count(*) FROM "+nome).Scan(&visiveis); err != nil {
 		t.Fatalf("consultar como tenaz_app: %v", err)
 	}
-
 	if visiveis != 0 {
 		t.Errorf("tenaz_app viu %d linha(s) sem contexto de empresa; a falha fechada não está valendo", visiveis)
 	}
@@ -265,28 +256,35 @@ func TestConferirEscopoRecusaContextoInvalido(t *testing.T) {
 		},
 	}
 
-	for _, c := range casos {
-		t.Run(c.nome, func(t *testing.T) {
-			err := pgx.BeginTxFunc(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
-				for chave, valor := range c.contexto {
-					if _, err := tx.Exec(ctx, `SELECT set_config($1, $2, true)`, chave, valor); err != nil {
+	// Como os papéis que de fato chamam a função: como superusuário, a leitura
+	// de app.usuario dentro dela ignoraria o RLS e o teste não provaria nada.
+	for _, papel := range []string{papelApp, papelJob} {
+		for _, c := range casos {
+			t.Run(papel+"/"+c.nome, func(t *testing.T) {
+				err := pgx.BeginTxFunc(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
+					if err := prepararTransacao(ctx, tx, papel, contexto{}); err != nil {
 						return err
 					}
-				}
-				_, err := tx.Exec(ctx, `SELECT app.conferir_escopo()`)
-				return err
-			})
+					for chave, valor := range c.contexto {
+						if _, err := tx.Exec(ctx, `SELECT set_config($1, $2, true)`, chave, valor); err != nil {
+							return erroPreparacao{"definir " + chave + ": " + err.Error()}
+						}
+					}
+					_, err := tx.Exec(ctx, `SELECT app.conferir_escopo()`)
+					return err
+				})
 
-			if c.recusa && err == nil {
-				t.Errorf("app.conferir_escopo() aceitou o contexto, mas deveria recusar: %s", c.motivo)
-			}
-			if c.recusa && err != nil && sqlstate(err) != erroPrivilegio {
-				t.Errorf("app.conferir_escopo() recusou com erro inesperado (%v); esperado %s", err, erroPrivilegio)
-			}
-			if !c.recusa && err != nil {
-				t.Errorf("app.conferir_escopo() recusou um contexto válido: %v", err)
-			}
-		})
+				if c.recusa && err == nil {
+					t.Errorf("app.conferir_escopo() aceitou o contexto, mas deveria recusar: %s", c.motivo)
+				}
+				if c.recusa && err != nil && sqlstate(err) != erroPrivilegio {
+					t.Errorf("app.conferir_escopo() recusou com erro inesperado (%v); esperado %s", err, erroPrivilegio)
+				}
+				if !c.recusa && err != nil {
+					t.Errorf("app.conferir_escopo() recusou um contexto válido: %v", err)
+				}
+			})
+		}
 	}
 }
 
@@ -295,16 +293,9 @@ func TestConferirEscopoRecusaContextoInvalido(t *testing.T) {
 func TestEmpresaIDEImutavel(t *testing.T) {
 	ctx := context.Background()
 
-	const nome = "tabela_prova_imutabilidade"
-
-	t.Cleanup(func() {
-		if _, err := pool.Exec(ctx, "DROP TABLE IF EXISTS app."+nome); err != nil {
-			t.Errorf("limpar tabela de prova: %v", err)
-		}
-	})
-
-	_, err := pool.Exec(ctx, `
-		CREATE TABLE app.`+nome+` (
+	const nome = "app.tabela_prova_imutabilidade"
+	tx := criarTabelasDeProva(t, ctx, []string{`
+		CREATE TABLE ` + nome + ` (
 		  id             uuid PRIMARY KEY DEFAULT app.uuid_v7(),
 		  empresa_id     uuid NOT NULL,
 		  versao         bigint      NOT NULL DEFAULT 1,
@@ -314,46 +305,45 @@ func TestEmpresaIDEImutavel(t *testing.T) {
 		  atualizado_em  timestamptz NOT NULL DEFAULT now(),
 		  atualizado_por uuid,
 		  excluido_em    timestamptz
-		)`)
-	if err != nil {
-		t.Fatalf("criar tabela de prova: %v", err)
-	}
-
-	if _, err := pool.Exec(ctx, `
-		CREATE TRIGGER trg_padrao BEFORE INSERT OR UPDATE ON app.`+nome+`
-		FOR EACH ROW EXECUTE FUNCTION app.tg_padrao()`); err != nil {
-		t.Fatalf("criar trigger: %v", err)
-	}
+		)`,
+		"CREATE TRIGGER trg_padrao BEFORE INSERT OR UPDATE ON " + nome + " FOR EACH ROW EXECUTE FUNCTION app.tg_padrao()",
+	})
 
 	empresaA := uuid.New()
 	empresaB := uuid.New()
 	var id uuid.UUID
-	if err := pool.QueryRow(ctx,
-		"INSERT INTO app."+nome+" (empresa_id) VALUES ($1) RETURNING id", empresaA).Scan(&id); err != nil {
+	if err := tx.QueryRow(ctx, "INSERT INTO "+nome+" (empresa_id) VALUES ($1) RETURNING id", empresaA).Scan(&id); err != nil {
 		t.Fatalf("inserir: %v", err)
 	}
 
 	// A versão nasce em 1.
 	var versao int64
-	if err := pool.QueryRow(ctx, "SELECT versao FROM app."+nome+" WHERE id = $1", id).Scan(&versao); err != nil {
+	if err := tx.QueryRow(ctx, "SELECT versao FROM "+nome+" WHERE id = $1", id).Scan(&versao); err != nil {
 		t.Fatalf("ler versão: %v", err)
 	}
 	if versao != 1 {
 		t.Errorf("versão inicial = %d, esperado 1", versao)
 	}
 
-	// Trocar a empresa da linha é recusado.
-	if _, err := pool.Exec(ctx,
-		"UPDATE app."+nome+" SET empresa_id = $1 WHERE id = $2", empresaB, id); err == nil {
-		t.Error("o trigger aceitou trocar empresa_id; uma linha jamais muda de empresa")
+	// Trocar a empresa da linha é recusado — num savepoint, porque o erro
+	// aborta a transação. A recusa tem de ser a do trigger (42501), e não um
+	// erro qualquer: um erro de digitação no comando passaria por "recusado".
+	sub, err := tx.Begin(ctx)
+	if err != nil {
+		t.Fatalf("savepoint: %v", err)
+	}
+	_, err = sub.Exec(ctx, "UPDATE "+nome+" SET empresa_id = $1 WHERE id = $2", empresaB, id)
+	_ = sub.Rollback(ctx)
+	exigirErro(t, "trocar empresa_id", err, erroPrivilegio)
+	if err != nil && !strings.Contains(err.Error(), "empresa_id é imutável") {
+		t.Errorf("a recusa não veio do trigger das colunas padrão: %v", err)
 	}
 
 	// Atualização comum incrementa a versão.
-	if _, err := pool.Exec(ctx,
-		"UPDATE app."+nome+" SET atualizado_por = $1 WHERE id = $2", uuid.New(), id); err != nil {
+	if _, err := tx.Exec(ctx, "UPDATE "+nome+" SET atualizado_por = $1 WHERE id = $2", uuid.New(), id); err != nil {
 		t.Fatalf("atualizar: %v", err)
 	}
-	if err := pool.QueryRow(ctx, "SELECT versao FROM app."+nome+" WHERE id = $1", id).Scan(&versao); err != nil {
+	if err := tx.QueryRow(ctx, "SELECT versao FROM "+nome+" WHERE id = $1", id).Scan(&versao); err != nil {
 		t.Fatalf("ler versão: %v", err)
 	}
 	if versao != 2 {

@@ -405,7 +405,7 @@ type Usuario struct {
 	UnidadePadraoID   *uuid.UUID        `json:"unidade_padrao_id" format:"uuid"`
 	Situacao          string            `json:"situacao" enum:"convidado,ativo,inativo"`
 	Perfis            []PerfilAtribuido `json:"perfis"`
-	PermissoesAvulsas []string          `json:"permissoes_avulsas" doc:"Permissões concedidas a este usuário além dos perfis, como pessoa.saude.ler"`
+	PermissoesAvulsas []string          `json:"permissoes_avulsas" doc:"Permissões concedidas a este usuário além dos perfis, como os.encerrar"`
 	Versao            int64             `json:"versao"`
 	CriadoEm          time.Time         `json:"criado_em"`
 	AtualizadoEm      time.Time         `json:"atualizado_em"`
@@ -499,7 +499,7 @@ type camposEu struct {
 
 // EntradaPermissao concede uma permissão avulsa.
 type EntradaPermissao struct {
-	Permissao string `json:"permissao" maxLength:"60" example:"pessoa.saude.ler" doc:"Código do catálogo de RF-ADM-005"`
+	Permissao string `json:"permissao" maxLength:"60" example:"os.encerrar" doc:"Código do catálogo de RF-ADM-005"`
 }
 
 // SessoesEncerradas é a resposta de encerrar-sessoes.

@@ -1,8 +1,8 @@
 # Arquitetura de Software — Tenaz
 
-**Versão:** 0.6 · **Data:** 12/11/2026 · **Status:** Em elaboração
+**Versão:** 0.7 · **Data:** 13/11/2026 · **Status:** Em elaboração
 **Produto:** Tenaz · Gestão de Manutenção e Frota
-Alinhado ao sumário executivo 0.6
+Alinhado ao sumário executivo 0.7
 
 Este documento descreve como a Tenaz é construída: stack, contêineres, estrutura do monólito modular, isolamento entre empresas e de acessos externos (prestador, locatário e link de uso único), conexão entre contas (cliente e subcontratada, módulo SRV), repositório, convenções, testes, app offline, telemática, IA, infraestrutura e observabilidade. As decisões estruturais estão registradas como ADRs na seção 15. O alinhamento com o sumário e as pendências abertas estão na seção 16.
 
@@ -19,6 +19,10 @@ Este documento descreve como a Tenaz é construída: stack, contêineres, estrut
 **Emenda na versão 0.6 (mesma etapa E01, achado ISO-E01-08):** o ADR-011 passa a fixar também o **dono** das tabelas de credencial. Sem RLS, o dono lê tudo, e com dono `tenaz_dono` o `tenaz_manutencao`, membro dele com herança, lia todas as credenciais. As sete tabelas e as duas funções `SECURITY DEFINER` que as tocam pertencem agora ao papel `tenaz_credencial`, sem membros de runtime (decisões 1 e 9, alternativas, risco residual). Seções 6.1, 6.4, 6.9 e 9.3; pendências E01-14 (`conexao_empresa`) e herança do `tenaz_manutencao` na seção 16. Na mesma emenda, a tabela da seção 9.3 passa a descrever exatamente o que a suíte de isolamento de `backend/testes/vazamento/` verifica: linhas novas "Visões", "Papéis e relações de membro", "Moldes da trilha", "Corrida de atribuição", "Contexto no pool" e "Portão de achados"; linhas "Mapa de privilégios", "Dono das credenciais" e "Ataques do achado ISO-E01-02" reescritas conforme os testes.
 
 **Alinhamento ao código de E01 na versão 0.6:** o layout de módulo validado no ADM vira regra (seção 5.2): casos de uso no pacote raiz, HTTP em `<modulo>/rotas`, composição única em `internal/servidor` (seções 2.5 e 7); o desvio do código sqlc do ADM fica como pendência. A seção 2.5 passa a descrever a geração real do contrato (`tenaz openapi`) e marca `oasdiff` e a documentação pública como ainda não implantados. A seção 8.2 passa ao formato de erro real (códigos `snake_case` do documento 3, `type` em `https://api.tenaz.com.br/erros/<codigo>`, `id_rastreio`, `erros[]`). A seção 9.5 fixa a posição na divergência A-38 (`ambiente` não sai de `GET /v1/versao`).
+
+**Mudanças da versão 0.7 deste documento (13/11/2026, etapa E01, sumário 0.7):** três decisões do dono do produto. (1) **Só ferramentas e recursos 100% gratuitos ou de código aberto** (prompt da etapa E01, "Ajustes durante a etapa", linha "Ferramentas e recursos"): novo [ADR-012](#adr-012--só-software-livre-ou-gratuito-e-seaweedfs-no-lugar-do-minio), com a regra de admissão de software, a auditoria da stack e o **SeaweedFS** no lugar do MinIO como armazenamento compatível com S3 e com bloqueio de objeto, ensaiado na prática; seções 2.3 e 2.4, nota na seção 7 (ambiente local), notas no ADR-004 (plano B) e no ADR-006 (suspenso e, na emenda abaixo, de volta como exceção explícita) e pendências novas na seção 16, que dependem do dono do produto. (2) **A Tenaz não guarda dado de saúde** (sumário 0.7, seção 3.6, "Dados de saúde"): saem as citações das seções 6.8 (o que nunca trafega na conexão), 9.3 (corrida de atribuição, que passa a usar `os.encerrar`, como o teste), 12.3 (o que fica fora do índice de IA) e 14.3 (o que nunca vai para log). (3) A tabela da seção 9.3 volta a descrever exatamente a suíte de `backend/testes/vazamento/`: linhas "Consultas sqlc", "Mapa de privilégios" (privilégios padrão) e "Funções de credencial" reescritas, e linhas novas "NaEmpresa confere o escopo no banco", "Extensões" e "Sem dado de saúde".
+
+**Emenda na versão 0.7 (13/11/2026, mesma etapa):** respostas do dono do produto à auditoria do ADR-012 (sumário 0.7, seção 3.6, linha "Ferramentas e recursos"). A regra vale só para o que o sistema usa diretamente, não para o ambiente de desenvolvimento; a produção roda em nuvem gerenciada (AWS, São Paulo) como exceção explícita, e o ADR-006 volta a valer; o selo da trilha fica, em produção, no S3 com Object Lock em modo de conformidade, e o SeaweedFS fica só no desenvolvimento, numa máquina, endurecido; os serviços pagos por natureza ficam pendentes até a etapa em que entram. Emenda do ADR-012; seções 2.3, 2.4, 13.1 e 16; ADR-006 sem a suspensão. Na mesma passada, a convenção dos testes de integração (seção 8.2: PostgreSQL descartável por pacote, subida serializada e repetição da detecção do Docker) e a verificação estrita do access token do app (seção 10.6). Depois, o SeaweedFS aplicado no compose pelo `tenaz-plataforma-sre` (decisão 3 do ADR-012, auditoria, seções 7 e 16), com a correção de "desenvolvimento e CI" para "desenvolvimento": o CI ainda não o sobe, e o job fica como pendência na seção 16.
 
 Os nomes de módulos (ADM, ATV, OS...) e de entidades (`empresa`, `ativo`, `ordem_servico`...) seguem o [Sumário Executivo](0_SUMARIO_EXECUTIVO.md). As metas de disponibilidade, recuperação e segurança estão em [9_SEGURANCA_CONFIABILIDADE.md](9_SEGURANCA_CONFIABILIDADE.md).
 
@@ -99,7 +103,7 @@ Os nomes de módulos (ADM, ATV, OS...) e de entidades (`empresa`, `ativo`, `orde
 | Acesso ao SQLite | Drizzle ORM com consultas reativas (proposta) |
 | Credenciais | `expo-secure-store` (Keychain e Keystore) |
 | Recursos nativos | Câmera e QR code, localização sob demanda, notificações push, compressão de foto |
-| Distribuição | EAS Build (lojas) e EAS Update (atualização do JavaScript sem loja, por canal) |
+| Distribuição | EAS Build (lojas) e EAS Update (atualização do JavaScript sem loja, por canal). **Versão 0.7:** o EAS é serviço hospedado com cota gratuita e excedente pago, e as lojas cobram a conta de desenvolvedor; a forma de distribuição é decidida em E12 (ADR-012, pendência H5 da seção 16) |
 | Testes | Jest + React Native Testing Library; Maestro para E2E em emulador (proposta) |
 
 ### 2.4 Dados e plataforma
@@ -108,11 +112,12 @@ Os nomes de módulos (ADM, ATV, OS...) e de entidades (`empresa`, `ativo`, `orde
 |---|---|
 | Banco | PostgreSQL gerenciado (versão 17 ou superior suportada pelo provedor), com RLS forçado |
 | Busca vetorial | Extensão `pgvector` no mesmo banco |
-| Arquivos | Object storage compatível com S3 |
+| Arquivos | Object storage compatível com S3, com bloqueio de objeto. Produção: S3 gerenciado, com Object Lock em modo de conformidade no bucket do selo (ADR-006). Desenvolvimento: **SeaweedFS** (Apache-2.0), por versão e digest, no lugar do MinIO (o CI ainda não o sobe; pendência na seção 16). O backend fala só a API S3, pelo `aws-sdk-go-v2` (Apache-2.0), sem API própria do servidor ([ADR-012](#adr-012--só-software-livre-ou-gratuito-e-seaweedfs-no-lugar-do-minio)) |
 | Cache | Valkey gerenciado (proposta), nunca como fonte de verdade |
 | Contêineres | Docker, imagem mínima (ver 9_SEGURANCA_CONFIABILIDADE.md) |
-| Nuvem | AWS `sa-east-1` (proposta, ver [ADR-006](#adr-006--nuvem-aws-na-região-são-paulo)) |
+| Nuvem | AWS `sa-east-1` ([ADR-006](#adr-006--nuvem-aws-na-região-são-paulo)): provedor e região decididos pelo dono do produto em 13/11/2026, como exceção explícita à regra de admissão (ADR-012); serviços e configuração continuam proposta |
 | IaC | OpenTofu (proposta) |
+| Regra de admissão | O que o sistema usa diretamente (bibliotecas, imagens, servidores e serviços que vão para a produção) é de código aberto (licença aprovada pela OSI; fontes sob OFL) ou gratuito sem condição; licença "source-available" e recurso pago de produto "open core" não entram. O ambiente de desenvolvimento fica fora da regra, e a hospedagem de produção é a exceção explícita ([ADR-012](#adr-012--só-software-livre-ou-gratuito-e-seaweedfs-no-lugar-do-minio)) |
 
 ### 2.5 Contrato único
 
@@ -985,7 +990,7 @@ sequenceDiagram
 | Execução | subcontratada → cliente | Estado, `data_reconhecimento`, `data_inicio`, pausas com motivo, `data_conclusao`, `descricao_servico`, itens `servico_os` (descrição e quantidade), apontamentos (nome do técnico, início, fim, horas), componentes (`tipo_material`, item em texto, quantidade, `numero_serie_retirado`, `numero_serie_instalado`), leituras de medidor, respostas de checklist, fotos, observações, assinatura do cliente (nome, função, imagem, hash) | Sempre |
 | Preços | subcontratada → cliente | Preço de referência dos itens `servico_os` e dos componentes | Opcional, desligado; só a subcontratada liga |
 
-Nunca trafegam: CPF, contatos pessoais, documentos, capacitações e dados de saúde de técnicos; custos internos e preços de outros fornecedores do cliente; OS do ativo não vinculadas; dados de outros clientes da subcontratada; usuários e permissões. Cada lado controla os grupos opcionais dos dados que **envia**.
+Nunca trafegam: CPF, contatos pessoais, documentos e capacitações de técnicos (a Tenaz não guarda dado de saúde, sumário 3.6); custos internos e preços de outros fornecedores do cliente; OS do ativo não vinculadas; dados de outros clientes da subcontratada; usuários e permissões. Cada lado controla os grupos opcionais dos dados que **envia**.
 
 **Dono de cada dado e conflitos.**
 
@@ -1175,7 +1180,7 @@ tenaz/
 | Gerenciador JS | pnpm workspaces | Monorepo com pacotes compartilhados entre web e app. Se o Metro do Expo exigir, usar `node-linker=hoisted`. |
 | Orquestração de tarefas | Scripts do pnpm; Turborepo só se o tempo de CI justificar | Menos ferramentas no início |
 | Regras duplicadas Go e TS | `pacotes/dominio` com casos de teste em JSON em `backend/testes/casos/`, executados pelas duas suítes | A máquina de estados da OS e a validação de leitura existem nos dois lados (o app valida offline). Os mesmos casos impedem divergência. |
-| Desenvolvimento local | `docker compose` com Postgres, Valkey e MinIO; backend e web rodando no host | Ciclo rápido |
+| Desenvolvimento local | `docker compose` com PostgreSQL, Valkey, Mailpit e SeaweedFS (S3), todos por versão e digest (SeaweedFS no lugar do MinIO desde a versão 0.7, ADR-012; o compose é do `tenaz-plataforma-sre`). `ferramentas/tarefas.sh infra` espera os quatro saudáveis e cria o bucket `tenaz-auditoria` com bloqueio de objeto; `armazenamento-provar` qualifica o endurecimento em 19 verificações. Backend e web rodam no host | Ciclo rápido |
 | Validação de campos extras Go e TS (versão 0.5) | Mesma função no domínio da OS e em `pacotes/dominio`, com casos JSON em `backend/testes/casos/` | O app valida os campos extras offline antes de enfileirar o comando; o servidor revalida. Os mesmos casos impedem que o app aceite o que o servidor recusa (seção 5.6) |
 | Pacotes de segmento (versão 0.5) | Arquivos YAML em `backend/internal/modulos/configuracao/pacotes/`, validados no CI e publicados por `tenaz migrate` | Revisão em PR e teste antes de chegar a qualquer conta (seção 5.6) |
 
@@ -1208,6 +1213,7 @@ tenaz/
 - `panic` só para erro de programação na inicialização. Um middleware recupera panics em requisições, registra o erro e devolve 500.
 - Sem SQL concatenado. Ordenação dinâmica só por lista fechada de colunas.
 - Toda chamada externa (LLM, telemática, ERP) tem timeout, retry com backoff e disjuntor (circuit breaker).
+- Testes de integração (versão 0.7): cada pacote de teste de integração sobe o seu PostgreSQL descartável (`internal/plataforma/db/dbteste`). A subida é serializada entre os processos do `go test ./...` por um arquivo de trava no diretório temporário, e a falha transitória de detecção do Docker é repetida com recuo.
 
 Formato de erro (o dono é a seção 3.1 de `3_ESPECIFICACAO_APIS.md`; o tipo Go é `erros.Problema`). `type` é `https://api.tenaz.com.br/erros/<codigo>` (o domínio depende da P5); `codigo` é o que o cliente trata, e `title` e `detail` são texto para pessoas; `id_rastreio` repete o `X-Request-Id`; `erros[]` lista os erros por campo, com `campo` em notação de ponto, `codigo` do vocabulário curto (`obrigatorio`, `valor_invalido`, `formato_invalido`...) e `mensagem`; membros adicionais do código (ex.: `estado_atual` em `transicao_invalida`) saem no nível de cima. Exemplo real de E01, reativar uma unidade que já está ativa:
 
@@ -1317,21 +1323,26 @@ Roda em todo build, com duas empresas fictícias, A e B, populadas com dados em 
 | Listagens e busca | Listas, filtros, busca textual e busca vetorial com token de A não retornam nada de B. |
 | Arquivos | URL de arquivo de B não é assinada para usuário de A. |
 | Jobs | Job enfileirado para A não lê nem grava dados de B. |
-| Consultas sqlc | Toda consulta sobre tabela de cliente contém filtro por `empresa_id`. |
+| Consultas sqlc | Toda consulta sqlc sobre tabela de cliente, sem comentários nem literais, tem `empresa_id = sqlc.arg(empresa_id)` como `AND` no nível de cima de todo `WHERE` (sem `OR` no nível de cima; subconsulta não conta) ou, no `INSERT`, na lista de colunas; nome entre aspas e tabela sem esquema são recusados. (Limite conhecido da suíte: a regra é por consulta, não por tabela da junção.) |
 | Catálogos globais só leitura (versão 0.5) | Conectado como `tenaz_app`, `INSERT`, `UPDATE` e `DELETE` em `pacote_segmento` falham. A aplicação de um pacote em A não cria nem altera nada em B. |
 | Regras e disparos (versão 0.5) | A rotina diária de regras de A não lê candidatos nem grava `disparo_regra`, bloqueio ou solicitação em B. |
 | Visões (versão 0.6) | Em todo esquema que não seja do sistema (fora de `pg_catalog`, `information_schema` e `pg_*`): nenhuma visão materializada, e toda visão com `security_invoker = true`. Uma visão comum roda com os privilégios do dono e, sobre `plataforma.identidade`, entregaria `senha_hash` a quem tivesse `SELECT` nela. |
 | Papéis e relações de membro (versão 0.6) | As relações de membro de e para os papéis de execução (`tenaz_app`, `tenaz_job`, `tenaz_leitura`, `tenaz_sinc`, `tenaz_sinc_conexao`, `tenaz_autenticacao`, `tenaz_autenticacao_conexao` e `tenaz_manutencao`) batem, nos dois sentidos e com as opções `INHERIT` e `SET`, com o arquivo versionado da suíte `relacoes_de_membro.txt`: relação a mais ou a menos quebra o build. Fica de fora só a concessão pura de `ADMIN` (sem `INHERIT` nem `SET`), que não transfere privilégio. Hoje o arquivo declara três: `tenaz_sinc_conexao` em `tenaz_sinc`, `tenaz_autenticacao_conexao` em `tenaz_autenticacao` e `tenaz_manutencao` em `tenaz_dono`. Todo papel de execução existe, e nenhum, inclusive o `tenaz_manutencao`, tem `BYPASSRLS` ou é superusuário. O par da autenticação ([ADR-011](#adr-011--papel-de-banco-próprio-para-as-credenciais-de-autenticação)): `tenaz_autenticacao` é `NOLOGIN`, `tenaz_autenticacao_conexao` é `LOGIN` e membro só dele, com herança, e nenhum outro papel o herda ou assume; nenhum dos dois tem `BYPASSRLS`, `CREATEROLE`, `CREATEDB` ou `REPLICATION` nem é superusuário; nenhum é dono de tabela, função, esquema ou tipo; nenhuma relação de membro, em nenhum sentido, com `tenaz_dono`, `tenaz_app`, `tenaz_job`, `tenaz_leitura`, `tenaz_sinc`, `tenaz_sinc_conexao` ou `tenaz_manutencao`; `USAGE` exatamente em `app`, `plataforma` e `public`. |
-| Mapa de privilégios (versão 0.6) | O catálogo bate, nos dois sentidos e coluna a coluna, com o arquivo versionado da suíte `privilegios.txt`: privilégio a mais ou a menos quebra o build. Entram: todo privilégio em tabela, visão, sequência ou função **fora** de `app`, em qualquer esquema que não seja do sistema, concedido a um papel `tenaz_*` ou a `PUBLIC` (exceto o `EXECUTE` padrão de `PUBLIC` em função, coberto pela linha "Funções de credencial" e pela lista aprovada de funções `SECURITY DEFINER`); todo privilégio, em qualquer esquema, inclusive `app`, dos três papéis de lista fechada: sincronizador (`tenaz_sinc`, `tenaz_sinc_conexao`), autenticação (`tenaz_autenticacao`, `tenaz_autenticacao_conexao`) e `tenaz_credencial`; e todo privilégio de esquema (`USAGE`, `CREATE`) de papel `tenaz_*` ou de `PUBLIC` que não seja o dono do esquema. Nas sete tabelas de credencial, o arquivo declara só os privilégios do `tenaz_autenticacao` da seção 6.9 e o `REFERENCES (id)` do `tenaz_dono` em `identidade`; nele estão também os demais privilégios cruzados entre os dois donos (seção 6.9) e as colunas de `INSERT` do `tenaz_autenticacao` e do `tenaz_sinc` em `evento_auditoria`. Fora do mapa, para os papéis da aplicação (`tenaz_app`, `tenaz_job`, `tenaz_leitura` e os pares do sincronizador e da autenticação): nenhum `TRUNCATE`, `TRIGGER` ou `REFERENCES` em tabela de nenhum esquema, e nenhum `CREATE` em esquema nenhum. |
+| Mapa de privilégios (versão 0.6) | O catálogo bate, nos dois sentidos e coluna a coluna, com o arquivo versionado da suíte `privilegios.txt`: privilégio a mais ou a menos quebra o build. Entram: todo privilégio em tabela, visão, sequência ou função **fora** de `app`, em qualquer esquema que não seja do sistema, concedido a um papel `tenaz_*` ou a `PUBLIC` (exceto o `EXECUTE` padrão de `PUBLIC` em função, coberto pela linha "Funções de credencial" e pela lista aprovada de funções `SECURITY DEFINER`); todo privilégio, em qualquer esquema, inclusive `app`, dos três papéis de lista fechada: sincronizador (`tenaz_sinc`, `tenaz_sinc_conexao`), autenticação (`tenaz_autenticacao`, `tenaz_autenticacao_conexao`) e `tenaz_credencial`; e todo privilégio de esquema (`USAGE`, `CREATE`) de papel `tenaz_*` ou de `PUBLIC` que não seja o dono do esquema, inclusive os privilégios padrão (`ALTER DEFAULT PRIVILEGES`). Nas sete tabelas de credencial, o arquivo declara só os privilégios do `tenaz_autenticacao` da seção 6.9 e o `REFERENCES (id)` do `tenaz_dono` em `identidade`; nele estão também os demais privilégios cruzados entre os dois donos (seção 6.9) e as colunas de `INSERT` do `tenaz_autenticacao` e do `tenaz_sinc` em `evento_auditoria`. Fora do mapa, para os papéis da aplicação (`tenaz_app`, `tenaz_job`, `tenaz_leitura` e os pares do sincronizador e da autenticação): nenhum `TRUNCATE`, `TRIGGER` ou `REFERENCES` em tabela de nenhum esquema, e nenhum `CREATE` em esquema nenhum. |
 | Dono das credenciais (emenda ISO-E01-08, versão 0.6) | Todo objeto de `app` e `plataforma` (tabela, visão, sequência, tabela externa, índice, tipo de linha e função) pertence a `tenaz_dono`, e os dois esquemas também, com uma exceção exata: as sete tabelas de credencial, com os seus índices e tipos de linha, e as funções `plataforma.tg_acesso_empresa()` e `plataforma.purgar_credenciais_vencidas()` pertencem a `tenaz_credencial`. Objeto a mais ou a menos na exceção, ou objeto de credencial ausente, quebra o build. `tenaz_credencial` existe, não faz login, não tem `BYPASSRLS` nem `CREATEROLE` e não é superusuário; não é membro de nenhum papel; não tem membro, com `INHERIT` ou `SET`, além de superusuário ou do `tenaz_migrador`; e nenhum papel de runtime o alcança, nem por herança transitiva: `tenaz_app`, `tenaz_job`, `tenaz_leitura`, `tenaz_sinc`, `tenaz_sinc_conexao`, `tenaz_autenticacao`, `tenaz_autenticacao_conexao`, `tenaz_manutencao` e `tenaz_dono`. Como `tenaz_manutencao` e como `tenaz_dono`, `SELECT` em cada uma das sete tabelas e a troca da senha da identidade de B recebem "permissão negada". O trigger `trg_acesso_empresa` existe em `app.usuario`, não está desabilitado e chama `plataforma.tg_acesso_empresa()`. Em `plataforma`, tabela da classe `credencial` em `tabelas_globais.txt` tem dono `tenaz_credencial`, e tabela sem RLS habilitado e forçado e de dono `tenaz_dono` só pode ser da classe `catalogo` ou `controle` (regra da pendência E01-14). |
 | Ataques do achado ISO-E01-02 (versão 0.6) | Como `tenaz_app`, `tenaz_job`, `tenaz_leitura`, `tenaz_sinc`, `tenaz_sinc_conexao`, `tenaz_dono` e `tenaz_manutencao`, com contexto interno de A: ler a identidade (com `senha_hash` e segredo de MFA), os acessos e as sessões de B, criar sessão web ou código OAuth para o usuário de B, trocar a senha da identidade de B e `SELECT`, `INSERT`, `UPDATE` e `DELETE` em cada uma das sete tabelas recebem "permissão negada", e não zero linhas. |
 | Auditoria pelo papel de autenticação (versão 0.6) | Como `tenaz_autenticacao`, com contexto A: evento de outra entidade ou ação, evento com o usuário de B ou com usuário que não é o da identidade em A, e qualquer `SELECT` na trilha são recusados. |
 | Consultas de credencial (versão 0.6) | Nenhum arquivo `.sql` fora do repositório da autenticação cita as sete tabelas; toda consulta do repositório filtra por hash, `id`, `identidade_id`, `(empresa_id, usuario_id)` ou e-mail exato. |
-| Funções de credencial (versão 0.6) | `plataforma.tg_acesso_empresa()` e `plataforma.purgar_credenciais_vencidas()` na lista aprovada de funções `SECURITY DEFINER`, de dono `tenaz_credencial`, com `search_path` fixo e `EXECUTE` revogado de `PUBLIC` (a purga, só para `tenaz_job`). Inativar um usuário em A revoga as sessões e os refresh tokens dele em A e não toca os do mesmo usuário em B. |
+| Funções de credencial (versão 0.6) | `plataforma.tg_acesso_empresa()` e `plataforma.purgar_credenciais_vencidas()` na lista aprovada de funções `SECURITY DEFINER`, de dono `tenaz_credencial`, com `search_path` fixo e `EXECUTE` revogado de `PUBLIC` (a purga, só para `tenaz_job`). Inativar um usuário em A revoga as sessões e os refresh tokens dele em A e não toca os do mesmo usuário em B. Nenhuma função `SECURITY DEFINER` fora da lista aprovada em esquema nenhum, sem exceção para extensões; nenhuma função fora de `app` e `plataforma`, exceto as de extensão declarada em `extensoes.txt`, com a impressão das suas funções. |
 | Moldes da trilha (versão 0.6) | As três restritivas de `INSERT` em `app.evento_auditoria`, cada uma com o seu molde (o que passa e o que a política recusa, conferido pela mensagem de RLS, e não por outro erro) e a sua prova (sem a política, o teste acusa). `auditoria_sem_autenticacao`: `tenaz_app`, `tenaz_job` e `tenaz_sinc` não gravam evento de `entidade = 'identidade'` (ISO-E01-07), e o `tenaz_app` grava evento de outra entidade. `escopo_externo_insercao`: prestador, locatário e link gravam só em nome de si e no próprio escopo (a coluna `escopo` do evento confere com o escopo da transação), sem atribuir o evento a outro usuário, a colega do mesmo fornecedor ou a ninguém; o interno grava evento de qualquer usuário da empresa. `conexao_sinc`: `tenaz_sinc` e `tenaz_sinc_conexao` gravam só evento da conexão em processamento, com ator `sincronizacao_conexao`, e não gravam evento de outra conexão, sem conexão, de outro ator, sem a conexão no contexto ou de B na transação de A; o sincronizador não lê a trilha. Como o `tenaz_sinc` ainda não tem `USAGE` em `app` (E04), o teste o concede só dentro da transação desfeita, para que a recusa venha da política e não do esquema. |
-| Corrida de atribuição (ISO-E01-06, versão 0.6) | Duas conexões reais, no isolamento padrão (READ COMMITTED), como `tenaz_app` com contexto interno de A: a primeira atribui a um usuário interno o perfil `gestor` ou a permissão avulsa vedada `pessoa.saude.ler` e não confirma; a segunda tenta trocar o `fornecedor_id` desse usuário com `lock_timeout` de 300 ms e precisa receber `55P03` (`lock_not_available`), pela trava `FOR SHARE` dos triggers de atribuição. A prova troca o trigger de atribuição de perfil por uma versão sem a trava, e a troca passa. |
+| Corrida de atribuição (ISO-E01-06, versão 0.6) | Duas conexões reais, no isolamento padrão (READ COMMITTED), como `tenaz_app` com contexto interno de A: a primeira atribui a um usuário interno o perfil `gestor` ou a permissão avulsa `os.encerrar`, vedada ao escopo externo, e não confirma; a segunda tenta trocar o `fornecedor_id` desse usuário com `lock_timeout` de 300 ms e precisa receber `55P03` (`lock_not_available`), pela trava `FOR SHARE` dos triggers de atribuição. A prova troca o trigger de atribuição de perfil por uma versão sem a trava, e a troca passa. |
 | Contexto no pool (versão 0.6) | Com o helper real `db.NaEmpresa`, num pool de uma conexão como `tenaz_app`: depois de uma transação confirmada, de uma abortada por erro de SQL, de uma desfeita pelo caso de uso e de uma de prestador, a mesma conexão, fora de `NaEmpresa`, tem `app.empresa_atual()`, `app.escopo_atual()`, `app.usuario_atual()` e `app.fornecedor_atual()` nulos e vê zero linhas em toda tabela de empresa; e `NaEmpresa` de B, logo depois de A na mesma conexão, não vê a unidade de A. Antes, o teste exige que `NaEmpresa` de A veja a unidade de A, para não passar por vacuidade. |
+| NaEmpresa confere o escopo no banco (versão 0.7) | Escopo bem formado e incoerente com o cadastro é recusado antes do caso de uso (pool de uma conexão; nenhum contexto sobra na conexão). |
+| Extensões (versão 0.7) | Só as de `extensoes.txt`, com versão e impressão das funções. |
+| Sem dado de saúde (versão 0.7) | Nenhum objeto com `saude` em `app` e `plataforma`, nenhuma leitura de `app.saude`, `pessoa.saude.ler` recusada pelo formato de permissão. |
 | Portão de achados (versão 0.6) | Falha de isolamento já demonstrada por um teste e devolvida ao dono da migração fica no mapa `achadosAbertos` da suíte, com o ID do achado. Não é lista de exceções: no CI (variável `CI` definida), o teste do achado aberto falha e a suíte encerra com erro enquanto o mapa não estiver vazio; fora do CI, o teste aparece como SKIP com o ID. Numa execução completa (sem `-run`), chave do mapa que nenhum teste exercitou é erro (achado sem prova), e o achado que deixa de se reproduzir faz o teste falhar pedindo a retirada. |
+
+**Nota (versão 0.7):** a suíte roda igual em contêiner descartável e no banco local compartilhado entre pacotes (`ferramentas/tarefas.sh testar-rapido`). As provas de detector rodam numa transação do superusuário que é desfeita no fim do teste, e nenhum objeto de prova fica visível para outra conexão. O helper `estragar` aplica os comandos num savepoint com `lock_timeout` de 1 segundo e, em `55P03` ou `40P01`, repete com recuo, até 8 vezes: a prova espera a vez e não falha por concorrência alheia. A prova que altera tabela real (dono, trigger ou coluna) segura a trava só até o fim da própria transação.
 
 **Isolamento por fornecedor e por locatário** (risco R4), na mesma suíte e com a mesma regra de bloqueio. As sementes têm, na empresa A, os fornecedores F1 e F2 (com OS, almoxarifados `em_terceiro` e usuários `prestador`) e os locatários L1 e L2 (com contratos, vistorias e solicitações); na empresa B, um fornecedor F3 com o **mesmo CNPJ** de F1, para simular o prestador que atende duas contratantes.
 
@@ -1542,6 +1553,7 @@ Nenhum comando rejeitado desaparece em silêncio. O app mostra o motivo e o que 
 
 - Banco local criptografado; chave no Keychain ou Keystore.
 - Sessão do app com token de atualização válido por 30 dias de inatividade (RNF-017 em [1_ESPECIFICACAO_REQUISITOS.md](1_ESPECIFICACAO_REQUISITOS.md); até a versão 0.5 este documento dizia 14 dias, corrigido na etapa E01), rotativo, com detecção de reuso e ligado ao aparelho. Sem conexão, o app continua funcionando até o fim desse prazo. As credenciais ficam nas tabelas da seção 6.9.
+- Access token do app (versão 0.7, `plataforma/autenticacao/jwt.go`; formato na seção 4.3 de [3_ESPECIFICACAO_APIS.md](3_ESPECIFICACAO_APIS.md)): a verificação aceita um formato só e recusa cabeçalho diferente de `alg` EdDSA, `typ` JWT e `kid` conhecido, `iss` ou `aud` errados, `exp` ausente ou vencido, e `nbf` ou `iat` no futuro. A sessão é conferida depois, no banco.
 - Na reconexão, o servidor confere se o usuário e o aparelho continuam ativos. Se não, os comandos pendentes são aceitos ou recusados conforme a política da empresa e o banco local é apagado.
 - Apagamento remoto do aparelho pelo administrador.
 
@@ -1677,7 +1689,7 @@ O módulo IA entra na Fase 2 (nível 1) e evolui para agentes com aprovação na
 | Elemento | Definição **(proposta)** |
 |---|---|
 | Fontes | Manuais e documentos técnicos de ativos, procedimentos, histórico de OS (descrição, causa, solução) |
-| Fora do índice | Dados sensíveis (exames, ASO), dados de pessoas, credenciais, documentos marcados como restritos |
+| Fora do índice | Dados sensíveis (CPF completo, dados de vítimas de sinistro, CPF de locatário pessoa física; sumário 3.6), dados de pessoas, credenciais, documentos marcados como restritos. A Tenaz não guarda dado de saúde |
 | Armazenamento | Tabela `trecho_documento` com `empresa_id`, `documento_id`, `origem`, `texto`, `embedding vector(n)`, com RLS forçado como qualquer tabela |
 | Índice | HNSW do pgvector. Usar a varredura iterativa do pgvector para filtros, para não retornar vazio quando o filtro por empresa descarta os vizinhos mais próximos. |
 | Ingestão | Jobs River: extrair texto do PDF, dividir em trechos, gerar embedding, gravar. Reindexação quando o documento muda. |
@@ -1723,6 +1735,8 @@ Regras:
 ### 13.1 Nuvem e região
 
 Proposta: **AWS `sa-east-1` (São Paulo)**, com 3 zonas de disponibilidade. Comparação no [ADR-006](#adr-006--nuvem-aws-na-região-são-paulo).
+
+**Versão 0.7:** a nuvem gerenciada é a exceção explícita do [ADR-012](#adr-012--só-software-livre-ou-gratuito-e-seaweedfs-no-lugar-do-minio) à regra de só software gratuito ou de código aberto (decisão do dono do produto, 13/11/2026). Os serviços da tabela abaixo continuam proposta quanto à configuração; e-mail, push do iOS e lojas, pagos por natureza e ainda sem decisão, seguem a seção 16 (H5 e H6).
 
 | Camada | Serviço **(proposta)** | Configuração inicial |
 |---|---|---|
@@ -1834,7 +1848,7 @@ Responder "a empresa X está lenta?" é feito por consulta a logs e traces filtr
 
 JSON via `slog`. Campos obrigatórios: `ts`, `nivel`, `msg`, `servico`, `versao` (SemVer do release, seção 9.5), `trace_id`, `span_id`, `empresa_id`, `usuario_id`, `request_id`, `rota`, `status`, `duracao_ms`.
 
-Nunca registrar: senha, token, chave de API, segredo de conector, conteúdo de documento sensível, CPF completo, resultado de exame. Um filtro de redação no logger mascara campos com nomes conhecidos, e um teste confere.
+Nunca registrar: senha, token, chave de API, segredo de conector, conteúdo de documento sensível, CPF completo. Um filtro de redação no logger mascara campos com nomes conhecidos, e um teste confere.
 
 Retenção **(proposta)**: 30 dias quente, 13 meses arquivado, exceto logs de segurança (ver 9_SEGURANCA_CONFIABILIDADE.md).
 
@@ -1896,12 +1910,13 @@ Formato: contexto, decisão, alternativas consideradas e consequências. Status 
 | [ADR-003](#adr-003--monólito-modular) | Monólito modular | Aceita |
 | [ADR-004](#adr-004--app-offline-first-com-sincronização-própria) | App offline-first com sincronização própria | Proposta |
 | [ADR-005](#adr-005--fila-de-jobs-no-postgresql) | Fila de jobs no PostgreSQL | Proposta |
-| [ADR-006](#adr-006--nuvem-aws-na-região-são-paulo) | Nuvem AWS na região São Paulo | Proposta |
+| [ADR-006](#adr-006--nuvem-aws-na-região-são-paulo) | Nuvem AWS na região São Paulo | Proposta; provedor e região aceitos como exceção do ADR-012 |
 | [ADR-007](#adr-007--ia-com-provedor-externo-rag-isolado-e-ferramentas-tipadas) | IA com provedor externo, RAG isolado e ferramentas tipadas | Proposta |
 | [ADR-008](#adr-008--acesso-externo-por-escopo-restritivo-e-link-de-uso-único) | Acesso externo por escopo restritivo e link de uso único | Proposta |
 | [ADR-009](#adr-009--conexão-entre-contas) | Conexão entre contas | Proposta |
 | [ADR-010](#adr-010--configuração-por-segmento-com-catálogos-fechados) | Configuração por segmento com catálogos fechados | Proposta |
 | [ADR-011](#adr-011--papel-de-banco-próprio-para-as-credenciais-de-autenticação) | Papel de banco próprio para as credenciais de autenticação | Proposta |
+| [ADR-012](#adr-012--só-software-livre-ou-gratuito-e-seaweedfs-no-lugar-do-minio) | Só software livre ou gratuito, e SeaweedFS no lugar do MinIO | Regra: Aceita (dono do produto). Substituto do MinIO: Proposta |
 
 ---
 
@@ -2006,7 +2021,7 @@ Motivos:
 
 | Alternativa | A favor | Contra | Resultado |
 |---|---|---|---|
-| PowerSync | Pull pronto; SDK para React Native | Escrita e conflitos continuam com a Tenaz; lê fora do RLS (segundo mecanismo de isolamento); serviço adicional; residência a verificar | Plano B |
+| PowerSync | Pull pronto; SDK para React Native | Escrita e conflitos continuam com a Tenaz; lê fora do RLS (segundo mecanismo de isolamento); serviço adicional; residência a verificar | Plano B. **Versão 0.7 (ADR-012):** suspenso enquanto a edição autohospedada estiver sob licença "source-available" (FSL), que a regra de admissão não aceita; conferir a licença vigente antes de reabrir |
 | ElectricSQL | Sincronização de leitura por "shapes" sobre HTTP | Mesmas objeções de isolamento e operação; escrita também fica com o backend | Descartada |
 | WatermelonDB com sync próprio | Banco local reativo maduro | Protocolo de sync ainda a construir; menos alinhado ao SQLite puro | Descartada |
 | Realm / Atlas Device Sync | Era a referência | Fim de vida em 2025 | Descartada |
@@ -2048,7 +2063,9 @@ Motivos:
 
 ### ADR-006 — Nuvem AWS na região São Paulo
 
-**Status:** Proposta · **Data:** 12/11/2026
+**Status:** Proposta; provedor e região **aceitos** pelo dono do produto em 13/11/2026 · **Data:** 12/11/2026
+
+**Nota de 13/11/2026 ([ADR-012](#adr-012--só-software-livre-ou-gratuito-e-seaweedfs-no-lugar-do-minio)).** O dono do produto fixou a regra de só usar software 100% gratuito ou de código aberto no que o sistema usa diretamente e, no mesmo dia, abriu a **exceção explícita** para esta decisão: a produção roda em nuvem gerenciada (AWS, região São Paulo), com banco, chaves e armazenamento gerenciados. A suspensão registrada mais cedo, na mesma versão 0.7, foi retirada. Continuam proposta os serviços e a configuração (seção 13), e continua aberta a P7.
 
 **Contexto.** Promessa comercial: dados primários hospedados no Brasil, RPO e RTO publicados. Metas do sumário: SLA de 99,9% (Essencial e Profissional) e 99,95% (Enterprise), RPO ≤ 5 min, RTO ≤ 1 h (zona) e ≤ 4 h (região, dependente da P7). Equipe pequena: o máximo de serviços gerenciados.
 
@@ -2255,9 +2272,158 @@ Motivos:
 
 ---
 
+### ADR-012 — Só software livre ou gratuito, e SeaweedFS no lugar do MinIO
+
+**Status:** regra de admissão, alcance e exceção **Aceitos** (dono do produto, 13/11/2026); SeaweedFS no desenvolvimento e verificação no CI **Proposta** · **Data:** 13/11/2026 · **Emenda:** 13/11/2026
+
+**Emenda de 13/11/2026 (mesma versão 0.7).** Respostas do dono do produto à auditoria abaixo, já no sumário 0.7 (seção 3.6, "Ferramentas e recursos"), em [CLAUDE.md](../CLAUDE.md) (seção 4) e no prompt de E01:
+
+- **Alcance da regra**, nas palavras dele: "Ambiente de desenvolvimento é diferente de ambiente de produção. A questão de gratuidade se aplica exclusivamente para ferramentas utilizadas diretamente pelo sistema." Ficam **fora** da regra as ferramentas de quem desenvolve: Docker Desktop, navegador (inclusive o do `md2pdf.py`), editor, GitHub e GitHub Actions. Ficam **dentro** o que vai para a produção: dependências de `backend/go.mod`, `web/`, `app/` e `pacotes/`, imagens de produção, servidores e serviços que o sistema chama. Software proprietário gratuito sem condição usado pelo sistema (por exemplo, o Expo Push) atende ao item (b) da decisão 1. Isso resolve H2, H3 e H4.
+- **Exceção explícita:** hospedagem de produção em nuvem gerenciada (AWS, São Paulo), com banco, chaves e armazenamento gerenciados. O [ADR-006](#adr-006--nuvem-aws-na-região-são-paulo) volta a valer. Resolve a H1.
+- **Selo em produção:** S3 com Object Lock em modo de conformidade, que resiste à própria conta root. Resolve a H10 na produção.
+- **Selo e anexos em desenvolvimento:** "por enquanto, em dev, tudo em uma única máquina (docker)": SeaweedFS no compose, endurecido com `security.toml` (decisão 4). O risco residual vale só nesse ambiente, que não tem dado real.
+- **Serviços pagos por natureza** (lojas e build de iOS, e-mail transacional, SMS, IA, pagamento) ficam pendentes até a etapa em que entram (seção 16, H5 a H9).
+
+O texto original abaixo fica como registro; onde a emenda muda o efeito, a mudança está marcada.
+
+**Contexto.** Na etapa E01 o dono do produto fixou o requisito: **não usar nenhuma ferramenta ou recurso que não seja 100% gratuito ou open source** (prompt [E01](prompts/E01_conta-e-acesso.md), "Ajustes durante a etapa", linha "Ferramentas e recursos"). O primeiro alvo é o MinIO, que o compose de desenvolvimento previa para os anexos: a edição comunitária deixou de ter binários e imagens publicados, a tag `latest` não aceita mais pull anônimo (comentário do compose, etapa 011) e o repositório `minio/minio` está arquivado (conferido pela API do GitHub em 13/11/2026: `archived = true`, último push em 24/04/2026). O sistema precisa de armazenamento compatível com S3 com **bloqueio de objeto em modo de conformidade**, para o selo diário da trilha (RF-ADM-011 em [1_ESPECIFICACAO_REQUISITOS.md](1_ESPECIFICACAO_REQUISITOS.md), versão 0.5; `selo_auditoria.chave_objeto` em [2_ARQUITETURA_BANCO_DADOS.md](2_ARQUITETURA_BANCO_DADOS.md)), e de URL pré-assinada para os anexos a partir de E02 (seção 9.3, linha "Arquivos"). O requisito alcança também a nuvem do ADR-006 e os serviços das seções 10 a 14, que são pagos por natureza: hospedagem nenhuma é gratuita.
+
+**Decisão.**
+
+1. **Regra de admissão de software.** Biblioteca, ferramenta de desenvolvimento ou de CI, imagem de contêiner e sistema operado pela Tenaz só entram se forem (a) de código aberto, com licença aprovada pela OSI (MIT, BSD, ISC, Apache-2.0, MPL-2.0, LGPL, GPL, AGPL), ou fonte tipográfica sob OFL-1.1; ou (b) gratuitos **sem condição**: sem cota que vire cobrança, sem limite de porte ou de receita da empresa, sem período de teste. **(Emenda: a regra vale só para o que o sistema usa diretamente; ferramenta de desenvolvimento e de CI fica fora, e software proprietário gratuito sem condição usado pelo sistema atende ao item (b).)** **Não entram:** licença "source-available" (BSL, SSPL, FSL, Elastic License, Commons Clause, RSAL; por exemplo Terraform, HashiCorp Vault e Nomad, Redis desde a 7.4, a edição comercial do MinIO) e o recurso pago de produto "open core", mesmo com a base aberta (River Pro, sqlc Cloud, Testcontainers Cloud, Maestro Cloud, edições Enterprise). Software GPL ou AGPL roda como processo separado e sem modificação; modificar o código dele exige revisão antes, porque a AGPL obriga a publicar o código modificado oferecido por rede.
+2. **Verificação no CI (proposta, com o alcance da emenda).** Tarefa `licencas` em `ferramentas/tarefas.sh`, chamada por `conferir`, **só sobre o que vai para o produto**: `go-licenses` (Apache-2.0) sobre as dependências do binário `cmd/tenaz` (sem as só de teste), `pnpm licenses list --prod` sobre `web`, `app` e `pacotes`, e as imagens de produção (base do `backend/Dockerfile` e o que for implantado), contra a lista de licenças da decisão 1 e um arquivo versionado com licença e versão fixa (tag concreta, nunca `latest` nem tag flutuante). Ficam de fora as `devDependencies`, as dependências só de teste (testcontainers e afins), o compose de desenvolvimento e as ferramentas do CI. Licença fora da lista quebra o build. A tarefa continua fazendo sentido porque a regra, mesmo menor, precisa de um portão automático: dependência transitiva nova entra sem ninguém ler a licença. Responsável: `tenaz-plataforma-sre`.
+3. **SeaweedFS no lugar do MinIO.** SeaweedFS (Apache-2.0), imagem `chrislusf/seaweedfs:4.53`, fixada por versão e digest (`sha256:ccad23e18639c8b98cee17e7100b95830a06077b56d8e5b006d6dcf8ec5e94a0`, conferido em 13/11/2026) e atualizada só depois de passar no ensaio da decisão 5. No desenvolvimento, um contêiner `weed server -s3` (master, volume, filer e gateway S3 num processo), numa máquina só. **(Emenda: em produção o armazenamento é o S3 gerenciado, pela exceção do ADR-006; o SeaweedFS fica no desenvolvimento.)** **(Aplicado em 13/11/2026:** servidor único no compose, no `up` comum, sem perfil; master, volume e filer escutam só dentro do contêiner (`-ip.bind=127.0.0.1`), e só o gateway S3 escuta na rede; telemetria do projeto desligada (`-master.telemetry=false`).**)** Não é componente novo: o object storage compatível com S3 já está na stack (seção 2.4); muda só o servidor.
+4. **Endurecimento obrigatório onde o SeaweedFS rodar, inclusive o local.** (a) `security.toml` com chaves JWT de volume e de filer, para leitura e escrita: **sem ele, a API HTTP do filer apaga objeto em retenção de conformidade sem credencial nenhuma** (ensaio abaixo). (b) Só a porta do gateway S3 é publicada; master, volume, filer e gRPC ficam na rede interna do armazenamento. (c) Identidades S3 separadas por uso, com as ações mínimas: a dos anexos sem permissão de bloqueio de objeto; a do selo com gravação e retenção, sem `bypass`; `Admin` só para a operação. (d) Chave de objeto prefixada por `empresa_id` (seção 6.1), versionamento ligado e, no bucket do selo, bloqueio de objeto com retenção padrão em modo `COMPLIANCE`.
+5. **O backend fala só S3.** Cliente `aws-sdk-go-v2` (Apache-2.0), com endpoint, região e estilo de caminho por configuração; nenhuma API própria do SeaweedFS, nenhum `minio-go`. Trocar de servidor é trocar configuração. As 15 verificações do ensaio viram teste de integração do armazenamento, contra o contêiner do compose **(proposta**, `tenaz-qa-automacao` com `tenaz-plataforma-sre`), acrescidas do `DELETE` recursivo no filer sem JWT, que precisa receber 401; o teste qualifica toda versão nova da imagem e qualquer substituto.
+6. **Serviços pagos por natureza não são decididos aqui.** Hospedagem, domínio, lojas de aplicativo, SMS, e-mail transacional, push do iOS, pagamento e GPU para IA custam dinheiro qualquer que seja o software. A tabela abaixo dá, para cada serviço proposto neste documento, o equivalente autohospedado em software livre e o que continua pago ou não tem substituto. **(Emenda: a última coluna diz o que o dono do produto decidiu; a hospedagem de produção é a exceção, e o resto entra na etapa indicada na seção 16.)**
+
+| Serviço proposto | Equivalente autohospedado em software livre | O que continua pago ou não tem substituto | Situação (emenda) |
+|---|---|---|---|
+| Computação (ECS Fargate, ALB) | Docker Engine com Compose, ou k3s (Apache-2.0); proxy Caddy (Apache-2.0) ou nginx (BSD-2) | As máquinas (VPS, servidor dedicado ou colocation no Brasil) | Exceção: nuvem gerenciada (ADR-006) |
+| Banco gerenciado (RDS Multi-AZ, PITR de 35 dias) | PostgreSQL com Patroni (MIT) e pgBackRest (MIT), ou CloudNativePG (Apache-2.0) sobre k3s | Máquinas em pelo menos dois datacenters para o SLA de 99,9% e o RTO de zona | Exceção: nuvem gerenciada (ADR-006) |
+| Cache (ElastiCache) | Valkey (BSD-3) | Nada além da máquina | Exceção: nuvem gerenciada (ADR-006) |
+| Arquivos e cópia imutável (S3, Object Lock, AWS Backup com Vault Lock) | SeaweedFS (decisão 3); cópias com restic (BSD-2) e pgBackRest para um segundo SeaweedFS em outro local, com bloqueio de objeto | O segundo local; a imutabilidade não resiste a quem administra o host (risco residual abaixo) | Exceção em produção: S3 com Object Lock em conformidade; SeaweedFS no desenvolvimento |
+| Segredos e chaves (Secrets Manager, KMS) | OpenBao (MPL-2.0, fork aberto do Vault), ou SOPS (MPL-2.0) com age (BSD-3) | Sem HSM: a chave-mestra fica protegida por procedimento, não por hardware | Exceção: nuvem gerenciada (ADR-006) |
+| DNS (Route 53) | Servidores DNS do registro.br, sem custo para domínio registrado nele, ou PowerDNS (GPL-2.0) | **O domínio**: registro anual no registro.br, sem substituto gratuito | Exceção: nuvem gerenciada; o domínio segue a P5 |
+| CDN e WAF (CloudFront, AWS WAF) | Caddy ou nginx com Coraza (Apache-2.0) e OWASP CRS (Apache-2.0); certificados do Let's Encrypt (gratuito) | Sem CDN global; a defesa contra DDoS volumétrico depende do provedor das máquinas | Exceção: nuvem gerenciada (ADR-006) |
+| E-mail transacional (SES) | Postfix (IPL-1.0 ou EPL-2.0) com OpenDKIM (BSD); Mailpit só no desenvolvimento | Entregabilidade: IP próprio com reputação e porta 25 liberada pelo provedor; risco real de cair em spam | Pendente: H6, até a primeira homologação (Mailpit no desenvolvimento) |
+| Observabilidade (CloudWatch, X-Ray, ADOT) | Coletor OpenTelemetry, Prometheus, Jaeger, VictoriaMetrics e VictoriaLogs (todos Apache-2.0); Grafana (AGPL-3.0) | Máquinas e disco para a retenção de 13 meses | Exceção: nuvem gerenciada (ADR-006) |
+| Segurança da conta (CloudTrail, GuardDuty, Security Hub) | Wazuh (GPL-2.0), Falco (Apache-2.0), auditd | Pessoas para olhar os alertas | Exceção: nuvem gerenciada (ADR-006) |
+| Página de status (RNF-020) | Uptime Kuma (MIT) ou Gatus (Apache-2.0), numa máquina fora da infraestrutura principal | A máquina externa | Com a configuração da seção 13, em E12 |
+| Push (Expo Push para APNs e FCM) | Envio direto do worker ao APNs e ao FCM; no Android, ntfy com UnifiedPush (Apache-2.0) | O APNs exige a conta de desenvolvedor Apple, paga; Expo Push e FCM são gratuitos, mas proprietários (H2) | Expo Push e FCM atendem (gratuitos sem condição); a conta Apple segue a H5, E12 |
+| Distribuição do app (EAS Build, EAS Update, lojas) | Build local (`eas build --local`, eas-cli MIT, ou `expo prebuild` com Gradle); servidor próprio do protocolo `expo-updates` para a atualização sem loja | **As lojas**: Apple Developer Program (anual) e Google Play (taxa única), sem substituto para iOS; o build de iOS exige macOS e Xcode (gratuito, proprietário, em hardware Apple) | Pendente: H5, E12 |
+| SMS (P11) | Nenhum: a operadora cobra cada mensagem; um gateway num celular Android só troca o provedor pelo plano da operadora | Tudo. Saída sem SMS: e-mail, TOTP, convite por QR code | Pendente: H7 (P11), E12 |
+| IA (ADR-007, Fase 2) | Modelos de pesos abertos sob Apache-2.0 servidos por vLLM (Apache-2.0) ou Ollama (MIT) | GPU; qualidade a medir no conjunto de avaliação da seção 12.5 | Pendente: H8, Fase 2 |
+| Pagamento (RF-ADM-009) | Faturamento próprio ou Kill Bill (Apache-2.0) | Gateway, banco ou Pix: tarifa por transação, sem substituto | Pendente: H9, E10 |
+
+**Ensaio de 13/11/2026**, fora do repositório, num diretório de rascunho e numa rede Docker isolada, sem tocar no compose. Cliente `amazon/aws-cli:2.40.2` e `curlimages/curl:8.17.0`. As 15 verificações: (1) bucket criado com bloqueio de objeto; (2) versionamento ligado automaticamente; (3) retenção padrão `COMPLIANCE` de 1 dia; (4) gravação do selo com retenção `COMPLIANCE` explícita; (5) retenção lida de volta; (6) apagar a versão protegida: `AccessDenied`; (7) apagar com `--bypass-governance-retention`: `AccessDenied`; (8) encurtar a retenção: `AccessDenied`; (9) trocar para `GOVERNANCE`: `AccessDenied`; (10) sobrescrever a chave: cria versão nova; (11) apagar sem versão: só marcador de exclusão; (12) apagar o bucket: recusado; (13) a versão protegida continua lá com o conteúdo original; (14) URL pré-assinada de 5 minutos: HTTP 200; (15) URL adulterada: HTTP 403.
+
+| Candidata | Licença | Resultado das 15 verificações | Memória em repouso | Imagem |
+|---|---|---|---|---|
+| SeaweedFS 4.53 | Apache-2.0 | 15 de 15 | cerca de 100 MiB | 792 MB |
+| RustFS 1.0.5 | Apache-2.0 | 15 de 15 | cerca de 31 MiB | 346 MB |
+| Versity Gateway v1.11.0 | Apache-2.0 | 15 de 15 | cerca de 13 MiB | 82 MB |
+
+Dois achados no SeaweedFS, que moldam as decisões 4 e 5 e o risco residual: **sem `security.toml`**, um `DELETE` recursivo na API HTTP do filer (porta 8888, sem credencial) apagou o bucket inteiro, com a versão em retenção de conformidade (HTTP 204); **com** o JWT do filer, o mesmo pedido recebeu 401 e a versão ficou intacta. E `weed shell` dentro do contêiner, com acesso de operador, apagou o bucket mesmo com o JWT.
+
+**Auditoria da stack contra a regra (13/11/2026).** Dependências reais do repositório e itens citados como software nos documentos 2, 5, 6 e 9:
+
+| Item | Onde | Licença | Veredito |
+|---|---|---|---|
+| Go 1.27 e imagem `golang:1.27-alpine` | backend, Dockerfile, CI | BSD-3 | ok |
+| Huma v2, pgx v5, goose v3, `google/uuid`, `x/crypto`, testify | `go.mod` | MIT; MIT; MIT; BSD-3; BSD-3; MIT | ok |
+| testcontainers-go | `go.mod` | MIT | ok; o Testcontainers Cloud, pago, fica de fora |
+| OpenTelemetry Go | `go.mod` (indireta) | Apache-2.0 | ok |
+| River (ADR-005, ainda fora do `go.mod`) | backend | MPL-2.0 | ok; o River Pro, pago, fica de fora |
+| sqlc 1.30.0 pela imagem `sqlc/sqlc` | `sqlc.yaml` | MIT | ok; o sqlc Cloud fica de fora |
+| golangci-lint | `.golangci.yml` | GPL-3.0, ferramenta não ligada ao binário | ok |
+| `gcr.io/distroless/static-debian12:nonroot` | Dockerfile | Apache-2.0, pacotes livres do Debian | ok |
+| PostgreSQL 17.11 (`postgres:17.11-alpine3.24`, por digest) e pgvector | compose, documento 2 | PostgreSQL License | ok; os testes com testcontainers sobem a mesma imagem por digest (`dbteste.ImagemPostgres` e `testes/vazamento/ambiente_test.go`, alinhados em 13/11/2026) |
+| Valkey 8.1.11 (`valkey/valkey:8.1.11-alpine3.24`, por digest) | compose | BSD-3 | ok |
+| Mailpit v1.27.0 (por digest) | compose | MIT | ok |
+| MinIO (`quay.io/minio/minio:latest`) | estava no compose, perfil `anexos` | AGPL-3.0; repositório arquivado e sem imagem comunitária | **substituído**, fora do compose desde 13/11/2026 |
+| SeaweedFS 4.53 (`chrislusf/seaweedfs:4.53`, por digest) | compose | Apache-2.0 | ok (decisão 3) |
+| aws-cli 2.40.2 (`amazon/aws-cli:2.40.2`, por digest, perfil `ferramentas`) | compose, ferramenta de desenvolvimento | Apache-2.0 | ok; fora da regra pelo alcance da emenda |
+| Node 22.17, pnpm 10, TypeScript 5.9 | raiz | MIT; MIT; Apache-2.0 | ok |
+| React 19, React Router 7, TanStack Query, i18next e react-i18next, openapi-fetch, openapi-typescript, Radix, lucide-react | web, pacotes | MIT; lucide-react ISC | ok |
+| Vite, Vitest, Tailwind CSS 4, ESLint e plugins, typescript-eslint, Testing Library, jsdom | web | MIT; typescript-eslint MIT e BSD-2 | ok |
+| axe-core | web | MPL-2.0 | ok |
+| Fontsource (Archivo, Inter, JetBrains Mono) | web | pacotes MIT; fontes OFL-1.1 | ok |
+| Expo SDK 54, expo-router, expo-sqlite, expo-secure-store, React Native | app | MIT | ok |
+| SQLCipher, Drizzle, Jest, Playwright, Maestro, React Hook Form, Zod, OpenFeature (propostas) | seções 2.2, 2.3, 13.4 | BSD-3 (edição comunitária); Apache-2.0; MIT; Apache-2.0; Apache-2.0 (CLI); MIT; MIT; Apache-2.0 | ok; edições comerciais do SQLCipher e o Maestro Cloud ficam de fora |
+| OpenTofu | seção 13.2 | MPL-2.0 | ok (o Terraform, BSL, não entra) |
+| gitleaks, Trivy, Syft, Cosign, Checkov, OWASP ZAP, Renovate | documento 9 | MIT; Apache-2.0 nos cinco seguintes; Renovate AGPL-3.0, CLI autohospedada | ok |
+| Python 3.13 e o pacote `markdown` | `ferramentas/` | PSF; BSD-3 | ok |
+| Mermaid 10.9.1 pelo jsDelivr | `ferramentas/md2pdf.py` | MIT; CDN gratuita | ok |
+| Chrome ou Edge no `md2pdf.py` | `ferramentas/md2pdf.py` | proprietário, gratuito | fora da regra (ferramenta de desenvolvimento, emenda) |
+| Docker Desktop | máquinas de desenvolvimento | proprietário; gratuito só para empresa com menos de 250 pessoas **e** menos de US$ 10 milhões de receita anual | fora da regra (ferramenta de desenvolvimento, emenda); continua |
+| GitHub e GitHub Actions | CI | serviço proprietário; gratuito e sem limite de minutos em repositório público | fora da regra (ferramenta de desenvolvimento, emenda); continua |
+| Docker Hub e quay.io | compose | serviço gratuito, com limite de pull anônimo | ok |
+| PowerSync (plano B do ADR-004) | ADR-004 | edição autohospedada sob FSL (a confirmar na versão vigente) | suspenso |
+
+**Alternativas consideradas** (para o armazenamento de objetos).
+
+| Alternativa | A favor | Contra | Resultado |
+|---|---|---|---|
+| **RustFS 1.0.5** | Apache-2.0; 15 de 15 no ensaio; leve; um processo só, sem API paralela à S3; desenho próximo do MinIO | Projeto jovem (1.0 em 2026), mantido por uma empresa só, o mesmo perfil de governança que levou ao fim do MinIO comunitário; pouco histórico de segurança em produção | **Alternativa qualificada**: substituto imediato pelos gatilhos (a) e (b) |
+| **Versity Gateway v1.11.0** | Apache-2.0; 15 de 15; o mais leve | Gateway sobre sistema de arquivos POSIX: durabilidade e alta disponibilidade dependem do sistema de arquivos embaixo; o bloqueio fica em atributos de arquivo, que quem tem acesso ao disco apaga | Descartada como padrão; serve para servidor único ou CI |
+| **Ceph RGW** | LGPL; Object Lock completo e maduro há anos; governança neutra (Ceph Foundation); o mais robusto em escala | Monitores, gerenciadores, OSDs e RGW; mínimo de três nós em produção; impraticável no compose de desenvolvimento | Descartada agora; gatilho (c) |
+| **Zenko CloudServer** (Scality) | Apache-2.0; Object Lock implementado | Backend autohospedado é arquivo local ou memória; o distribuído é o RING, comercial; a imagem do Docker Hub está parada desde 2023 | Descartada |
+| **Garage** | AGPL-3.0; leve; feito para vários locais | Sem versionamento e sem bloqueio de objeto (página de compatibilidade S3 do projeto, conferida em 13/11/2026) | Descartada: não atende o selo |
+| **OpenStack Swift** com `s3api` | Apache-2.0; maduro | Sem Object Lock; operação pesada | Descartada |
+| **MinIO compilado da fonte ou fork comunitário** | Comportamento conhecido | Repositório arquivado, sem correção de segurança; fork de terceiro sem garantia de continuidade | Descartada |
+| **Só o S3 gerenciado** | O modo de conformidade resiste até à conta root | Serviço pago; não resolve desenvolvimento nem CI | **Adotada em produção pela emenda** (exceção do ADR-006); o SeaweedFS fica no desenvolvimento, com o mesmo contrato S3 |
+| **Disco local e hash no banco, sem S3** | Nenhum componente | Sem bloqueio de objeto nem URL pré-assinada; o selo ficaria no mesmo domínio do banco que ele protege | Descartada |
+
+**Consequências.**
+
+- Positivas: licença permissiva, sem copyleft; imagem com versão fixa publicada; um contêiner no desenvolvimento; código preso só à API S3, com um substituto já qualificado pelo mesmo ensaio; a regra de admissão vira verificação automática no CI.
+- Negativas: imagem pesada para o desenvolvimento (792 MB); endurecimento obrigatório que, se esquecido, abre um caminho de exclusão sem credencial, e por isso o teste de integração exige 401 no filer; o Object Lock do SeaweedFS é recente (correções de retenção e de exclusão em setembro e outubro de 2026, issues 11335, 11492, 12006 e 12008 do projeto); governança de um mantenedor principal que vende edição comercial.
+- **Risco residual: bloqueio de objeto autohospedado não resiste a quem administra o host.** No ensaio, `weed shell` apagou o bucket com a versão em conformidade; o mesmo vale para RustFS e Versity, bastando apagar o disco. Na nuvem gerenciada, o modo de conformidade resiste à própria conta root. Para o selo de RF-ADM-011, autohospedado, a garantia "guardado fora do banco, imutável" protege contra defeito do código e contra credencial S3 vazada, mas não contra o operador. **(Emenda: em produção o selo fica no S3 com Object Lock em conformidade, que resiste à conta root; o limite vale só para o desenvolvimento, numa máquina e sem dado real, e é aceito.)**
+- Gatilhos de revisão: (a) versão nova do SeaweedFS reprovada no ensaio, sem correção em 30 dias → RustFS, qualificado pelo mesmo ensaio; (b) mudança de licença, fim da edição comunitária ou 6 meses sem release → o mesmo; (c) produção autohospedada acima de 50 TB, ou exigência de três locais com erasure coding **(proposta: limiar)** → avaliar Ceph RGW num ADR novo; (d) acionado pela emenda: produção no S3 gerenciado, SeaweedFS só no desenvolvimento; se a produção um dia sair da nuvem gerenciada, o SeaweedFS endurecido e a questão da H10 voltam; (e) componente da auditoria que passe a licença "source-available" → sai pela decisão 1, com ADR se for estrutural.
+
+---
+
 ## 16. Alinhamento com o sumário e pendências
 
-Situação deste documento em relação ao sumário executivo 0.6.
+Situação deste documento em relação ao sumário executivo 0.7.
+
+**Resolvido na versão 0.7 (etapa E01, sumário 0.7) e aplicado aqui**
+
+| Tema | Como ficou |
+|---|---|
+| Só ferramentas e recursos 100% gratuitos ou de código aberto (requisito do dono do produto) | [ADR-012](#adr-012--só-software-livre-ou-gratuito-e-seaweedfs-no-lugar-do-minio) e a sua emenda: a regra vale só para o que o sistema usa diretamente (o desenvolvimento fica fora); produção em nuvem gerenciada como exceção explícita; verificação de licenças no CI só sobre o que vai para o produto (proposta). Seções 2.3, 2.4, 7 e 13.1; notas no ADR-004 e no ADR-006, que volta a valer. |
+| Substituto do MinIO | Desenvolvimento: SeaweedFS 4.53, numa máquina, endurecido com `security.toml`, aplicado no compose em 13/11/2026 (19 de 19 provas de `armazenamento-provar`); RustFS qualificado como alternativa. Produção: S3 com Object Lock em conformidade. Backend preso à API S3. Ensaio prático no ADR-012. |
+| Dado de saúde (sumário 3.6, "Dados de saúde") | A Tenaz não guarda dado de saúde: saem as citações das seções 6.8, 9.3 (o teste de corrida usa `os.encerrar`), 12.3 e 14.3. Nenhuma referência a `pessoa.saude.ler` resta neste documento. |
+| Tabela da seção 9.3 contra a suíte | Linhas "Consultas sqlc", "Mapa de privilégios" e "Funções de credencial" conferidas com `catalogo_test.go` e `consultas_test.go`; linha nova "NaEmpresa confere o escopo no banco", conferida com `pool_test.go`; linhas novas "Extensões" (`catalogo_test.go`, `extensoes.txt`) e "Sem dado de saúde" (`saude_test.go`). |
+| Testes de integração e access token | Seção 8.2: PostgreSQL descartável por pacote, subida serializada por arquivo de trava e repetição com recuo da detecção do Docker (conferido com `dbteste.go`). Seção 10.6: verificação estrita do access token (conferida com `jwt.go`). |
+
+**Perguntas da auditoria do ADR-012 (versão 0.7).** H1 a H4 e H10 foram respondidas pelo dono do produto em 13/11/2026 (emenda do ADR-012); H5 a H9 ficam abertas até a etapa em que o serviço entra.
+
+| # | Pergunta | Situação | Etapa |
+|---|---|---|---|
+| H1 | Onde a Tenaz roda em homologação e produção | **Resolvida:** nuvem gerenciada (AWS, São Paulo), exceção explícita à regra; o ADR-006 volta a valer | — |
+| H2 | Software proprietário gratuito atende? | **Resolvida pelo alcance:** ferramenta de desenvolvimento fica fora da regra; usado pelo sistema, o gratuito sem condição atende ao item (b) | — |
+| H3 | Docker Desktop | **Resolvida pelo alcance:** ferramenta de desenvolvimento, fora da regra; continua | — |
+| H4 | GitHub e GitHub Actions | **Resolvida pelo alcance:** fora da regra; continuam | — |
+| H5 | Distribuição do app: lojas (Apple Developer anual e Google Play taxa única, sem substituto para iOS), build de iOS (macOS e Xcode), EAS gratuito com cota ou build local com servidor próprio do `expo-updates`, conta Apple para o APNs | Aberta | E12 (lançamento); o teste fechado nas lojas do risco 15 do roadmap pode antecipar |
+| H6 | E-mail transacional em homologação e produção: provedor pago ou Postfix próprio, com risco de entregabilidade. Mailpit no desenvolvimento | Aberta | Até a primeira implantação em homologação; no mais tardar E12 |
+| H7 | SMS (P11): não há SMS gratuito | Aberta, com a P11 | E12, ou antes se o login por telefone for antecipado |
+| H8 | IA: provedor pago (ADR-007), modelo aberto com GPU paga, ou adiar | Aberta | Fase 2 |
+| H9 | Pagamento da assinatura (RF-ADM-009): todo gateway cobra tarifa | Aberta | E10 (API, SSO e cobrança) |
+| H10 | Imutabilidade do selo | **Resolvida:** produção no S3 com Object Lock em conformidade, que resiste à conta root; desenvolvimento numa máquina, com SeaweedFS endurecido e o limite aceito | — |
+
+**Aplicação do ADR-012 fora deste documento (versão 0.7).** Cada dono altera o que é seu, no mesmo passo da mudança de código:
+
+| Dono | O que muda |
+|---|---|
+| `tenaz-plataforma-sre` | **Feito em 13/11/2026:** SeaweedFS 4.53 por digest no lugar do MinIO, com `security.toml` e `s3.json` versionados, só a porta S3 publicada e `healthcheck`; `postgres`, `valkey` e `mailpit` por versão e digest; `tarefas.sh infra` espera os quatro saudáveis e cria o bucket `tenaz-auditoria`; tarefa `armazenamento-provar` com 19 verificações. **Falta:** a tarefa `licencas` (decisão 2), chamada por `conferir`, só sobre as dependências de produção; e o job de CI da linha abaixo |
+| `tenaz-plataforma-sre` com `tenaz-qa-automacao` | **Pendência:** o CI ainda não sobe o SeaweedFS. Job que rode `tarefas.sh infra` e `armazenamento-provar` em todo PR, para que a qualificação do endurecimento (decisões 4 e 5) não dependa da máquina de quem desenvolve |
+| `tenaz-backend-go` | Quando o armazenamento entrar (E01, selo; E02, anexos): cliente `aws-sdk-go-v2` atrás de uma interface da plataforma, sem `minio-go`, com endpoint, região e estilo de caminho por configuração. A imagem do PostgreSQL dos testes com testcontainers foi alinhada à do compose em 13/11/2026 (`dbteste.ImagemPostgres`, por digest) |
+| `tenaz-qa-automacao` | Teste de integração do armazenamento com as 15 verificações do ensaio e o `DELETE` no filer sem JWT esperando 401 |
+| `tenaz-banco-dados` | Documento 2: o bucket do selo e do arquivo da auditoria (`selo_auditoria.chave_objeto`) é, em produção, S3 com Object Lock em modo de conformidade, e no desenvolvimento, SeaweedFS. KMS, Secrets Manager e RDS ficam como estão (exceção do ADR-006) |
+| `tenaz-plataforma-sre` (documento 9, parte de operação) | Nada a desfazer: a nuvem gerenciada continua (exceção do ADR-012). Registrar que o selo em produção usa S3 Object Lock em conformidade e que o SeaweedFS do desenvolvimento não protege contra o operador da máquina (sem dado real) |
+| `tenaz-produto` (documento 6) | S12 ("Publicação nas lojas") e risco 15 dependem da H5; E10 (cobrança), da H9; a primeira homologação e E12, da H6 e da H7. M0 fica como está |
 
 **Resolvido na versão 0.6 (etapa E01, sumário 0.6) e aplicado aqui**
 

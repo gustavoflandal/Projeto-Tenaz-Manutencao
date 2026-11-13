@@ -166,6 +166,16 @@ func emailAleatorio(prefixo string) string {
 
 const senhaBoa = "Manutenção preditiva 7x"
 
+// turnosComerciais é o modelo "comercial" que a web oferece: segunda a sexta,
+// 08:00 às 17:00. O backend não impõe calendário (RN-ADM-019).
+func turnosComerciais() []adm.EntradaTurno {
+	var t []adm.EntradaTurno
+	for d := int32(1); d <= 5; d++ {
+		t = append(t, adm.EntradaTurno{DiaSemana: d, HoraInicio: "08:00", HoraFim: "17:00"})
+	}
+	return t
+}
+
 // conta é uma empresa criada pelo fluxo real, com o administrador já logado.
 type conta struct {
 	criada adm.ContaCriada
@@ -185,7 +195,7 @@ func novaConta(t *testing.T, plano string) conta {
 	c, err := svc.CriarConta(ctx, adm.EntradaCriarConta{
 		CNPJ: cnpjAleatorio(), RazaoSocial: "Transportes Teste Ltda", Plano: p,
 		Responsavel: adm.EntradaResponsavel{Nome: "Ana Administradora", Email: em},
-		Unidade:     adm.EntradaUnidade{Codigo: "MTZ", Nome: "Matriz"},
+		Unidade:     adm.EntradaUnidade{Codigo: "MTZ", Nome: "Matriz", Turnos: turnosComerciais()},
 	})
 	if err != nil {
 		t.Fatalf("criar conta: %v", err)

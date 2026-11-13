@@ -30,7 +30,7 @@ const (
 
 // Permissao é uma linha do catálogo de RF-ADM-005.
 type Permissao struct {
-	Codigo    string // <módulo>.<ação>; pessoa.saude.ler é a exceção aceita
+	Codigo    string // <módulo>.<ação>, sem exceção
 	Descricao string
 	Grupo     string // grupo no documento 3, seção 4.8
 	Fase      Fase
@@ -67,7 +67,6 @@ const (
 	AdmLerAuditoria          = "adm.ler_auditoria"
 	OsEncerrar               = "os.encerrar"
 	EstDecidirDestino        = "est.decidir_destino"
-	PessoaSaudeLer           = "pessoa.saude.ler"
 	TerManterCatalogoProprio = "ter.manter_catalogo_proprio"
 	MobUsarApp               = "mob.usar_app"
 	SrvGerenciarConexao      = "srv.gerenciar_conexao"
@@ -80,7 +79,6 @@ const (
 	CtrGerenciar             = "ctr.gerenciar"
 	CtrFecharMedicao         = "ctr.fechar_medicao"
 	CtrReabrirMedicao        = "ctr.reabrir_medicao"
-	permissaoExcecaoFormat   = PessoaSaudeLer
 )
 
 // PerfilPadrao descreve um dos 12 perfis padrão.
@@ -106,10 +104,10 @@ var perfisPadrao = [...]PerfilPadrao{
 	{PerfilLocatario, "Locatário", true},
 }
 
-// isencoesAdministrador são as três permissões internas que o administrador
+// isencoesAdministrador são as duas permissões internas que o administrador
 // não tem por padrão e mesmo assim concede a OUTROS usuários, nunca a si
 // mesmo (RF-ADM-005; documento 9, seção 5.4, regras anti-escalada).
-var isencoesAdministrador = [...]string{OsEncerrar, EstDecidirDestino, PessoaSaudeLer}
+var isencoesAdministrador = [...]string{OsEncerrar, EstDecidirDestino}
 
 // configuracaoPRJCTR são as nove permissões da configuração, de PRJ e de CTR
 // do sumário 3.6, todas vedadas a usuário externo.
@@ -170,7 +168,7 @@ func PermissoesDoPerfil(codigo string) []string {
 
 // VedadasExterno são as permissões que usuário externo nunca recebe, nem por
 // perfil nem avulsa: os.encerrar, as nove da configuração, de PRJ e de CTR,
-// srv.gerenciar_conexao, pessoa.saude.ler e as do grupo Admin (RF-ADM-005,
+// srv.gerenciar_conexao e as do grupo Admin (RF-ADM-005,
 // regras dos perfis padrão).
 //
 // O banco repete esta lista em app.permissoes_vedadas_externo() para os CHECKs
@@ -179,7 +177,7 @@ func PermissoesDoPerfil(codigo string) []string {
 func VedadasExterno() []string {
 	var v []string
 	for _, p := range catalogo {
-		if p.Codigo == OsEncerrar || p.Codigo == PessoaSaudeLer || p.Codigo == SrvGerenciarConexao ||
+		if p.Codigo == OsEncerrar || p.Codigo == SrvGerenciarConexao ||
 			slices.Contains(configuracaoPRJCTR[:], p.Codigo) || strings.HasPrefix(p.Grupo, "Admin") {
 			v = append(v, p.Codigo)
 		}
@@ -192,7 +190,7 @@ func VedadaExterno(codigo string) bool {
 	return slices.Contains(VedadasExterno(), codigo)
 }
 
-// IsencaoAdministrador informa se a permissão é uma das três que o
+// IsencaoAdministrador informa se a permissão é uma das duas que o
 // administrador concede a outros sem tê-las.
 func IsencaoAdministrador(codigo string) bool {
 	return slices.Contains(isencoesAdministrador[:], codigo)
@@ -236,8 +234,7 @@ type Ator struct {
 	SessaoID     uuid.UUID
 	Canal        string // web ou app
 
-	// Escopo de acesso com o fornecedor ou locatário do cadastro e
-	// PodeLerSaude derivado das permissões efetivas.
+	// Escopo de acesso com o fornecedor ou locatário do cadastro.
 	Escopo db.Escopo
 
 	PessoaID   *uuid.UUID
@@ -304,7 +301,7 @@ func (a Ator) ExigirAlguma(codigos ...string) error {
 
 // PodeConceder aplica a regra anti-escalada (documento 9, seção 5.4): só
 // concede uma permissão quem a tem, com a exceção do administrador, que
-// concede as três permissões internas que não tem por padrão. Não confere se
+// concede as duas permissões internas que não tem por padrão. Não confere se
 // o alvo é o próprio ator; isso é do caso de uso.
 func (a Ator) PodeConceder(codigo string) bool {
 	if a.Pode(codigo) {
@@ -315,7 +312,7 @@ func (a Ator) PodeConceder(codigo string) bool {
 
 // PodeAtribuirPerfil aplica a regra anti-escalada a um perfil inteiro: o
 // editor precisa ter todas as permissões do perfil. O administrador é isento
-// das três permissões internas e de ter.manter_catalogo_proprio, exclusiva do
+// das duas permissões internas e de ter.manter_catalogo_proprio, exclusiva do
 // prestador, que ele não tem por padrão e que acompanham os perfis gestor,
 // planejador, almoxarife e prestador (RF-ADM-005). Devolve a primeira
 // permissão que falta.
@@ -332,13 +329,10 @@ func (a Ator) PodeAtribuirPerfil(permissoesDoPerfil []string) (bool, string) {
 	return true, ""
 }
 
-// FormatoValido confere o formato <módulo>.<ação> (sumário 3.6), com a
-// exceção aceita de pessoa.saude.ler. Módulo de 2 ou 3 letras minúsculas;
+// FormatoValido confere o formato <módulo>.<ação> (sumário 3.6), sem
+// exceção (a Tenaz não guarda dado de saúde). Módulo de 2 ou 3 letras minúsculas;
 // ação começando por letra, com letras, dígitos e sublinhado.
 func FormatoValido(codigo string) bool {
-	if codigo == permissaoExcecaoFormat {
-		return true
-	}
 	modulo, acao, ok := strings.Cut(codigo, ".")
 	if !ok || len(modulo) < 2 || len(modulo) > 3 || len(acao) < 2 {
 		return false

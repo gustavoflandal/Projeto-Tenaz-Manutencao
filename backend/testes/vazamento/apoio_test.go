@@ -27,6 +27,8 @@ const (
 	arquivoPrivilegios = "privilegios.txt"
 	// Relações de membro entre os papéis de execução.
 	arquivoRelacoesDeMembro = "relacoes_de_membro.txt"
+	// Extensões permitidas e a impressão das suas funções.
+	arquivoExtensoes = "extensoes.txt"
 )
 
 // entrada é uma linha de lista: nome, campos opcionais e justificativa.
@@ -83,7 +85,8 @@ func lerListaDe(arquivo string, exigirEsquema bool) (lista, error) {
 		if len(campos) == 0 {
 			return nil, fmt.Errorf("%s:%d: linha sem nome", arquivo, n)
 		}
-		if exigirEsquema && !strings.Contains(campos[0], ".") && !strings.HasPrefix(campos[0], "esquema:") {
+		if exigirEsquema && !strings.Contains(campos[0], ".") && !strings.HasPrefix(campos[0], "esquema:") &&
+			!strings.HasPrefix(campos[0], "padrao:") {
 			return nil, fmt.Errorf("%s:%d: %q sem esquema; use esquema.nome (ou esquema:nome para o próprio esquema)",
 				arquivo, n, campos[0])
 		}

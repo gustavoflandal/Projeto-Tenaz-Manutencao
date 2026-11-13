@@ -94,9 +94,7 @@ func TestDetectorAcusaTrilhaSemAuditoriaSemAutenticacao(t *testing.T) {
 	f := fixtures(t)
 	emTransacaoDesfeita(t, ctx, func(tx pgx.Tx) {
 		usagemDoSincronizadorEmApp(t, ctx, tx)
-		if _, err := tx.Exec(ctx, "DROP POLICY auditoria_sem_autenticacao ON app.evento_auditoria"); err != nil {
-			t.Fatalf("estragar: %v", err)
-		}
+		estragar(t, ctx, tx, "DROP POLICY auditoria_sem_autenticacao ON app.evento_auditoria")
 		p := strings.Join(problemasDaTrilha(t, ctx, tx, moldeSemAutenticacao(f)), " | ")
 		if !strings.Contains(p, "tenaz_app: não recusado pela policy: empresa=") || !strings.Contains(p, "acao=login entidade=identidade") {
 			t.Errorf("sem a policy, o evento de login da identidade pelo tenaz_app não foi acusado: %s", p)
@@ -140,9 +138,7 @@ func TestDetectorAcusaTrilhaSemEscopoExternoInsercao(t *testing.T) {
 	ctx := context.Background()
 	f := fixtures(t)
 	emTransacaoDesfeita(t, ctx, func(tx pgx.Tx) {
-		if _, err := tx.Exec(ctx, "DROP POLICY escopo_externo_insercao ON app.evento_auditoria"); err != nil {
-			t.Fatalf("estragar: %v", err)
-		}
+		estragar(t, ctx, tx, "DROP POLICY escopo_externo_insercao ON app.evento_auditoria")
 		p := strings.Join(problemasDaTrilha(t, ctx, tx, moldeEscopoInsercao(f)), " | ")
 		if !strings.Contains(p, fmt.Sprintf("usuario=%.8s acao=exclusao", f.A.UsuarioInterno)) {
 			t.Errorf("sem a policy, o prestador gravando evento em nome do interno não foi acusado: %s", p)
@@ -158,9 +154,7 @@ func TestDetectorAcusaTrilhaSemEscopoExternoInsercao(t *testing.T) {
 // de USAGE no esquema — e o teste da policy passaria pela razão errada.
 func usagemDoSincronizadorEmApp(t *testing.T, ctx context.Context, tx pgx.Tx) {
 	t.Helper()
-	if _, err := tx.Exec(ctx, "GRANT USAGE ON SCHEMA app TO tenaz_sinc"); err != nil {
-		t.Fatalf("conceder USAGE ao sincronizador na transação: %v", err)
-	}
+	estragar(t, ctx, tx, "GRANT USAGE ON SCHEMA app TO tenaz_sinc")
 }
 
 func moldeConexaoSinc(f *fixturesE01) []tentativaTrilha {
@@ -201,9 +195,7 @@ func TestDetectorAcusaTrilhaSemConexaoSinc(t *testing.T) {
 	f := fixtures(t)
 	emTransacaoDesfeita(t, ctx, func(tx pgx.Tx) {
 		usagemDoSincronizadorEmApp(t, ctx, tx)
-		if _, err := tx.Exec(ctx, "DROP POLICY conexao_sinc ON app.evento_auditoria"); err != nil {
-			t.Fatalf("estragar: %v", err)
-		}
+		estragar(t, ctx, tx, "DROP POLICY conexao_sinc ON app.evento_auditoria")
 		p := strings.Join(problemasDaTrilha(t, ctx, tx, moldeConexaoSinc(f)), " | ")
 		if !strings.Contains(p, "tenaz_sinc: não recusado pela policy: empresa=") || !strings.Contains(p, "ator=usuario") {
 			t.Errorf("sem a policy, o sincronizador gravando evento de outro ator não foi acusado: %s", p)

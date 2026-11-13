@@ -161,7 +161,10 @@ func (r *rotas) registrarPessoas(s *api.Servidor) {
 
 	api.Registrar(s, rotaADM(api.Rota{
 		ID: "inativarPessoa", Metodo: http.MethodDelete, Caminho: "/v1/pessoas/{id}", Status: http.StatusNoContent, Permissoes: gerenciar,
-		Resumo: "Inativar pessoa", Descricao: "A pessoa nunca é apagada: é inativada (seção 2.12). Com If-Match.",
+		Resumo: "Inativar pessoa",
+		Descricao: "A pessoa nunca é apagada: é inativada (seção 2.12). Com If-Match. 409 transicao_invalida se a " +
+			"pessoa já está inativa ou se está ligada a usuário ativo ou convidado: o usuário é inativado antes " +
+			"(RN-ADM-021).",
 	}), func(ctx context.Context, in *entradaIDIfMatch) (*saidaVazia, error) {
 		svc, a, err := r.contexto(ctx)
 		if err != nil {

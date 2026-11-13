@@ -147,9 +147,7 @@ func TestDetectorAcusaPrivilegioDeCredencialNoApp(t *testing.T) {
 	ctx := context.Background()
 	f := fixtures(t)
 	emTransacaoDesfeita(t, ctx, func(tx pgx.Tx) {
-		if _, err := tx.Exec(ctx, "GRANT SELECT ON plataforma.identidade TO tenaz_app"); err != nil {
-			t.Fatalf("estragar: %v", err)
-		}
+		estragar(t, ctx, tx, "GRANT SELECT ON plataforma.identidade TO tenaz_app")
 		aceitos := strings.Join(ataquesAceitos(t, ctx, tx, papelApp, f), " | ")
 		for _, esperado := range []string{"lê a identidade de B (", "SELECT em plataforma.identidade ("} {
 			if !strings.Contains(aceitos, esperado) {
@@ -360,9 +358,7 @@ func TestDetectorAcusaMoldeDeAuditoriaSemARestritiva(t *testing.T) {
 	ctx := context.Background()
 	f := fixtures(t)
 	emTransacaoDesfeita(t, ctx, func(tx pgx.Tx) {
-		if _, err := tx.Exec(ctx, "DROP POLICY autenticacao_identidade ON app.evento_auditoria"); err != nil {
-			t.Fatalf("estragar: %v", err)
-		}
+		estragar(t, ctx, tx, "DROP POLICY autenticacao_identidade ON app.evento_auditoria")
 		p := strings.Join(problemasDoMolde(t, ctx, tx, papelAutenticacao, f), " | ")
 		for _, esperado := range []string{"entidade=usuario", "acao=exclusao", "ator=sistema"} {
 			if !strings.Contains(p, "não recusado com 42501: ") || !strings.Contains(p, esperado) {
@@ -490,7 +486,7 @@ func TestDetectorAcusaRevogacaoQueAtravessaEmpresas(t *testing.T) {
 	ctx := context.Background()
 	f := fixtures(t)
 	emTransacaoDesfeita(t, ctx, func(tx pgx.Tx) {
-		if _, err := tx.Exec(ctx, `
+		estragar(t, ctx, tx, `
 			CREATE OR REPLACE FUNCTION plataforma.tg_acesso_empresa() RETURNS trigger
 			  LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp
 			AS $$
@@ -503,9 +499,7 @@ func TestDetectorAcusaRevogacaoQueAtravessaEmpresas(t *testing.T) {
 			  END IF;
 			  RETURN NULL;
 			END
-			$$`); err != nil {
-			t.Fatalf("estragar: %v", err)
-		}
+			$$`)
 		p := strings.Join(problemasDaRevogacao(t, ctx, tx, f, "situacao = 'inativo'"), " | ")
 		if !strings.Contains(p, "sessão web B: revogada=true") || !strings.Contains(p, "sessão app B: revogada=true") {
 			t.Errorf("um trigger que revoga as sessões de B ao inativar em A não foi acusado; acusou: %s", p)
@@ -620,7 +614,7 @@ func TestDetectorAcusaPurgaQueApagaCredencialViva(t *testing.T) {
 	ctx := context.Background()
 	f := fixtures(t)
 	emTransacaoDesfeita(t, ctx, func(tx pgx.Tx) {
-		if _, err := tx.Exec(ctx, `
+		estragar(t, ctx, tx, `
 			CREATE OR REPLACE FUNCTION plataforma.purgar_credenciais_vencidas() RETURNS bigint
 			  LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, pg_temp
 			AS $$
@@ -632,9 +626,7 @@ func TestDetectorAcusaPurgaQueApagaCredencialViva(t *testing.T) {
 			  DELETE FROM plataforma.sessao WHERE expira_em < pg_catalog.now() + interval '100 years';
 			  RETURN 0;
 			END
-			$$`); err != nil {
-			t.Fatalf("estragar: %v", err)
-		}
+			$$`)
 		p := strings.Join(problemasDaPurga(t, ctx, tx, f), " | ")
 		for _, esperado := range []string{"foi apagada: plataforma.sessao " + f.A.SessaoWeb,
 			"foi apagada: plataforma.token_email " + f.A.TokenEmail, "a purga devolveu 0"} {

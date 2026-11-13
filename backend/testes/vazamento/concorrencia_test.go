@@ -20,9 +20,9 @@ import (
 const erroTrava = "55P03"
 
 // resultadoDaCorrida devolve o erro da troca de vínculo na conexão 2 enquanto
-// a atribuição da conexão 1 está aberta. estragar roda na conexão 1, antes da
+// a atribuição da conexão 1 está aberta. comandoDeProva roda na conexão 1, antes da
 // atribuição, como superusuário (prova do detector).
-func resultadoDaCorrida(t *testing.T, ctx context.Context, f *fixturesE01, atribuicao string, estragar string) error {
+func resultadoDaCorrida(t *testing.T, ctx context.Context, f *fixturesE01, atribuicao string, comandoDeProva string) error {
 	t.Helper()
 	usuario := f.A.UsuarioInativo // interno, sem perfil nem permissão avulsa
 
@@ -42,10 +42,8 @@ func resultadoDaCorrida(t *testing.T, ctx context.Context, f *fixturesE01, atrib
 		t.Fatalf("transação 1: %v", err)
 	}
 	defer func() { _ = tx1.Rollback(context.Background()) }()
-	if estragar != "" {
-		if _, err := tx1.Exec(ctx, estragar); err != nil {
-			t.Fatalf("estragar: %v", err)
-		}
+	if comandoDeProva != "" {
+		estragar(t, ctx, tx1, comandoDeProva)
 	}
 	if err := prepararTransacao(ctx, tx1, papelApp, f.internoA()); err != nil {
 		t.Fatal(err)
@@ -74,7 +72,7 @@ var atribuicoes = []struct{ nome, sql string }{
 	{"perfil interno", `INSERT INTO app.usuario_perfil (empresa_id, usuario_id, perfil_id)
 	                    SELECT $1, $2, id FROM app.perfil WHERE empresa_id = $1 AND codigo = 'gestor'`},
 	{"permissão avulsa vedada", `INSERT INTO app.usuario_permissao (empresa_id, usuario_id, permissao)
-	                             VALUES ($1, $2, 'pessoa.saude.ler')`},
+	                             VALUES ($1, $2, 'os.encerrar')`},
 }
 
 func TestAtribuicaoTravaATrocaDeVinculo(t *testing.T) {

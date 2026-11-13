@@ -1,8 +1,12 @@
 # Segurança e Confiabilidade — Tenaz
 
-**Versão:** 0.4 · **Data:** 12/11/2026 · **Status:** Em elaboração
+**Versão:** 0.5 · **Data:** 13/11/2026 · **Status:** Em elaboração
 **Produto:** Tenaz · Gestão de Manutenção e Frota
-Alinhado ao sumário executivo 0.6
+Alinhado ao sumário executivo 0.7
+
+**Mudanças da versão 0.5:** decisão do dono do produto em 13/11/2026, na etapa E01 (sumário 0.7, seção 3.6, "Dados de saúde"): **a Tenaz não guarda dado de saúde.** ASO e exame toxicológico saem do escopo; não há tipo de documento, campo, anexo nem permissão para dado de saúde; `pessoa.saude.ler` e a exceção ao formato `<módulo>.<ação>` deixam de existir. A seção 7.6 fica sem objeto e é marcada como removida, sem renumerar as seguintes. Dado sensível, na classificação da Tenaz, passa a ser CPF completo, dados de vítimas de sinistro e CPF de locatário pessoa física (RF-ADM-011, RNF-021), com a ressalva de que essa classificação de acesso restrito não é a categoria de dado pessoal sensível da LGPD (seção 7.5). Ajustados 5.1, 5.4 (catálogo de 116 permissões, sem exceção ao formato), 5.6, 5.13, 5.16, 6.1, 7.1, 7.3, 7.5, 7.12, 9.1, 11 e 12; a seção 7.5 passa a dizer de forma explícita que ASO (NR-7), exame toxicológico e a aptidão de saúde exigida por outras NRs são controlados pelo cliente fora da Tenaz, para não prometer conformidade que o produto não dá. A integridade da trilha passa a seguir RF-ADM-011: hash por evento e selo encadeado por empresa e período (`selo_auditoria`), com cópia em armazenamento imutável (5.6, 6.1, 6.2), e a trilha fica 24 meses no banco antes do arquivo imutável, como em RF-ADM-011 e no documento 2, seção 9.5 (6.3). No banco, a migração `00006_remove_saude` retirou o que restava de saúde (5.4). Novo histórico de revisões no fim do documento.
+
+**Complemento da versão 0.5 (13/11/2026, etapa E01, sumário 0.7, seção 3.6, "Ferramentas e recursos"; ADR-012 em [5_ARQUITETURA_SOFTWARE.md](5_ARQUITETURA_SOFTWARE.md)):** o armazenamento de objetos do ambiente de desenvolvimento passa a ser o SeaweedFS 4.53 do compose local, com o endurecimento obrigatório do ADR-012 e a prova automática `ferramentas/tarefas.sh armazenamento-provar` (5.11); as imagens do compose ficam fixadas por versão exata e digest (5.11); as credenciais e chaves de desenvolvimento versionadas ganham regra própria (5.5); o bucket da trilha no desenvolvimento fica descrito em 6.2.
 
 **Mudanças da versão 0.4:** na seção 5.4, a tabela de permissões típicas, que divergia dos grupos do documento 3, dá lugar à matriz canônica de RF-ADM-005, e a regra anti-escalada ganha a exceção do `administrador`; a concessão de `pessoa.saude.ler` passa a ser avulsa (`usuario_permissao`). Na seção 5.3, a sessão web passa a descrever o cookie com estado no servidor (documento 3, seção 4.2), e não um token de acesso rotativo, que é do app; a renovação do app passa de 14 para 30 dias de inatividade, como em RNF-017, que é o requisito dono do valor. Na seção 5.14, o registro do link usa `ator_tipo = link_execucao`, como no documento 2. Divergências encontradas na etapa E01.
 
@@ -31,6 +35,7 @@ Público: desenvolvimento, operação e comercial. A seção 1 e o resumo da se�
 10. [Roteiro de certificações](#10-roteiro-de-certificações)
 11. [Checklist de segurança por release](#11-checklist-de-segurança-por-release)
 12. [Alinhamento com o sumário e pendências](#12-alinhamento-com-o-sumário-e-pendências)
+13. [Histórico de revisões](#histórico-de-revisões)
 
 ---
 
@@ -264,7 +269,7 @@ Se o incidente envolver dados pessoais, o fluxo da seção 7.9 corre em paralelo
 
 ### 5.1 Modelo de ameaças (STRIDE)
 
-Ativos principais: dados de manutenção e de frota de cada empresa, documentos e fotos, dados pessoais de técnicos e motoristas (inclusive de saúde), dados de técnicos de prestadores e de locatários pessoa física, clientes atendidos e técnicos das subcontratadas com conta própria (SRV), estoque em poder de terceiros, credenciais de integração do cliente, assinaturas, links de uso único, convites e conexões entre contas e trilha de auditoria.
+Ativos principais: dados de manutenção e de frota de cada empresa, documentos e fotos, dados pessoais de técnicos e motoristas (inclusive CPF e CNH; a Tenaz não guarda dado de saúde, seção 7.6), dados de vítimas de sinistro, dados de técnicos de prestadores e de locatários pessoa física, clientes atendidos e técnicos das subcontratadas com conta própria (SRV), estoque em poder de terceiros, credenciais de integração do cliente, assinaturas, links de uso único, convites e conexões entre contas e trilha de auditoria.
 
 Fronteiras de confiança: navegador e app ↔ API; internet anônima ↔ rotas públicas do link de uso único e de versão; API ↔ banco; empresa ↔ empresa (dentro do mesmo banco); **conta do cliente ↔ conta da subcontratada conectada, só pelo sincronizador entre contas**; **dentro da empresa: usuários internos ↔ prestador de um fornecedor ↔ prestador de outro fornecedor ↔ locatário**; Tenaz ↔ terceiros (LLM, telemáticas, ERPs, IdP, push); equipe Tenaz ↔ dados de clientes.
 
@@ -273,7 +278,7 @@ Fronteiras de confiança: navegador e app ↔ API; internet anônima ↔ rotas p
 | **S**poofing (falsificação de identidade) | Roubo de sessão ou credencial; token forjado; IdP de uma empresa se passando por usuário de outra | Senha vazada de gestor; e-mail de domínio alheio num IdP mal configurado | MFA; tokens curtos e rotativos; conexão SSO vinculada a uma empresa com domínio verificado; sem ingresso automático por domínio de e-mail sem verificação |
 | **T**ampering (adulteração) | Alterar OS encerrada, assinatura ou trilha; comando offline adulterado | Mudar a data de uma inspeção NR-12 depois de assinada | OS encerrada imutável; hash do conteúdo assinado; auditoria append-only com encadeamento de hash; comandos validados pelos mesmos casos de uso da API |
 | **R**epudiation (repúdio) | Usuário nega ter feito ou assinado | Técnico diz que não concluiu a OS | Trilha com usuário, horário do servidor e do aparelho, IP, aparelho e geolocalização da assinatura |
-| **I**nformation disclosure (vazamento) | **Dados de uma empresa visíveis para outra**; IDOR; URL de arquivo; logs; índice de IA; exportação; dado de saúde visto por perfil indevido | Listagem sem filtro; ID de OS alheia na URL | Defesa em camadas (5.2); permissão específica para dados sensíveis; cifragem de campo |
+| **I**nformation disclosure (vazamento) | **Dados de uma empresa visíveis para outra**; IDOR; URL de arquivo; logs; índice de IA; exportação; dado sensível (CPF completo, vítimas de sinistro, CPF de locatário pessoa física) visto por perfil indevido | Listagem sem filtro; ID de OS alheia na URL; CPF completo de uma pessoa aberto por quem só precisava do nome | Defesa em camadas (5.2); CPF mascarado na interface e completo só no detalhe, para quem gere o cadastro; visualização de dado sensível sempre na trilha (RF-ADM-011); cifragem de campo |
 | **D**enial of service (negação) | Inundar a API; upload gigante; sincronização em massa; vizinho barulhento | Integração do cliente em loop | WAF, rate limit por plano e por chave, limites de tamanho, filas por empresa, `statement_timeout` |
 | **E**levation of privilege (escalada) | Técnico vira administrador; usuário de uma unidade vê outra; injeção de prompt manda a IA agir; administrador do cliente acessa dados da plataforma | Editar o próprio perfil; PDF com instruções maliciosas indexado no RAG | Permissões resolvidas no servidor a cada requisição; regras anti-escalada; escopo por unidade; ferramentas de IA com as permissões do usuário e sem gravação; separação total entre administração do cliente e da plataforma |
 
@@ -363,20 +368,20 @@ Risco R2 do sumário. A arquitetura está em 5_ARQUITETURA_SOFTWARE.md, seção 
 **Princípios:**
 
 - Permissões resolvidas no servidor **a cada requisição**, a partir do banco (com cache curto), nunca confiando no que está no token.
-- Perfis são conjuntos de permissões granulares no formato `<módulo>.<ação>` (`os.encerrar`, `est.ajustar_saldo`, `est.decidir_destino`); `pessoa.saude.ler` é a exceção aceita ao formato.
+- Perfis são conjuntos de permissões granulares no formato `<módulo>.<ação>` (`os.encerrar`, `est.ajustar_saldo`, `est.decidir_destino`), sem exceção. A antiga exceção `pessoa.saude.ler` deixou de existir em 13/11/2026, com a decisão de que a Tenaz não guarda dado de saúde (sumário 3.6).
 - **Escopo por unidade:** o usuário só vê dados das unidades a que está vinculado. Filtro aplicado no repositório e testado; RLS por unidade fica como evolução se o teste mostrar risco. **(proposta)**
-- **Regras anti-escalada:** ninguém altera as próprias permissões nem concede permissão a si mesmo; só edita um perfil ou usuário quem tem todas as permissões dele, com uma exceção: o `administrador` concede a outros usuários internos `os.encerrar`, `est.decidir_destino` e `pessoa.saude.ler`, que ele mesmo não tem por padrão (RF-ADM-005); só administrador altera administrador.
+- **Regras anti-escalada:** ninguém altera as próprias permissões nem concede permissão a si mesmo; só edita um perfil ou usuário quem tem todas as permissões dele, com uma exceção: o `administrador` concede a outros usuários internos `os.encerrar` e `est.decidir_destino`, que ele mesmo não tem por padrão (RF-ADM-005; RN-ADM-026 do documento 4); só administrador altera administrador.
 - Permissão negada responde 403 e fica registrada no log de segurança.
 
-**Perfis padrão (do sumário) e permissões.** A matriz completa, com as 117 permissões do catálogo e os 12 perfis padrão, é a de RF-ADM-005 em [1_ESPECIFICACAO_REQUISITOS.md](1_ESPECIFICACAO_REQUISITOS.md), canônica pelo sumário 3.6. Este documento não a repete. Os pontos que importam para a segurança:
+**Perfis padrão (do sumário) e permissões.** A matriz completa, com as 116 permissões do catálogo e os 12 perfis padrão, é a de RF-ADM-005 em [1_ESPECIFICACAO_REQUISITOS.md](1_ESPECIFICACAO_REQUISITOS.md), canônica pelo sumário 3.6. Este documento não a repete. Os pontos que importam para a segurança:
 
 | Regra | Onde é garantida |
 |---|---|
 | `os.encerrar` só em `gestor` e `planejador` por padrão; nunca em `prestador` nem `locatario`, nem em perfil derivado deles | Catálogo no Go e `CHECK` de `perfil` ([2_ARQUITETURA_BANCO_DADOS.md](2_ARQUITETURA_BANCO_DADOS.md), seção 5.1) |
 | `est.decidir_destino` só em `gestor`, `planejador` e `almoxarife` por padrão | Catálogo no Go |
-| `pessoa.saude.ler` em nenhum perfil padrão | Catálogo no Go e `ck_perfil_saude` |
-| O `administrador` tem todas, menos `pessoa.saude.ler`, `os.encerrar`, `est.decidir_destino` e `ter.manter_catalogo_proprio` | Catálogo no Go (sumário 3.6) |
-| Usuário externo nunca recebe as permissões vedadas (liberação de OS, configuração, PRJ, CTR, conexão entre contas, dados de saúde, grupo Admin), nem por perfil nem avulsa | `app.permissoes_vedadas_externo()` e os gatilhos de `perfil`, `usuario_perfil` e `usuario_permissao` |
+| Nenhuma permissão para dado de saúde: o catálogo não tem `pessoa.saude.ler` nem outra permissão de saúde, porque a Tenaz não guarda esse dado (sumário 3.6) | Catálogo no Go (RF-ADM-005, 116 códigos). No banco, a migração `00006_remove_saude` retirou `ck_perfil_saude`, a exceção de formato `pessoa.saude.ler` em `usuario_permissao` e `app.pode_ler_saude()` ([2_ARQUITETURA_BANCO_DADOS.md](2_ARQUITETURA_BANCO_DADOS.md), versão 0.6) |
+| O `administrador` tem todas, menos `os.encerrar`, `est.decidir_destino` e `ter.manter_catalogo_proprio` | Catálogo no Go (sumário 3.6) |
+| Usuário externo nunca recebe as permissões vedadas (liberação de OS, configuração, PRJ, CTR, conexão entre contas, grupo Admin), nem por perfil nem avulsa | `app.permissoes_vedadas_externo()` e os gatilhos de `perfil`, `usuario_perfil` e `usuario_permissao` |
 
 Os perfis `comprador` (requisições e pedidos de compra) e `plh` (registros NR-13) seguem a mesma lógica, com permissões só da sua área. A liberação (encerramento) de OS é a permissão `os.encerrar`, padrão em `gestor` e `planejador` e nunca concedida a `prestador` ou `locatario` (a regra anti-escalada recusa). O destino de peça com defeito é a permissão `est.decidir_destino`, padrão em `gestor`, `planejador` e `almoxarife`. A ação de assumir OS (`aberta` ou `planejada` da própria equipe) faz parte de "Executar" para o perfil `tecnico`.
 
@@ -405,7 +410,7 @@ Os perfis `comprador` (requisições e pedidos de compra) e `plh` (registros NR-
 | Ver custos, indicadores, outras OS ou pessoas do cliente | |
 | Técnicos contam na cobrança do cliente | Não (sumário 2.2) |
 
-**Dados de saúde:** a permissão `pessoa.saude.ler` não faz parte de nenhum perfil padrão. O administrador precisa concedê-la explicitamente, usuário a usuário, como permissão avulsa (`usuario_permissao`, em todos os planos) ou, a partir do Profissional, num perfil personalizado (ex.: "Saúde ocupacional"); a concessão fica na trilha. Os demais perfis veem só a situação ("apto", "vencido", "bloqueado"), sem o motivo. **(proposta)**
+**Dados de saúde:** sem objeto desde 13/11/2026. A Tenaz não guarda dado de saúde (sumário 3.6), e por isso não há permissão, perfil personalizado nem tela para ele (seção 7.6). **Dado sensível** na classificação da Tenaz (CPF completo, dados de vítimas de sinistro, CPF de locatário pessoa física) não tem permissão própria: é mascarado na interface, aparece completo só no detalhe do cadastro para quem tem a permissão de gerir aquele cadastro, e toda visualização dele vai para a trilha, sem opção de desligar (RF-ADM-011, RNF-021).
 
 **Acesso da equipe Tenaz a dados de clientes:**
 
@@ -424,6 +429,7 @@ Os perfis `comprador` (requisições e pedidos de compra) e `plh` (registros NR-
 | Credenciais de integração dos clientes | Cifradas com chave de dados por empresa (envelope encryption com KMS); decifradas só na memória do conector |
 | Papéis na nuvem | Uma função IAM por serviço, com o mínimo de permissões |
 | Acesso humano | Papéis temporários por SSO; sem chaves de acesso de longa duração |
+| Credenciais e chaves do desenvolvimento local | Ficam no repositório de propósito, só para o compose local: senhas em `infra/docker/compose.yaml`, chaves JWT do SeaweedFS em `infra/docker/seaweedfs/security.toml`, identidades S3 em `infra/docker/seaweedfs/s3.json` e chaves da API local em `ferramentas/tarefas.sh`. Não valem em nenhum outro ambiente e nunca são reaproveitadas em homologação ou produção, onde vêm do cofre. Quando o `gitleaks` entrar no CI (5.7), esses caminhos recebem lista de permissão própria, e só eles **(proposta)** |
 
 ### 5.6 Criptografia
 
@@ -434,10 +440,11 @@ Os perfis `comprador` (requisições e pedidos de compra) e `plh` (registros NR-
 | Banco em repouso | AES-256 via KMS com chave gerenciada pelo cliente (CMK), incluindo snapshots e réplicas |
 | Object storage | SSE-KMS; bloqueio de acesso público na conta |
 | Backups | Chave KMS da conta de backup |
-| Campos sensíveis | Resultados de exames e dados de ASO cifrados na aplicação com chave por empresa, além da cifragem do banco **(proposta)** |
+| Campos sensíveis | CPF completo (de pessoa, de locatário pessoa física e de cliente atendido pessoa física) e dados de vítimas de sinistro cifrados na aplicação com chave por empresa, além da cifragem do banco **(proposta)**. Não há resultado de exame nem dado de ASO para cifrar: a Tenaz não guarda dado de saúde (7.6) |
 | App | SQLite cifrado; chave no Keychain/Keystore |
 | Chaves | Rotação anual automática no KMS; uso registrado no CloudTrail |
 | Hash de assinatura | SHA-256 (seção 8) |
+| Integridade da trilha de auditoria | SHA-256 do conteúdo de cada evento (`evento_auditoria.hash`); um job encadeia, por empresa e por período (um dia UTC, proposta), os hashes dos eventos do período, em ordem, com o selo do período anterior, e grava o resultado em `selo_auditoria` e fora do banco, em armazenamento imutável: bucket com bloqueio de objeto em modo de conformidade e retenção igual à da trilha (proposta). A verificação recalcula os hashes e compara com o selo do banco e com a cópia imutável (RF-ADM-011; seção 6.2) |
 
 ### 5.7 Desenvolvimento seguro no CI
 
@@ -498,6 +505,8 @@ Prazos de correção **(proposta)**:
 | Sistema de arquivos | Somente leitura; diretório temporário em memória quando preciso |
 | Capacidades do kernel | Todas removidas |
 | Origem da imagem | Construída no CI, assinada (Cosign) e referenciada por digest; scan no registro |
+| Imagens de terceiros | Versão exata e digest (`imagem:versão@sha256:...`), nunca tag flutuante como `latest` ou `17-alpine`, que muda de conteúdo sem mudar o arquivo (ADR-012, decisão 2). Aplicado ao compose de desenvolvimento em 13/11/2026: PostgreSQL 17.11, Valkey 8.1.11, Mailpit v1.27.0, SeaweedFS 4.53 e o cliente aws-cli 2.40.2. Atualizar é trocar versão e digest juntos, conferidos com `docker pull` |
+| Armazenamento de objetos no desenvolvimento | SeaweedFS 4.53 do compose local, servidor único, com o endurecimento do ADR-012 (decisão 4), que vale também no desenvolvimento: (a) JWT de escrita e de leitura no volume e no filer (`security.toml`), sem o qual um `DELETE` recursivo na API do filer, sem credencial, apaga o bucket com a versão em retenção de conformidade; (b) master, volume, filer e os gRPC deles escutam só dentro do contêiner, e o gateway S3 (8333) é a única porta publicada no host; (c) uma identidade S3 por uso, com as ações mínimas: `tenaz_operacao` (Admin, só para as tarefas de operação) e `tenaz_auditoria` (ler, gravar, listar e reter no bucket `tenaz-auditoria`, sem bypass, sem mudar o bloqueio e sem apagar bucket); (d) telemetria do projeto, API IAM embutida e catálogos Iceberg e Lance desligados. Provado por `ferramentas/tarefas.sh armazenamento-provar`, com 19 verificações: as 15 do ensaio do ADR-012, com os ataques feitos pela identidade Admin, mais a identidade da trilha sem poder de mudar o bloqueio nem de apagar o bucket, a leitura anônima recusada, o filer inalcançável pela rede do compose e o `DELETE` no filer sem JWT recebendo 401. Fica no desenvolvimento: o gRPC do gateway S3 (18333) escuta na rede do compose sem TLS mútuo, sem porta no host; em ambiente autohospedado fora do desenvolvimento, a seção `[grpc]` do `security.toml` com TLS mútuo é obrigatória **(proposta)** |
 | Acesso interativo | Sem SSH; execução remota em contêiner desligada em produção, salvo break-glass registrado |
 | Rede | Tarefas e banco em sub-redes privadas; grupos de segurança mínimos; saída para a internet só para destinos necessários (LLM, telemáticas, ERPs, e-mail) **(proposta: lista de saída permitida na Fase 2)** |
 | Borda | WAF com regras gerenciadas (OWASP, reputação de IP), limite por IP, tamanho máximo de corpo |
@@ -516,7 +525,7 @@ Prazos de correção **(proposta)**:
 - Banco local cifrado e tokens no armazenamento seguro do sistema.
 - Apagamento remoto pelo administrador; desativação do usuário apaga o banco local na próxima conexão.
 - Nenhum dado pessoal no texto das notificações push.
-- Capturas de tela não bloqueadas (o técnico precisa compartilhar evidências), exceto em telas com dados de saúde.
+- Capturas de tela não bloqueadas (o técnico precisa compartilhar evidências). Não há tela com dado de saúde no app, porque a Tenaz não guarda esse dado (7.6); o CPF completo não vai para o banco local do app **(proposta)**.
 - Fixação de certificado (pinning) não adotada no MVP, pelo risco de travar o app numa troca de certificado. **(proposta)**
 - Usuário `prestador` no app: o banco local recebe só o escopo do fornecedor (5_ARQUITETURA_SOFTWARE.md, seção 10.2). Inativar o fornecedor ou o usuário apaga o banco local na próxima conexão, como na desativação de qualquer usuário.
 - **Várias contas no aparelho** (técnico da subcontratada que trabalha para mais de uma empresa): um banco SQLite por conta, cada um com chave própria no Keychain/Keystore, outbox própria e token próprio. O servidor recusa comando cujo token não seja da conta daquele banco. Sair de uma conta, desativar o usuário ou apagar remotamente afeta só aquela conta (5_ARQUITETURA_SOFTWARE.md, seção 10.8).
@@ -562,7 +571,7 @@ A subcontratada com conta própria (módulo SRV) e o cliente que também usa a T
 | Transações separadas | Leitura na origem e gravação no destino em transações distintas, cada uma com uma única `app.empresa_id` | Teste de que o sincronizador nunca define duas empresas na mesma transação; revisão de código com duas aprovações |
 | Destino calculado | A conta de destino é a outra ponta da conexão lida no banco, nunca um valor da mensagem ou do job | Teste "conta errada" |
 | Lista fechada de campos | Arquivo versionado define campos por grupo e por sentido; gera os `GRANT`, os DTOs e o teste. Grupos opcionais desligados por padrão e controlados pelo lado que envia | Teste com valores sentinela; revisão de segurança obrigatória em PR que muda a lista |
-| Dados de pessoas | Do técnico da subcontratada vai ao cliente só o nome (em apontamentos, linha do tempo e relatório). Nunca CPF, contato, documentos, capacitações, saúde ou posição | Teste de sentinela com CPF e telefone de técnico |
+| Dados de pessoas | Do técnico da subcontratada vai ao cliente só o nome (em apontamentos, linha do tempo e relatório). Nunca CPF, contato, documentos (inclusive a CNH), capacitações ou posição. Dado de saúde não existe na Tenaz (7.6) e não tem grupo na lista | Teste de sentinela com CPF e telefone de técnico |
 | Idempotência e ordem | `mensagem_id` único na caixa de entrada; sequência por vínculo e por sentido | Teste de replay e de reordenação |
 | Dono do dado | Cliente é dono do cadastro do equipamento, da abertura e da liberação; subcontratada é dona da execução. Mensagem que mexe em campo de outro dono é recusada inteira | Teste com mensagem montada à mão |
 | Ciclo de vida | Convite com código de 256 bits como hash, validade, tentativas limitadas, conferência de CNPJ; suspensão e encerramento com efeito imediato, lidos do banco a cada mensagem | Teste de estados e de convite encaminhado |
@@ -578,7 +587,7 @@ A subcontratada com conta própria (módulo SRV) e o cliente que também usa a T
 
 ### 6.1 O que é registrado
 
-Toda criação, alteração e exclusão em: OS e tarefas (inclusive executor e responsável pelo custo, com a justificativa quando difere do padrão), solicitações, ativos e localizações, medidores e leituras, planos, checklists, estoque e movimentações (remessa e retorno a terceiro com NF-e), peças serializadas e ordens de reparo, fornecedores, papéis, catálogo de serviços, contratos de prestação e orçamentos, locatários, contratos de locação, matriz de responsabilidade e vistorias, frota (pneus, abastecimentos, multas, sinistros), documentos com vencimento e capacitações, clientes atendidos, equipamentos de clientes, técnicos e especialidades (SRV), usuários, perfis, permissões, parâmetros, integrações, chaves de API e plano contratado. Também: login e falhas de login, troca de empresa, exportações, acessos de suporte, concessão de permissões sensíveis, **leitura** de dados de saúde, todo o ciclo dos links de uso único (seção 5.14) e todo o ciclo das conexões entre contas: convite, aceite, recusa, mudança de grupos compartilhados, suspensão, reativação, encerramento, pedido de eliminação, e cada mensagem enviada e recebida, nas duas contas (seção 5.16).
+Toda criação, alteração e exclusão em: OS e tarefas (inclusive executor e responsável pelo custo, com a justificativa quando difere do padrão), solicitações, ativos e localizações, medidores e leituras, planos, checklists, estoque e movimentações (remessa e retorno a terceiro com NF-e), peças serializadas e ordens de reparo, fornecedores, papéis, catálogo de serviços, contratos de prestação e orçamentos, locatários, contratos de locação, matriz de responsabilidade e vistorias, frota (pneus, abastecimentos, multas, sinistros), documentos com vencimento e capacitações, clientes atendidos, equipamentos de clientes, técnicos e especialidades (SRV), usuários, perfis, permissões, parâmetros, integrações, chaves de API e plano contratado. Também: login e falhas de login, troca de empresa, exportações, acessos de suporte, concessão de permissões sensíveis, **visualização** de dado sensível (CPF completo, dados de vítimas de sinistro, CPF de locatário pessoa física), sempre gravada e sem opção de desligar, sem guardar o valor mostrado (RF-ADM-011), todo o ciclo dos links de uso único (seção 5.14) e todo o ciclo das conexões entre contas: convite, aceite, recusa, mudança de grupos compartilhados, suspensão, reativação, encerramento, pedido de eliminação, e cada mensagem enviada e recebida, nas duas contas (seção 5.16).
 
 Campos de `evento_auditoria` **(proposta)**:
 
@@ -589,27 +598,29 @@ Campos de `evento_auditoria` **(proposta)**:
 | `origem` | `web`, `app`, `api`, `integracao`, `job`, `ia`, `suporte`, `restauracao`, `link`, `conexao` |
 | `escopo` | `interno`, `prestador` (com o `fornecedor_id`), `locatario` (com o `locatario_id`) ou `link` (com o `link_execucao.id`) |
 | `conexao_empresa_id`, `conta_origem_id`, `mensagem_id`, `hash_conteudo` | Só em eventos com `origem = conexao`: conexão, empresa que enviou, mensagem e hash do conteúdo, iguais nas duas contas |
-| `acao` | `criar`, `alterar`, `excluir`, `ler_sensivel`, `login`, `exportar`... |
+| `acao` | Tipo de operação, da lista fechada de RF-ADM-011: `login`, `logout`, `inclusao`, `alteracao`, `exclusao`, `delecao`, `visualizacao`, `impressao`, `extracao`. Visualização, impressão e extração seguem a captura ligada por tela (`captura_auditoria`), salvo a visualização de dado sensível, sempre gravada |
+| `tela`, `modulo` | Tela e módulo de origem; chamada sem tela (API, job, sincronização) grava só o módulo (RF-ADM-011) |
 | `entidade`, `entidade_id` | Registro afetado |
 | `antes`, `depois` | Valores dos campos alterados (jsonb), **sem** senhas, hashes, tokens ou segredos |
 | `ocorrido_em` | Horário do servidor |
 | `ocorrido_no_aparelho_em` | Horário do aparelho, para ações offline |
 | `ip`, `aparelho`, `request_id` | Contexto técnico |
-| `hash_anterior`, `hash` | Encadeamento por empresa (6.2) |
+| `hash` | SHA-256 do conteúdo do próprio evento; o encadeamento é feito pelo selo do período em `selo_auditoria` (6.2) |
 
 ### 6.2 Imutabilidade
 
 - Tabela append-only: o papel da aplicação tem só `INSERT` e `SELECT`; um gatilho bloqueia `UPDATE` e `DELETE` para qualquer papel exceto o processo de arquivamento.
-- **Encadeamento de hash por empresa:** cada evento guarda o hash do anterior. Uma alteração no meio da cadeia quebra a verificação.
-- Uma vez por dia, o hash do último evento de cada empresa é gravado num bucket com Object Lock. Isso prova que a trilha não foi reescrita, inclusive por alguém com acesso ao banco.
+- **Hash por evento e selo encadeado por empresa e período** (RF-ADM-011; sumário 3.6): cada evento guarda o hash do próprio conteúdo. Um job encadeia, por empresa e por período (um dia UTC, proposta), os hashes dos eventos do período, em ordem, com o selo do período anterior, e grava o resultado em `selo_auditoria` e fora do banco, num bucket com bloqueio de objeto em modo de conformidade e retenção igual à da trilha (proposta). Alterar, apagar ou incluir fora de ordem um evento quebra a cadeia, inclusive se feito por alguém com acesso ao banco, e a tela de auditoria mostra o período como **violado**; período intacto aparece como **íntegro**, e o ainda não selado, como **ainda não selado**.
+- O selo não entra em E01: entra com o job do selo, e até lá valem as demais camadas desta seção ([2_ARQUITETURA_BANCO_DADOS.md](2_ARQUITETURA_BANCO_DADOS.md), seção 9.4).
+- **Bucket da trilha no desenvolvimento:** `tenaz-auditoria`, no SeaweedFS do compose local (5.11), criado por `ferramentas/tarefas.sh infra` com bloqueio de objeto, versionamento ligado e retenção padrão em modo `COMPLIANCE` de 1 dia, para que objeto de teste não fique preso por anos; em produção a retenção é a da trilha (6.3). O bloqueio de objeto autohospedado não resiste a quem administra o host (ensaio do ADR-012: `weed shell` apaga o bucket); no desenvolvimento isso é aceito, e `infra-limpar` apaga o volume de propósito.
 - Gravação na mesma transação da mudança: se a mudança confirma, o evento existe.
 
 ### 6.3 Retenção
 
 | Item | Prazo **(proposta)** |
 |---|---|
-| Trilha consultável no produto | 13 meses em tabela particionada por mês |
-| Trilha arquivada | Mínimo de **5 anos**, configurável por empresa para mais; exportada para object storage com Object Lock, consultável sob pedido em até 2 dias úteis |
+| Trilha consultável no produto | 24 meses no banco, em tabela particionada por mês (RF-ADM-011; [2_ARQUITETURA_BANCO_DADOS.md](2_ARQUITETURA_BANCO_DADOS.md), seção 9.5) |
+| Trilha arquivada | Depois de 24 meses, a partição vai para o arquivo imutável. Mínimo de **5 anos** no total, configurável por empresa para mais, para eventos e selos (RNF-019); object storage com Object Lock; a verificação de integridade de um período arquivado roda de forma assíncrona, e a consulta é atendida sob pedido em até 2 dias úteis |
 | Logs de segurança (login, permissão negada, acesso de suporte) | 1 ano consultável, 5 anos arquivados |
 | Após o fim do contrato | Ver seção 7.11 |
 
@@ -630,7 +641,8 @@ Todo este bloco depende de parecer jurídico antes do lançamento. O estudo de m
 
 | Tratamento | Controlador | Operador |
 |---|---|---|
-| Dados que o cliente coloca na Tenaz (usuários, técnicos, motoristas, OS, assinaturas, geolocalização, documentos, dados de saúde) | **Cliente** | **Tenaz** |
+| Dados que o cliente coloca na Tenaz (usuários, técnicos, motoristas, CPF, CNH e demais documentos pessoais, capacitações, OS, assinaturas, geolocalização, sinistros) | **Cliente** | **Tenaz** |
+| Dados de saúde (ASO, exame toxicológico) | Não tratados pela Tenaz: o produto não os recebe (7.6). O controle fica com o cliente, fora da Tenaz | — |
 | Dados de contratação e cobrança (contatos comerciais, faturamento) | Tenaz | Provedores de cobrança e e-mail |
 | Logs de segurança da plataforma (detecção de fraude e ataque) | Tenaz (legítimo interesse, a validar) | Provedor de nuvem |
 | Site, materiais de marketing, testes gratuitos | Tenaz | Provedores de marketing |
@@ -666,7 +678,13 @@ Anexo do contrato, padrão para todos os planos. Conteúdo mínimo **(proposta)*
 
 ### 7.3 Relatório de impacto (RIPD) modelo
 
-A Tenaz entrega aos clientes um RIPD modelo, já preenchido com a descrição do tratamento na plataforma, para o cliente completar com a base legal e o contexto dele. Cobre: descrição dos tratamentos, necessidade e proporcionalidade, riscos aos titulares (com destaque para geolocalização e dados de saúde), medidas de mitigação existentes na plataforma e medidas recomendadas ao cliente (perfis, retenção, aviso aos colaboradores). A Tenaz mantém também o próprio RIPD como operadora e controladora dos dados dela.
+A Tenaz entrega aos clientes um RIPD modelo, já preenchido com a descrição do tratamento na plataforma, para o cliente completar com a base legal e o contexto dele. Cobre: descrição dos tratamentos, necessidade e proporcionalidade, riscos aos titulares (com destaque para geolocalização, CPF completo, dados de vítimas de sinistro e desempenho individual), medidas de mitigação existentes na plataforma e medidas recomendadas ao cliente (perfis, retenção, aviso aos colaboradores). A Tenaz mantém também o próprio RIPD como operadora e controladora dos dados dela.
+
+Desde 13/11/2026 o RIPD modelo não tem a seção de dados de saúde: a Tenaz não os guarda (7.6). Em lugar dela, o RIPD registra três pontos **(proposta)**:
+
+1. A não coleta de dado de saúde como medida de minimização do produto.
+2. O risco residual de dado de saúde entrar sem o produto pedir: tipo de documento criado pela empresa (RF-CON-005 permite criar tipos), anexo genérico, texto livre de OS ou de sinistro, foto, e a imagem da CNH, que pode trazer no campo de observações restrições ligadas à condição de saúde do condutor **(a validar)**. As medidas são os termos de uso, que vedam inserir dado de saúde, e a orientação na tela de anexo (7.5).
+3. Que o controle de ASO, exame toxicológico e aptidão de saúde fica com o cliente, fora da Tenaz (7.5).
 
 ### 7.4 Encarregado
 
@@ -675,39 +693,42 @@ A Tenaz entrega aos clientes um RIPD modelo, já preenchido com a descrição do
 
 ### 7.5 Inventário de dados pessoais
 
-| Categoria | Titulares | Exemplos | Sensível? | Observação |
+Duas noções diferentes, que não se confundem:
+
+- **Dado pessoal sensível da LGPD** (art. 5º, II): origem racial ou étnica, convicção religiosa, opinião política, filiação a sindicato ou a organização de caráter religioso, filosófico ou político, dado referente à saúde ou à vida sexual, dado genético ou biométrico. O tratamento dele tem bases legais próprias (art. 11). Com a decisão de 13/11/2026, a Tenaz não pede nem guarda nenhum dado dessa categoria (7.6).
+- **Dado sensível na classificação da Tenaz** (sumário 3.6; RF-ADM-011; RNF-021): CPF completo, dados de vítimas de sinistro e CPF de locatário pessoa física. É uma classificação de acesso restrito do produto (mascaramento, visualização sempre na trilha, cifragem de campo, fora do índice de IA), adotada pelo risco de fraude e de exposição. Não transforma esses dados em dado pessoal sensível no sentido da lei, e o DPA, o RIPD e as respostas a questionários de segurança não devem apresentá-los assim **(a validar com jurídico)**.
+
+A coluna "Sensível (LGPD)?" abaixo usa a noção da lei; a classificação da Tenaz aparece na observação.
+
+| Categoria | Titulares | Exemplos | Sensível (LGPD)? | Observação |
 |---|---|---|---|---|
-| Identificação e contato | Usuários, técnicos, motoristas, solicitantes | Nome, e-mail, telefone, matrícula | Não | |
+| Identificação e contato | Usuários, técnicos, motoristas, solicitantes | Nome, CPF, e-mail, telefone, matrícula | Não | CPF completo é dado sensível na classificação da Tenaz: mascarado em listas e na busca, completo só no detalhe do cadastro, com a visualização sempre na trilha (RF-ADM-011) |
 | Credenciais | Usuários | Hash de senha, fatores de MFA | Não | Nunca exportados nem exibidos |
 | Atividade de trabalho | Técnicos, motoristas | Apontamentos, OS executadas, checklists, assinaturas | Não | Pode revelar desempenho individual |
 | Geolocalização | Técnicos, motoristas | Posição na assinatura e no checklist; posição de veículo vinda de telemática | Não, mas de alto risco | Ver 7.7 |
-| Habilitação e capacitação | Motoristas, técnicos | CNH (número, categoria, validade), MOPP, NR-10, NR-11, NR-35 | Não | |
-| **Saúde** | Motoristas, técnicos | **Exame toxicológico**, **ASO** | **Sim** | Ver 7.6 |
+| Habilitação e capacitação | Motoristas, técnicos | CNH (número, categoria, validade), MOPP, NR-10, NR-11, NR-35 | Não | A CNH é documento com vencimento da `pessoa` (RF-CON-005, RF-FRO-001); MOPP é sempre capacitação (RF-CON-012), nunca documento. A imagem anexada da CNH traz o CPF completo e pode trazer, nas observações, restrições ligadas à condição de saúde do condutor **(a validar)**: o anexo é opcional e segue o mesmo acesso do CPF completo **(proposta)**; a Tenaz não cria campo estruturado para essas restrições |
 | Infrações | Motoristas | Multas e indicação de condutor | Não, mas sensível no contexto | Acesso restrito a quem gere multas |
+| Vítimas de sinistro | Condutores e terceiros envolvidos | Indicação de vítimas, identificação no boletim de ocorrência, fotos do sinistro | Não pelo cadastro; pode virar dado de saúde se o registro, o boletim ou as fotos descreverem lesões | Dado sensível na classificação da Tenaz: acesso restrito (RNF-021) e visualização sempre na trilha. Orientação: o registro diz se houve vítima, sem descrever lesões **(proposta; a validar com jurídico)** |
 | Imagens | Qualquer pessoa | Fotos de OS e de sinistros que mostrem pessoas ou placas | Pode conter | Orientação ao usuário para fotografar o ativo, não pessoas |
 | Técnicos de acesso | Usuários | IP, aparelho, horários | Não | Logs de segurança |
-| Locatário pessoa física | Locatários com CPF | Nome, CPF, telefone, e-mail, endereço do local de uso, assinatura na vistoria, fotos da vistoria, solicitações | Não | CPF mascarado em listas e na busca; visível completo só no cadastro, para quem gere locação. Fotos de vistoria orientadas ao equipamento |
+| Locatário pessoa física | Locatários com CPF | Nome, CPF, telefone, e-mail, endereço do local de uso, assinatura na vistoria, fotos da vistoria, solicitações | Não | CPF do locatário pessoa física é dado sensível na classificação da Tenaz: mascarado em listas e na busca; visível completo só no cadastro, para quem gere locação, com a visualização sempre na trilha. Fotos de vistoria orientadas ao equipamento |
 | Representante do locatário | Pessoas que assinam a vistoria | Nome, documento, rubrica | Não | Assinatura simples (seção 8.2) |
 | Técnicos de prestador | Usuários `prestador` e pessoas do fornecedor | Nome, documento, e-mail, telefone, apontamentos, OS executadas, fotos, assinatura, posição pontual na assinatura | Não | Mesma regra de geolocalização (7.7); desempenho individual visível só à empresa contratante e ao próprio fornecedor |
 | Executor via link | Prestador ocasional | Nome, documento, IP, aparelho, horários, assinatura simples | Não | Sem conta; dados ligados à OS |
 | Cliente atendido pessoa física (SRV) | Clientes da subcontratada com CPF | Nome, CPF, telefone, e-mail, endereço de atendimento | Não | Na conta da subcontratada (controladora). CPF mascarado em listas e na busca |
 | Contato e representante do cliente atendido (SRV) | Pessoas da unidade atendida | Nome, função, telefone e e-mail de trabalho, assinatura do cliente na OS | Não | Assinatura simples (seção 8.2); recebe o relatório PDF |
-| Técnicos da subcontratada (SRV) | Técnicos com usuário na conta da subcontratada | Os mesmos dados de técnico da linha "Atividade de trabalho" e "Habilitação e capacitação", na conta da subcontratada | Não (saúde: sim, se cadastrada) | Ao cliente conectado vão só nome, horários dos apontamentos e fotos das OS vinculadas (7.12) |
+| Técnicos da subcontratada (SRV) | Técnicos com usuário na conta da subcontratada | Os mesmos dados de técnico da linha "Atividade de trabalho" e "Habilitação e capacitação", na conta da subcontratada | Não | CPF completo é dado sensível na classificação da Tenaz, na conta da subcontratada. Ao cliente conectado vão só nome, horários dos apontamentos e fotos das OS vinculadas (7.12) |
 
-### 7.6 Dados sensíveis: exame toxicológico e ASO
+**Dados que a Tenaz não guarda: saúde.** Desde 13/11/2026 (sumário 3.6), a Tenaz não tem tipo de documento, campo, anexo nem permissão para dado de saúde. Consequência que o produto, o material comercial e as respostas a questionários precisam dizer com todas as letras, para não prometer conformidade que a Tenaz não dá:
 
-O exame toxicológico de motoristas profissionais e o atestado de saúde ocupacional são dados de saúde, logo **dados pessoais sensíveis**. Controles **(proposta)**:
+- O cliente que precisa controlar **ASO** (NR-7, PCMSO), **exame toxicológico** do motorista profissional (CLT, art. 168, §6º, e CTB, art. 148-A, incluídos pela Lei 13.103/2015 **(a validar)**) ou a **aptidão de saúde** que outras normas exigem junto com a capacitação, como NR-10 (item 10.8.7) e NR-35 (aptidão para trabalho em altura consignada no ASO) **(itens a conferir com o consultor de SST)**, faz esse controle **fora da Tenaz**, no sistema de saúde ocupacional ou da medicina do trabalho dele.
+- A Tenaz não alerta vencimento de ASO nem de exame toxicológico (RF-CON-006 cobre só documentos e capacitações cadastrados), e nem o apto para despacho do ativo (RF-CON-007), nem o vínculo do motorista com o veículo (RF-FRO-001), nem a atribuição de OS levam a saúde em conta. Um motorista com CNH e MOPP válidos é vinculado ao veículo sem aviso na Tenaz mesmo com ASO ou exame toxicológico vencido.
+- Capacitação NR-10 ou NR-35 válida na Tenaz (RF-CON-012) atesta o treinamento registrado, não a aptidão de saúde do trabalhador. Relatórios e dossiês da Tenaz não declaram conformidade com NR-7 nem com a parte de saúde de outras NRs.
+- Os termos de uso vedam inserir dado de saúde em tipo de documento criado pela empresa, anexo, campo extra ou texto livre. O que o produto faz para reforçar essa vedação está em aberto (seção 12).
 
-| Controle | Definição |
-|---|---|
-| Minimização | Por padrão, a Tenaz guarda só data de realização, validade e resultado "apto" ou "inapto". O laudo em PDF é opcional e fica em área restrita. |
-| Permissão específica | `pessoa.saude.ler` fora de todos os perfis padrão (seção 5.4) |
-| Situação sem motivo | Planejadores e gestores de frota veem só "apto", "vencido" ou "bloqueado para atribuição", sem saber se o motivo é saúde |
-| Cifragem de campo | Resultados cifrados com chave por empresa |
-| Auditoria de leitura | Toda leitura é registrada, não só a alteração |
-| Fora da IA | Nunca indexados no RAG nem enviados ao provedor de LLM |
-| Exportação | Exige a mesma permissão; não entra na exportação geral de relatórios |
-| Retenção | Configurável pelo cliente; sugestão padrão: apagar o laudo anexado após o vencimento do exame seguinte |
+### 7.6 Dados sensíveis: exame toxicológico e ASO (removida em 13/11/2026)
+
+**Seção sem objeto desde a versão 0.5.** Decisão do dono do produto em 13/11/2026, na etapa E01 (sumário 0.7, seção 3.6, "Dados de saúde"): **a Tenaz não guarda dado de saúde.** ASO e exame toxicológico saem do escopo; não há tipo de documento, campo, anexo nem permissão para dado de saúde, e a permissão `pessoa.saude.ler`, com a exceção ao formato `<módulo>.<ação>`, deixa de existir (RF-ADM-005, RF-ADM-015, RF-FRO-001, RF-CON-005 e RNF-021 em [1_ESPECIFICACAO_REQUISITOS.md](1_ESPECIFICACAO_REQUISITOS.md)). Os controles que esta seção previa (minimização a data, validade e "apto" ou "inapto", permissão específica, situação sem motivo, cifragem de campo, auditoria de leitura, fora da IA, exportação restrita, retenção do laudo) não se aplicam. O que fica fora da Tenaz, e como o produto diz isso ao cliente, está na seção 7.5. A numeração das seções 7.7 a 7.12 foi mantida.
 
 ### 7.7 Geolocalização de motoristas e técnicos
 
@@ -806,7 +827,7 @@ Todo este item é **(a validar com jurídico)**.
 | Horários de início, fim e pausas dos apontamentos | Sim | Revelam a jornada do técnico naquela OS; o cliente vê só as OS vinculadas a ele |
 | Fotos | Sim | Orientação no app: fotografar o equipamento, não pessoas (7.5) |
 | Assinatura eletrônica do técnico | Só o fato e o horário ("assinatura eletrônica · 13/11 10:44") | O manifesto completo (IP, aparelho, posição) fica na conta da subcontratada |
-| CPF, contatos, documentos, capacitações, dados de saúde, posição | Nunca | Fora da lista fechada; testado com sentinelas (5.16) |
+| CPF, contatos, documentos (inclusive a CNH), capacitações, posição | Nunca | Fora da lista fechada; testado com sentinelas (5.16). Dado de saúde não existe na Tenaz (7.6) |
 
 A subcontratada, como empregadora, informa seus técnicos de que nome e registros de trabalho vão aos clientes atendidos como prova do serviço (texto sugerido no material de implantação do SRV). A anonimização de um técnico desligado na conta da subcontratada gera uma mensagem para pseudonimizar o nome nas OS vinculadas dos clientes conectados; o cliente pode manter o nome quando tiver obrigação legal de guarda (registros NR-12), com a decisão registrada na trilha dele **(proposta)**.
 
@@ -846,7 +867,7 @@ Usada em todos os planos (sumário 2.1) e no plano Serviços (sumário 2.2): con
 | Integridade | Hash SHA-256 do conteúdo canônico do registro (JSON canonicalizado pela RFC 8785, incluindo os hashes dos anexos) |
 | Carimbo de tempo | Horário do servidor no recebimento e horário do aparelho na assinatura. Na Fase 2, carimbo de tempo de autoridade certificadora (RFC 3161), se o parecer jurídico recomendar. |
 | Geolocalização | Posição no momento da assinatura, se a empresa permitir (seção 7.7) |
-| Trilha | Evento de auditoria com todos os elementos acima, encadeado por hash |
+| Trilha | Evento de auditoria com todos os elementos acima, com hash próprio e coberto pelo selo do período (6.2) |
 | Bloqueio | Registro assinado não pode ser alterado. Correção só por novo registro que referencia o anterior. OS encerrada é imutável (sumário, seção 3.1). |
 | Evidência | PDF com o conteúdo, o manifesto de assinaturas (quem, quando, onde, hash) e um QR code para a página pública de verificação |
 | Verificação | A página de verificação confirma se o hash bate com o registro original, sem expor o conteúdo a quem não tem acesso. Vale também para o relatório PDF da OS de serviço (`GET /v1/ordens-servico/{id}/relatorio-pdf`), que leva o código de verificação **(proposta)** |
@@ -885,7 +906,7 @@ A mecânica está em 5_ARQUITETURA_SOFTWARE.md, seção 12. Aqui estão as regra
 | 5 | **Fonte sempre** | Toda resposta cita a fonte; sem fonte, diz que não encontrou |
 | 6 | **Transparência** | Conteúdo gerado por IA marcado na interface e na trilha (`origem = ia`) |
 | 7 | **Controle do cliente** | Liga e desliga por empresa e por perfil ou usuário; escolha das fontes indexadas |
-| 8 | **Fora da IA** | Dados de saúde, credenciais e documentos restritos nunca vão para o índice nem para o provedor |
+| 8 | **Fora da IA** | Dado sensível na classificação da Tenaz (CPF completo, dados de vítimas de sinistro, CPF de locatário pessoa física), anexos de documentos pessoais (inclusive a CNH), credenciais e documentos restritos nunca vão para o índice nem para o provedor. Dado de saúde não existe na Tenaz (7.6) |
 
 ### 9.2 Controles operacionais (proposta)
 
@@ -942,8 +963,8 @@ Copiar no PR de release e marcar cada item. Release com item crítico desmarcado
 
 - [ ] Rotas novas exigem autenticação e permissão específica, conferida no servidor
 - [ ] Novas permissões classificadas e atribuídas aos perfis padrão de forma deliberada
-- [ ] Nenhuma permissão nova dá acesso a dados de saúde sem `pessoa.saude.ler`
-- [ ] Permissões novas no formato `<módulo>.<ação>`; `os.encerrar` não concedida a `prestador` nem a `locatario`
+- [ ] Nenhum tipo de documento, campo, anexo, permissão ou tela nova para dado de saúde (ASO, exame toxicológico): a Tenaz não guarda esse dado (sumário 3.6; seção 7.6) (crítico)
+- [ ] Permissões novas no formato `<módulo>.<ação>`, sem exceção; `os.encerrar` não concedida a `prestador` nem a `locatario`
 - [ ] Notificações push novas sem dado pessoal no texto
 - [ ] Recursos novos de plano verificados por entitlement no backend
 
@@ -959,8 +980,10 @@ Copiar no PR de release e marcar cada item. Release com item crítico desmarcado
 
 - [ ] Campos novos com dado pessoal incluídos no inventário (seção 7.5)
 - [ ] Entidades novas cobertas pela trilha de auditoria, sem gravar segredos
-- [ ] Logs novos sem dado pessoal sensível, token ou segredo
-- [ ] Dados novos fora do índice de IA quando sensíveis
+- [ ] Logs novos sem CPF completo, dado de vítima de sinistro, token ou segredo
+- [ ] Dados novos fora do índice de IA quando sensíveis (classificação da Tenaz, 7.5)
+- [ ] Tela nova que mostra dado sensível grava a visualização sempre, sem chave de captura (RF-ADM-011)
+- [ ] Material comercial e notas de release não prometem controle de ASO, exame toxicológico ou aptidão de saúde (7.5)
 
 **Operação**
 
@@ -983,7 +1006,16 @@ Copiar no PR de release e marcar cada item. Release com item crítico desmarcado
 
 ## 12. Alinhamento com o sumário e pendências
 
-Situação deste documento em relação ao sumário executivo 0.4.
+Situação deste documento em relação ao sumário executivo 0.7.
+
+**Resolvido pelo sumário 0.7 e aplicado aqui**
+
+| Tema | Como ficou |
+|---|---|
+| Dados de saúde | A Tenaz não guarda dado de saúde (sumário 3.6, decisão de 13/11/2026): seção 7.6 removida sem renumerar; 5.1, 5.4, 5.6, 5.13, 5.16, 6.1, 7.1, 7.3, 7.5, 7.12, 9.1 e 11 ajustadas; o que fica fora da Tenaz está dito em 7.5 |
+| Dado sensível | CPF completo, dados de vítimas de sinistro e CPF de locatário pessoa física, como classificação de acesso restrito da Tenaz, distinta do dado pessoal sensível da LGPD (7.5) |
+| Trilha de auditoria | Hash por evento e selo encadeado por empresa e período em `selo_auditoria`, com cópia em armazenamento imutável (RF-ADM-011; 5.6, 6.1, 6.2) |
+| Ferramentas e recursos (sumário 3.6; ADR-012) | Armazenamento de objetos do desenvolvimento no SeaweedFS endurecido e provado, imagens do compose por versão e digest, credenciais de desenvolvimento com regra própria (5.5, 5.11, 6.2) |
 
 **Resolvido pelo sumário 0.4 e aplicado aqui**
 
@@ -991,7 +1023,7 @@ Situação deste documento em relação ao sumário executivo 0.4.
 |---|---|
 | Escopo externo | Valores `interno`, `prestador`, `locatario`, `link`; `prestador` substitui `fornecedor` nos vetores (5.2) e na trilha (6.1) |
 | Permissão de liberação | `os.encerrar`, nunca em perfil externo (5.4, 11) |
-| Formato das permissões | `<módulo>.<ação>`, com `est.decidir_destino` e a exceção `pessoa.saude.ler` (5.4) |
+| Formato das permissões | `<módulo>.<ação>`, com `est.decidir_destino`. A exceção `pessoa.saude.ler` deixou de existir no sumário 0.7: o formato vale sem exceção (5.4) |
 | Link de uso único | Token no fragmento (`/l/#<token>`), ativação com token no corpo, rotas `atual` sem token no caminho, consumo em `registrar-execucao` (5.14) |
 | `GET /v1/versao` | Exceção aceita à regra de plural; RNF-039 e RNF-040 (5.15, 11) |
 | Módulo SRV e risco R5 | STRIDE da conexão entre contas (5.1), vetores (5.2), controles e teste com três contas (5.16), convite e várias contas (5.3, 5.13), papel da subcontratada (5.4), auditoria nos dois lados (6.1), LGPD e retenção (7.1, 7.5, 7.12), assinatura do cliente (8.2), checklist de release (11) |
@@ -1007,3 +1039,22 @@ Situação deste documento em relação ao sumário executivo 0.4.
 | — | Prazos de retenção depois do encerramento da conexão (janela de 24 h, 30 dias para equipamentos sem OS) e fluxo de pedido de eliminação | 7.12 **(proposta)** |
 | — | Página pública de verificação do relatório PDF, ainda não prevista na especificação de APIs | 8.2 |
 | — | Prova de conceito do papel `tenaz_sinc` (privilégio por coluna com RLS) antes de fechar o MVP | 5.16; 5_ARQUITETURA_SOFTWARE.md, seção 16 |
+| — | **Risco: cliente que precisa controlar ASO (NR-7), exame toxicológico ou aptidão de saúde fará isso fora da Tenaz.** Pode pesar na venda a transportadoras e indústrias e gera risco de o cliente supor que o apto da Tenaz cobre a saúde. Mitigação: texto explícito em 7.5, nos termos de uso, no material comercial e nas respostas a questionários (11) | 7.5 |
+| — | Como o produto reforça a vedação a dado de saúde, decisão do dono do produto. Opções: (a) só termos de uso e orientação; (b) aviso fixo no cadastro da pessoa e no dossiê do motorista de que a aptidão de saúde não é controlada pela Tenaz; (c) recusa de tipo de documento cujo nome indique dado de saúde (ASO, toxicológico, atestado); (d) aviso na tela de anexo da pessoa e do sinistro. As opções se combinam | 7.3, 7.5 |
+| — | Perguntas ao advogado: se a imagem da CNH, por trazer restrições ligadas à saúde do condutor, deve ser tratada como dado de saúde quando anexada; se o registro de vítimas de sinistro, quando descreve lesões, exige base do art. 11 da LGPD; se a classificação "dado sensível" da Tenaz para o CPF pode ser apresentada assim no DPA e no RIPD sem confusão com o art. 5º, II | 7.5 **(a validar)** |
+| — | Conferência com o consultor de SST dos itens de NR-10 e NR-35 que exigem aptidão de saúde junto com a capacitação, citados em 7.5 | 7.5 **(a validar)** |
+| — | Implementação da auditoria configurável de RF-ADM-011, ainda por fazer em E01: colunas `tela`, `modulo` e `hash` em `evento_auditoria`, lista de `acao` com os nove tipos (6.1), `captura_auditoria` e, com o job do selo, `selo_auditoria` (6.2). Dono: `tenaz-banco-dados` ([2_ARQUITETURA_BANCO_DADOS.md](2_ARQUITETURA_BANCO_DADOS.md), seção 9) | 6.1, 6.2 |
+| — | Imagem do PostgreSQL dos testes com contêiner descartável (testcontainers) ainda na tag flutuante `postgres:17-alpine`, em `backend/internal/plataforma/db/dbteste/dbteste.go` e `backend/testes/vazamento/ambiente_test.go`: deve seguir o compose (`postgres:17.11-alpine3.24` com digest), para que a suíte de isolamento rode sobre o mesmo binário do desenvolvimento. Dono: `tenaz-backend-go` | 5.11 |
+| — | Lista de permissão do `gitleaks` restrita aos caminhos das credenciais de desenvolvimento, quando a varredura entrar no CI | 5.5, 5.7 **(proposta)** |
+| — | Cifragem de campo do CPF com chave por empresa (5.6) exige índice cego para manter a unicidade do CPF na empresa (`uq_pessoa_cpf`, documento 2) | 5.6 **(proposta)** |
+
+---
+
+## Histórico de revisões
+
+| Versão | Data | Alteração |
+|---|---|---|
+| 0.1 a 0.3 | 12/11/2026 | Concepção: metas de confiabilidade, alta disponibilidade, backup e recuperação, incidentes, segurança, trilha, LGPD, assinatura, IA, certificações e checklist de release, até o alinhamento ao sumário executivo 0.4 (acesso externo, link de uso único, módulo SRV e conexão entre contas) |
+| 0.4 | 12/11/2026 | Etapa E01, alinhado ao sumário 0.6: matriz canônica de RF-ADM-005 e exceção do `administrador` na regra anti-escalada (5.4); sessão web com cookie e estado no servidor e renovação do app em 30 dias (5.3, RNF-017); `ator_tipo = link_execucao` (5.14) |
+| 0.5 | 13/11/2026 | Etapa E01, alinhado ao sumário 0.7: a Tenaz não guarda dado de saúde; seção 7.6 removida sem renumerar; `pessoa.saude.ler` e a exceção ao formato retiradas (5.4, catálogo de 116 permissões); dado sensível da Tenaz distinto do dado pessoal sensível da LGPD (7.5); limite explícito do produto para ASO, exame toxicológico e aptidão de saúde (7.5) e RIPD sem a seção de saúde (7.3); ajustes em 5.1, 5.6, 5.13, 5.16, 6.1, 7.1, 7.12, 9.1, 11 e 12; integridade da trilha por hash por evento e selo encadeado em `selo_auditoria` com cópia imutável (RF-ADM-011; 5.6, 6.1, 6.2); trilha 24 meses no banco (6.3); remoção de saúde no banco pela migração `00006_remove_saude` (5.4); histórico de revisões criado |
+| 0.5 | 13/11/2026 | Complemento da etapa E01 (sumário 0.7, seção 3.6, "Ferramentas e recursos"; ADR-012): armazenamento de objetos do desenvolvimento no SeaweedFS 4.53 endurecido e provado por `armazenamento-provar` (5.11); imagens do compose por versão exata e digest (5.11); regra das credenciais de desenvolvimento versionadas (5.5); bucket `tenaz-auditoria` do desenvolvimento (6.2); pendências da imagem do testcontainers e da lista de permissão do `gitleaks` (12) |

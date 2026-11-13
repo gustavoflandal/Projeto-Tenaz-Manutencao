@@ -2,6 +2,7 @@ package autorizacao
 
 import (
 	"bufio"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -9,6 +10,7 @@ import (
 	"testing"
 
 	"tenaz/internal/plataforma/db"
+	"tenaz/internal/plataforma/erros"
 )
 
 // caminhoDocumento1 parte do diretório do pacote até a raiz do repositório.
@@ -74,8 +76,8 @@ func lerTabelasDoDocumento(t *testing.T) ([]linhaDoc, map[string][]bool) {
 // descrição, grupo, fase e marcação de sensível, e os mesmos ● por perfil.
 func TestCatalogoIgualAoDocumento(t *testing.T) {
 	cat, mat := lerTabelasDoDocumento(t)
-	if len(cat) != 117 {
-		t.Fatalf("o documento tem %d permissões no catálogo; o sumário 3.6 cita 117", len(cat))
+	if len(cat) != 116 {
+		t.Fatalf("o documento tem %d permissões no catálogo; o sumário 3.6 cita 116", len(cat))
 	}
 	codigo := Catalogo()
 	if len(codigo) != len(cat) {
@@ -133,8 +135,11 @@ func TestMatrizRespeitaRegrasDoSumario(t *testing.T) {
 	if got := quemTem(EstDecidirDestino); !slices.Equal(got, []string{PerfilGestor, PerfilPlanejador, PerfilAlmoxarife}) {
 		t.Errorf("est.decidir_destino deve estar só em gestor, planejador e almoxarife; está em %v", got)
 	}
-	if got := quemTem(PessoaSaudeLer); len(got) != 0 {
-		t.Errorf("pessoa.saude.ler não pode estar em perfil padrão; está em %v", got)
+	// A Tenaz não guarda dado de saúde: a permissão não existe mais.
+	for _, p := range Catalogo() {
+		if strings.Contains(p.Codigo, "saude") {
+			t.Errorf("permissão de saúde no catálogo: %s", p.Codigo)
+		}
 	}
 	if got := quemTem(SrvGerenciarConexao); !slices.Equal(got, []string{PerfilAdministrador, PerfilGestor}) {
 		t.Errorf("srv.gerenciar_conexao deve ser padrão de administrador e gestor; está em %v", got)
@@ -143,11 +148,10 @@ func TestMatrizRespeitaRegrasDoSumario(t *testing.T) {
 		t.Error("locatario não entra no app (sumário 3.6, RF-MOB-001)")
 	}
 
-	// Administrador: todas, menos quatro.
+	// Administrador: todas, menos três.
 	adm := PermissoesDoPerfil(PerfilAdministrador)
 	for _, p := range Catalogo() {
-		fora := p.Codigo == PessoaSaudeLer || p.Codigo == OsEncerrar || p.Codigo == EstDecidirDestino ||
-			p.Codigo == TerManterCatalogoProprio
+		fora := p.Codigo == OsEncerrar || p.Codigo == EstDecidirDestino || p.Codigo == TerManterCatalogoProprio
 		if slices.Contains(adm, p.Codigo) == fora {
 			t.Errorf("administrador e %s: esperado ter = %v", p.Codigo, !fora)
 		}
@@ -191,7 +195,7 @@ func TestCatalogoBemFormado(t *testing.T) {
 
 func TestFormatoValido(t *testing.T) {
 	casos := map[string]bool{
-		"os.encerrar": true, "pessoa.saude.ler": true, "adm.ler": true, "est.decidir_destino": true,
+		"os.encerrar": true, "pessoa.saude.ler": false, "adm.ler": true, "est.decidir_destino": true,
 		"OS.encerrar": false, "os": false, "os.": false, "o.ler": false, "abcd.ler": false,
 		"os._ler": false, "os.ler_": false, "con.gerenciar_nr13": true, "os.1ler": false, "os.ler-x": false, "pessoa.saude": false, "": false,
 	}
@@ -204,10 +208,10 @@ func TestFormatoValido(t *testing.T) {
 
 func TestVedadasExterno(t *testing.T) {
 	v := VedadasExterno()
-	if len(v) != 26 {
-		t.Errorf("esperadas 26 vedadas (1 + 9 + srv + saúde + 14 do grupo Admin); são %d: %v", len(v), v)
+	if len(v) != 25 {
+		t.Errorf("esperadas 25 vedadas (1 + 9 + srv + 14 do grupo Admin); são %d: %v", len(v), v)
 	}
-	for _, p := range []string{OsEncerrar, PessoaSaudeLer, SrvGerenciarConexao, AdmLerAuditoria, AdmGerenciarUsuarios,
+	for _, p := range []string{OsEncerrar, SrvGerenciarConexao, AdmLerAuditoria, AdmGerenciarUsuarios,
 		CtrReabrirMedicao, "ia.gerenciar", "con.gerenciar_tipos_documento"} {
 		if !slices.Contains(v, p) {
 			t.Errorf("%s deveria ser vedada a externo", p)
@@ -219,23 +223,47 @@ func TestVedadasExterno(t *testing.T) {
 }
 
 func TestExigirEAntiEscalada(t *testing.T) {
+	// O erro é conferido pela identidade (errors.Is), não pelo texto: a
+	// mensagem pode mudar; o código estável, não.
 	interno := Ator{Escopo: db.Escopo{Tipo: db.EscopoInterno}, Permissoes: NovoConjunto(AdmLer)}
 	if err := interno.Exigir(AdmLer); err != nil {
 		t.Fatalf("tem adm.ler: %v", err)
 	}
-	if err := interno.Exigir(AdmGerenciarEmpresa); err == nil || !strings.Contains(err.Error(), "permissao_negada") {
-		t.Errorf("interno sem a permissão: esperado permissao_negada, veio %v", err)
+	if err := interno.ExigirAlguma(AdmGerenciarEmpresa, AdmLer); err != nil {
+		t.Fatalf("tem uma das permissões: %v", err)
 	}
-	externo := Ator{Escopo: db.Escopo{Tipo: db.EscopoPrestador}, Permissoes: NovoConjunto("os.ler")}
-	if err := externo.Exigir(AdmLerPessoas); err == nil || !strings.Contains(err.Error(), "recurso_nao_encontrado") {
-		t.Errorf("externo sem a permissão: esperado recurso_nao_encontrado, veio %v", err)
+	for nome, err := range map[string]error{
+		"Exigir":        interno.Exigir(AdmLer, AdmGerenciarEmpresa),
+		"ExigirAlguma":  interno.ExigirAlguma(AdmGerenciarEmpresa, AdmGerenciarUsuarios),
+		"sem permissão": (Ator{Escopo: db.Escopo{Tipo: db.EscopoInterno}}).Exigir(AdmLer),
+	} {
+		if !errors.Is(err, erros.SemPermissao) || errors.Is(err, erros.NaoEncontrado) {
+			t.Errorf("%s: interno sem a permissão recebe SemPermissao, veio %v", nome, err)
+		}
+	}
+	for _, tipo := range []string{db.EscopoPrestador, db.EscopoLocatario} {
+		externo := Ator{Escopo: db.Escopo{Tipo: tipo}, Permissoes: NovoConjunto("os.ler")}
+		for nome, err := range map[string]error{
+			"Exigir":       externo.Exigir(AdmLerPessoas),
+			"ExigirAlguma": externo.ExigirAlguma(AdmLerPessoas, AdmLerUsuarios),
+		} {
+			if !errors.Is(err, erros.NaoEncontrado) || errors.Is(err, erros.SemPermissao) {
+				t.Errorf("%s %s: externo sem a permissão recebe NaoEncontrado, veio %v", tipo, nome, err)
+			}
+		}
+		if err := externo.Exigir("os.ler"); err != nil {
+			t.Errorf("%s com a permissão: %v", tipo, err)
+		}
 	}
 
 	adm := Ator{Perfis: []string{PerfilAdministrador}, Permissoes: NovoConjunto(PermissoesDoPerfil(PerfilAdministrador)...)}
-	for _, p := range []string{OsEncerrar, EstDecidirDestino, PessoaSaudeLer} {
+	for _, p := range []string{OsEncerrar, EstDecidirDestino} {
 		if !adm.PodeConceder(p) {
 			t.Errorf("administrador concede %s a outros", p)
 		}
+	}
+	if adm.PodeConceder(TerManterCatalogoProprio) {
+		t.Error("ter.manter_catalogo_proprio não é isenção do administrador na concessão avulsa")
 	}
 	for _, perfil := range PerfisPadrao() {
 		if ok, falta := adm.PodeAtribuirPerfil(PermissoesDoPerfil(perfil.Codigo)); !ok {
@@ -243,8 +271,8 @@ func TestExigirEAntiEscalada(t *testing.T) {
 		}
 	}
 	gestor := Ator{Perfis: []string{PerfilGestor}, Permissoes: NovoConjunto(PermissoesDoPerfil(PerfilGestor)...)}
-	if gestor.PodeConceder(PessoaSaudeLer) {
-		t.Error("gestor não concede pessoa.saude.ler")
+	if gestor.PodeConceder(AdmGerenciarUsuarios) || IsencaoAdministrador(OsEncerrar) && !gestor.PodeConceder(OsEncerrar) {
+		t.Error("gestor concede o que tem (os.encerrar) e não o que não tem (adm.gerenciar_usuarios)")
 	}
 	if ok, _ := gestor.PodeAtribuirPerfil(PermissoesDoPerfil(PerfilAdministrador)); ok {
 		t.Error("gestor não atribui o perfil administrador")

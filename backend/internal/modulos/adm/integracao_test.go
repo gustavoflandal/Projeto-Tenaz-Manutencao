@@ -54,11 +54,13 @@ func TestCriarConta(t *testing.T) {
 		t.Fatalf("turno padrão de segunda a sexta: %+v %v", u.Turnos, err)
 	}
 	eu, err := svc.ObterEu(ctx, c.adm)
-	if err != nil || eu.Situacao != "ativo" || !eu.IdentidadeLigada || len(eu.Perfis) != 1 || eu.Perfis[0].Codigo != "administrador" {
+	if err != nil || eu.Situacao != "ativo" || !eu.IdentidadeLigada || len(eu.Perfis) != 2 {
 		t.Fatalf("responsável: %+v %v", eu, err)
 	}
-	if c.adm.Pode(autorizacao.OsEncerrar) || !c.adm.Pode(autorizacao.AdmGerenciarUsuarios) || c.adm.Escopo.PodeLerSaude {
-		t.Error("permissões efetivas do administrador")
+	// RN-ADM-017: o responsável nasce administrador e gestor, e libera OS.
+	if !slices.Equal(c.adm.Perfis, []string{"administrador", "gestor"}) || !c.adm.Pode(autorizacao.OsEncerrar) ||
+		!c.adm.Pode(autorizacao.AdmGerenciarUsuarios) {
+		t.Errorf("permissões efetivas do responsável: %v", c.adm.Perfis)
 	}
 
 	// A trilha tem a criação da empresa (trigger) e o login (serviço).
@@ -71,7 +73,8 @@ func TestCriarConta(t *testing.T) {
 
 	// CNPJ repetido.
 	_, err = svc.CriarConta(ctx, adm.EntradaCriarConta{CNPJ: *emp.CNPJ, RazaoSocial: "Outra",
-		Responsavel: adm.EntradaResponsavel{Nome: "B", Email: emailAleatorio("b")}, Unidade: adm.EntradaUnidade{Codigo: "U", Nome: "U"}})
+		Responsavel: adm.EntradaResponsavel{Nome: "B", Email: emailAleatorio("b")},
+		Unidade:     adm.EntradaUnidade{Codigo: "U", Nome: "U", Turnos: turnosComerciais()}})
 	exigirErro(t, err, erros.Duplicado)
 	_, err = svc.CriarConta(ctx, adm.EntradaCriarConta{CNPJ: "11222333000180", RazaoSocial: "X",
 		Responsavel: adm.EntradaResponsavel{Nome: "B", Email: emailAleatorio("b")}, Unidade: adm.EntradaUnidade{Codigo: "U", Nome: "U"}})
@@ -114,7 +117,11 @@ func TestUnidadesTurnosFeriados(t *testing.T) {
 
 	err = svc.RemoverTurno(ctx, pro.adm, f2.ID, f2.Turnos[0].ID)
 	exigirErro(t, err, erros.EntradaInvalida)
-	t2, err := svc.IncluirTurno(ctx, pro.adm, f2.ID, adm.EntradaTurno{DiaSemana: 7, HoraInicio: "00:00", HoraFim: "24:00"})
+	// Domingo 00:00 às 24:00 colide com o sábado 22:00 às 06:00, que invade o
+	// domingo (RN-ADM-019); quarta não colide.
+	_, err = svc.IncluirTurno(ctx, pro.adm, f2.ID, adm.EntradaTurno{DiaSemana: 7, HoraInicio: "00:00", HoraFim: "24:00"})
+	exigirErro(t, err, erros.EntradaInvalida)
+	t2, err := svc.IncluirTurno(ctx, pro.adm, f2.ID, adm.EntradaTurno{DiaSemana: 3, HoraInicio: "00:00", HoraFim: "24:00"})
 	if err != nil || t2.HoraFim != "24:00" {
 		t.Fatalf("turno até a meia-noite: %+v %v", t2, err)
 	}
@@ -193,12 +200,23 @@ func TestPessoas(t *testing.T) {
 		t.Fatalf("visualização do CPF na trilha: %v %v", ev.Dados, err)
 	}
 
+	// RN-ADM-021: pessoa com usuário convidado ou ativo não é inativada; o
+	// usuário é inativado antes.
+	_, err = svc.InativarPessoa(ctx, c.adm, semUsuario.ID)
+	exigirErro(t, err, erros.TransicaoInvalida)
+	if _, err := svc.InativarUsuario(ctx, c.adm, u2.Usuario.ID); err != nil {
+		t.Fatal(err)
+	}
 	in, err := svc.InativarPessoa(ctx, c.adm, semUsuario.ID)
 	if err != nil || in.Situacao != "inativa" {
 		t.Fatalf("inativar: %v", err)
 	}
 	_, err = svc.InativarPessoa(ctx, c.adm, semUsuario.ID)
 	exigirErro(t, err, erros.TransicaoInvalida)
+	// Não liga usuário a pessoa inativa.
+	_, err = svc.CriarUsuario(ctx, c.adm, adm.EntradaUsuario{Nome: "Outro", Email: emailAleatorio("y"),
+		Perfis: []string{"motorista"}, PessoaID: &semUsuario.ID})
+	exigirErro(t, err, erros.EntradaInvalida)
 
 	// Técnico não lê pessoas.
 	_, tec := convidarEEntrar(t, c, adm.EntradaUsuario{Perfis: []string{"tecnico"}})
@@ -207,7 +225,7 @@ func TestPessoas(t *testing.T) {
 }
 
 // RF-ADM-004 e RF-ADM-005: perfis, externos, último administrador,
-// anti-escalada, permissão avulsa e pessoa.saude.ler.
+// anti-escalada e permissão avulsa.
 func TestUsuariosEPermissoes(t *testing.T) {
 	c := novaConta(t, "")
 	ctx := ctxWeb()
@@ -244,26 +262,30 @@ func TestUsuariosEPermissoes(t *testing.T) {
 	_, err = svc.ConcederPermissao(ctx, c.adm, prest.ID, autorizacao.OsEncerrar)
 	exigirErro(t, err, erros.EntradaInvalida) // vedada a externo
 
-	// Permissão avulsa: só o administrador concede pessoa.saude.ler, e não a si.
-	_, err = svc.ConcederPermissao(ctx, c.adm, c.adm.UsuarioID, autorizacao.PessoaSaudeLer)
+	// Permissão avulsa: só o administrador concede os.encerrar e
+	// est.decidir_destino, e não a si; pessoa.saude.ler não existe mais.
+	tecAvulso, _ := convidarEEntrar(t, c, adm.EntradaUsuario{Perfis: []string{"tecnico"}})
+	_, err = svc.ConcederPermissao(ctx, c.adm, c.adm.UsuarioID, autorizacao.EstDecidirDestino)
 	exigirErro(t, err, erros.SemPermissao)
-	_, err = svc.ConcederPermissao(ctx, aGestor, c.adm.UsuarioID, autorizacao.PessoaSaudeLer)
-	exigirErro(t, err, erros.SemPermissao)
-	u, err := svc.ConcederPermissao(ctx, c.adm, gestor.ID, autorizacao.PessoaSaudeLer)
-	if err != nil || !slices.Contains(u.PermissoesAvulsas, autorizacao.PessoaSaudeLer) {
-		t.Fatalf("conceder pessoa.saude.ler: %v", err)
+	_, err = svc.ConcederPermissao(ctx, aGestor, tecAvulso.ID, autorizacao.OsEncerrar)
+	exigirErro(t, err, erros.SemPermissao) // o gestor tem, mas só o administrador concede
+	_, err = svc.ConcederPermissao(ctx, c.adm, tecAvulso.ID, "pessoa.saude.ler")
+	exigirErro(t, err, erros.EntradaInvalida)
+	u, err := svc.ConcederPermissao(ctx, c.adm, tecAvulso.ID, autorizacao.OsEncerrar)
+	if err != nil || !slices.Contains(u.PermissoesAvulsas, autorizacao.OsEncerrar) {
+		t.Fatalf("conceder os.encerrar: %v", err)
 	}
-	_, err = svc.ConcederPermissao(ctx, c.adm, gestor.ID, autorizacao.PessoaSaudeLer)
+	_, err = svc.ConcederPermissao(ctx, c.adm, tecAvulso.ID, autorizacao.OsEncerrar)
 	exigirErro(t, err, erros.Duplicado)
-	recarregado, err := auth.CarregarAtor(ctx, c.criada.EmpresaID, gestor.ID)
-	if err != nil || !recarregado.Escopo.PodeLerSaude {
-		t.Fatalf("PodeLerSaude vem das permissões efetivas: %v", err)
+	recarregado, err := auth.CarregarAtor(ctx, c.criada.EmpresaID, tecAvulso.ID)
+	if err != nil || !recarregado.Pode(autorizacao.OsEncerrar) {
+		t.Fatalf("a avulsa entra nas permissões efetivas: %v", err)
 	}
-	if _, err := svc.RetirarPermissao(ctx, c.adm, gestor.ID, autorizacao.PessoaSaudeLer); err != nil {
+	if _, err := svc.RetirarPermissao(ctx, c.adm, tecAvulso.ID, autorizacao.OsEncerrar); err != nil {
 		t.Fatal(err)
 	}
-	recarregado, _ = auth.CarregarAtor(ctx, c.criada.EmpresaID, gestor.ID)
-	if recarregado.Escopo.PodeLerSaude {
+	recarregado, _ = auth.CarregarAtor(ctx, c.criada.EmpresaID, tecAvulso.ID)
+	if recarregado.Pode(autorizacao.OsEncerrar) {
 		t.Error("retirada vale na próxima requisição")
 	}
 
@@ -307,30 +329,6 @@ func TestUsuariosEPermissoes(t *testing.T) {
 	}
 	_, err = svc.ListarUsuarios(ctx, c.adm, adm.FiltroUsuarios{Limite: 2, Cursor: p1.ProximoCursor, Situacao: ptr("ativo")})
 	exigirErro(t, err, erros.CursorInvalido)
-}
-
-// Isolamento entre empresas nos casos de uso: id de outra empresa é 404.
-func TestOutraEmpresaNaoEncontra(t *testing.T) {
-	a, b := novaConta(t, ""), novaConta(t, "")
-	ctx := ctxWeb()
-	if _, err := svc.ObterUsuario(ctx, b.adm, a.adm.UsuarioID); !errors.Is(err, erros.NaoEncontrado) {
-		t.Errorf("usuário de outra empresa: %v", err)
-	}
-	if _, err := svc.InativarUsuario(ctx, b.adm, a.adm.UsuarioID); !errors.Is(err, erros.NaoEncontrado) {
-		t.Errorf("inativar usuário de outra empresa: %v", err)
-	}
-	if _, err := svc.ConcederPermissao(ctx, b.adm, a.adm.UsuarioID, "ind.exportar"); !errors.Is(err, erros.NaoEncontrado) {
-		t.Errorf("permissão a usuário de outra empresa: %v", err)
-	}
-	if n, err := svc.EncerrarSessoes(ctx, b.adm, a.adm.UsuarioID); !errors.Is(err, erros.NaoEncontrado) || n != 0 {
-		t.Errorf("encerrar sessões de outra empresa: %v", err)
-	}
-	if _, err := auth.TrocarEmpresa(ctx, b.adm, a.criada.EmpresaID); !errors.Is(err, erros.NaoEncontrado) {
-		t.Errorf("trocar para empresa sem acesso: %v", err)
-	}
-	if _, err := auth.AutenticarWeb(ctx, a.cookie, "", false); err != nil {
-		t.Errorf("a sessão de A continua: %v", err)
-	}
 }
 
 // RF-ADM-006: falhas, bloqueio temporário, tempo constante e trilha.
@@ -378,13 +376,17 @@ func TestMFA(t *testing.T) {
 	if !errors.As(err, &e) || e.Codigo != erros.MFACodigoInvalido.Codigo || e.Dados["tentativas_restantes"] != 4 {
 		t.Fatalf("código errado consome uma tentativa: %v", err)
 	}
-	r2, err := auth.VerificarMFA(ctx, autenticacao.EntradaVerificarMFA{DesafioID: r.DesafioMFA.DesafioID,
+	// O passo usado na confirmação não vale de novo; o seguinte, sim.
+	_, err = auth.VerificarMFA(ctx, autenticacao.EntradaVerificarMFA{DesafioID: r.DesafioMFA.DesafioID,
 		Codigo: codigoTOTP(t, cfg.SegredoBase32, time.Now())})
+	exigirErro(t, err, erros.MFACodigoInvalido)
+	r2, err := auth.VerificarMFA(ctx, autenticacao.EntradaVerificarMFA{DesafioID: r.DesafioMFA.DesafioID,
+		Codigo: codigoTOTP(t, cfg.SegredoBase32, time.Now().Add(30*time.Second))})
 	if err != nil || r2.Sessao == nil {
 		t.Fatalf("código certo conclui o login: %v", err)
 	}
 	_, err = auth.VerificarMFA(ctx, autenticacao.EntradaVerificarMFA{DesafioID: r.DesafioMFA.DesafioID,
-		Codigo: codigoTOTP(t, cfg.SegredoBase32, time.Now())})
+		Codigo: codigoTOTP(t, cfg.SegredoBase32, time.Now().Add(30*time.Second))})
 	exigirErro(t, err, erros.CredencialInvalida) // desafio é de uso único
 }
 
@@ -426,6 +428,18 @@ func TestOAuthApp(t *testing.T) {
 	// Reuso do antigo: a família inteira cai, inclusive o novo.
 	_, err = auth.Renovar(ctx, tok.RefreshToken, "tenaz-app")
 	exigirErro(t, err, erros.CredencialInvalida)
+	// Todos os tokens da família (o reapresentado e o sucessor) ficam com
+	// revogado_em, e a sessão do aparelho, com revogada_em, logo no reuso.
+	var total, vivos int
+	var sessaoRevogada bool
+	if err := amb.Migrador.QueryRow(context.Background(), `SELECT count(*), count(*) FILTER (WHERE revogado_em IS NULL),
+  (SELECT revogada_em IS NOT NULL FROM plataforma.sessao WHERE id = $1)
+FROM plataforma.token_renovacao WHERE familia_id = $1`, tok.SessaoID).Scan(&total, &vivos, &sessaoRevogada); err != nil {
+		t.Fatal(err)
+	}
+	if total != 2 || vivos != 0 || !sessaoRevogada {
+		t.Fatalf("reuso: %d tokens na família, %d sem revogado_em, sessão revogada %v", total, vivos, sessaoRevogada)
+	}
 	_, err = auth.Renovar(ctx, novo.RefreshToken, "tenaz-app")
 	exigirErro(t, err, erros.CredencialInvalida)
 	_, err = auth.AutenticarApp(ctx, novo.AccessToken)

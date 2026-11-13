@@ -1,7 +1,7 @@
 # Arquitetura de Banco de Dados — Tenaz
 
-**Versão:** 0.5 · **Data:** 12/11/2026 · **Status:** Em elaboração
-**Alinhado ao sumário executivo 0.6**
+**Versão:** 0.6 · **Data:** 13/11/2026 · **Status:** Em elaboração
+**Alinhado ao sumário executivo 0.7**
 **Produto:** Tenaz · Gestão de Manutenção e Frota
 **SGBD:** PostgreSQL 16 ou superior (recomendado 18) · **Acesso:** Go com pgx v5 e sqlc (SQL explícito, sem ORM)
 
@@ -15,7 +15,9 @@ A versão 0.3 inclui o módulo **SRV** (gestão de serviços do prestador, MVP):
 
 **Mudanças da versão 0.5** (etapa E01, sumário 0.6, migrações `00003` a `00005`): tabelas de autenticação no esquema `plataforma` — `sessao` (campo `canal`), `token_renovacao` (família = sessão do app), `codigo_autorizacao` (PKCE S256), `desafio_mfa` e `token_email` (campo `finalidade`) —, com privilégio por coluna e FK composta para `app.usuario`, e os campos `identidade.falhas_login`, `bloqueada_ate` e `mfa_ativado_em` (5.1); calendário da unidade em `turno_unidade` e `feriado_unidade` (5.1); `acesso_empresa` mantida só por trigger `SECURITY DEFINER`, sem escrita da aplicação; `app.tg_padrao_empresa()` para as colunas padrão da empresa; `escopo_externo` da empresa, da unidade, da pessoa e do usuário, com a policy `escopo_externo_exclusao` que impede escopo de leitura de apagar (2.9.4); `evento_auditoria` particionada por função própria, `plataforma.criar_particoes_mensais()`, sem `pg_partman`, com partição padrão e partições sem privilégio e com RLS forçado (9.5); coluna `ocorrido_no_dispositivo_em` e contexto opcional de token, aparelho e navegador na auditoria (9.2, 9.3); `usuario_permissao` (permissão avulsa), `perfil.perfil_origem` e a lista `app.permissoes_vedadas_externo()`, com os CHECKs e triggers que impedem permissão vedada a usuário externo, também por perfil personalizado derivado (5.1); `usuario.situacao` com `convidado`, `ativo`, `inativo` (sumário 3.6); correções da revisão de isolamento ISO-E01-01 a 06 (17.3), com o papel `tenaz_autenticacao` do [ADR-011 do documento 5](5_ARQUITETURA_SOFTWARE.md#adr-011--papel-de-banco-próprio-para-as-credenciais-de-autenticação) como único a alcançar as tabelas de credencial, auditoria de login contida pela policy `autenticacao_identidade`, revogação das sessões no trigger de `acesso_empresa` e purga por `plataforma.purgar_credenciais_vencidas()`; pendências do backend: `evento_auditoria.escopo` (RF-ADM-011), `identidade.mfa_ultimo_passo` contra reuso de TOTP, `uq_usuario_perfil` parcial e formato de permissão com dígito; evento de autenticação vedado a `tenaz_app`, `tenaz_job` e `tenaz_sinc` (ISO-E01-07); `preparar_tabela` recusa tabela que não seja de `tenaz_dono` (4.5); `USAGE` no esquema `public` devolvido aos papéis do sistema (2.2); `CASE` entre parênteses em `app.conferir_escopo()` (2.9.3). Pendências da etapa na seção 17.3.
 
-Os itens marcados como **Proposta** são decisões de projeto ainda não validadas em implementação e podem mudar até a versão 1.0. Segurança, backup e recuperação de desastre aparecem aqui em alto nível; o detalhe fica em [9_SEGURANCA_CONFIABILIDADE.md](9_SEGURANCA_CONFIABILIDADE.md).
+**Mudanças da versão 0.6** (sumário 0.7, seção 3.6, linha "Dados de saúde"; migração `00006_remove_saude`): **a Tenaz não guarda dado de saúde**. Saem a função `app.pode_ler_saude()`, a variável `app.saude` do `NaEmpresa`, o CHECK `ck_perfil_saude`, a permissão `pessoa.saude.ler` (da lista de vedadas a externo e da exceção ao formato de permissão, que deixa de existir), o campo `dado_sensivel` de `tipo_documento` e `documento_vencimento`, a policy restritiva de saúde e a regra de alertas com `app.saude` (5.10); D13 fica sem objeto. A seção 2.8 acompanha a suíte de vazamento (consultas 6, 6-b e 8-b, regra das consultas sqlc, prova da chamada de `app.conferir_escopo()`).
+
+Os itens marcados **Proposta** são decisões de projeto ainda não validadas em implementação e podem mudar até a versão 1.0. Segurança, backup e recuperação de desastre aparecem aqui em alto nível; o detalhe fica em [9_SEGURANCA_CONFIABILIDADE.md](9_SEGURANCA_CONFIABILIDADE.md).
 
 ---
 
@@ -304,13 +306,16 @@ type Contexto struct {
 	ConexaoID    uuid.UUID // só no pool do sincronizador (seção 2.10); uuid.Nil nos demais
 	IP           string
 	RequestID    string
+	UserAgent    string
+	TokenAPIID   uuid.UUID // requisição por token de API; uuid.Nil nas demais
+	DispositivoID uuid.UUID // comando do app
+	OcorridoNoDispositivoEm *time.Time // instante do aparelho, na ação offline (RF-ADM-011)
 	// Escopo dentro da empresa (seção 2.9). Vem da sessão autenticada,
 	// nunca de parâmetro da requisição.
 	Escopo       string    // interno, prestador, locatario, link
 	FornecedorID uuid.UUID // escopo prestador
 	LocatarioID  uuid.UUID // escopo locatario
 	LinkHash     []byte    // escopo link: sha256 do segredo apresentado
-	PodeLerSaude bool      // permissão pessoa.saude.ler
 }
 
 // NaEmpresa abre uma transação, fixa o contexto com set_config(..., true)
@@ -334,25 +339,30 @@ func (b *Banco) NaEmpresa(ctx context.Context, c Contexto, opts pgx.TxOptions,
 		return ErrConexaoInvalida
 	}
 	return pgx.BeginTxFunc(ctx, b.pool, opts, func(tx pgx.Tx) error {
-		// pgx.Batch: os dois comandos vão numa única ida ao banco
+		// pgx.Batch: os comandos vão numa única ida ao banco. As 14 variáveis abaixo são
+		// as de backend/internal/plataforma/db/db.go; app.saude não existe mais (00006).
 		lote := &pgx.Batch{}
 		lote.Queue(`
-			SELECT set_config('app.empresa_id',    $1, true),
-			       set_config('app.usuario_id',    $2, true),
-			       set_config('app.ator_tipo',     $3, true),
-			       set_config('app.origem',        $4, true),
-			       set_config('app.ip',            $5, true),
-			       set_config('app.request_id',    $6, true),
-			       set_config('app.escopo',        $7, true),
-			       set_config('app.fornecedor_id', $8, true),
-			       set_config('app.locatario_id',  $9, true),
-			       set_config('app.link_hash',     $10, true),
-			       set_config('app.saude',         $11, true),
-			       set_config('app.conexao_empresa_id',    $12, true)`,
-			c.EmpresaID.String(), textoOuVazio(c.UsuarioID),
-			c.AtorTipo, c.Origem, c.IP, c.RequestID,
-			c.Escopo, textoOuVazio(c.FornecedorID), textoOuVazio(c.LocatarioID),
-			hexOuVazio(c.LinkHash), simNao(c.PodeLerSaude), textoOuVazio(c.ConexaoID))
+			SELECT set_config('app.empresa_id',                 $1,  true),
+			       set_config('app.escopo',                     $2,  true),
+			       set_config('app.usuario_id',                 $3,  true),
+			       set_config('app.fornecedor_id',              $4,  true),
+			       set_config('app.locatario_id',               $5,  true),
+			       set_config('app.link_hash',                  $6,  true),
+			       set_config('app.ator_tipo',                  $7,  true),
+			       set_config('app.origem',                     $8,  true),
+			       set_config('app.ip',                         $9,  true),
+			       set_config('app.request_id',                 $10, true),
+			       set_config('app.user_agent',                 $11, true),
+			       set_config('app.token_api_id',               $12, true),
+			       set_config('app.dispositivo_id',             $13, true),
+			       set_config('app.ocorrido_no_dispositivo_em', $14, true)`,
+			c.EmpresaID.String(), c.Escopo, textoOuVazio(c.UsuarioID),
+			textoOuVazio(c.FornecedorID), textoOuVazio(c.LocatarioID), hexOuVazio(c.LinkHash),
+			c.AtorTipo, c.Origem, c.IP, c.RequestID, c.UserAgent,
+			textoOuVazio(c.TokenAPIID), textoOuVazio(c.DispositivoID), instanteOuVazio(c.OcorridoNoDispositivoEm))
+		// Só o pool do sincronizador (E04, ainda não implementado) define a 15ª variável,
+		// app.conexao_empresa_id, no mesmo lote (seção 2.10).
 		// confere o escopo contra o cadastro do usuário (seção 2.9.3)
 		lote.Queue(`SELECT app.conferir_escopo()`)
 		// no sincronizador, confere que a empresa é parte da conexão (seção 2.10.3)
@@ -376,7 +386,7 @@ Regras:
 - A réplica de leitura usa um segundo pool (`poolLeitura`) com o mesmo helper e `AccessMode: pgx.ReadOnly`.
 - As credenciais de login usam outro pool, `poolAutenticacao`, conectado como `tenaz_autenticacao_conexao` (papel `tenaz_autenticacao`), só no modo `tenaz api` e só pelo pacote de autenticação ([ADR-011 do documento 5](5_ARQUITETURA_SOFTWARE.md#adr-011--papel-de-banco-próprio-para-as-credenciais-de-autenticação); documento 5, seção 6.9). Ele **não** usa o `NaEmpresa` nem chama `app.conferir_escopo()`: abre transação sem empresa, para achar a credencial por hash, e-mail ou id, ou na trilha de uma empresa, definindo só `app.empresa_id`, `app.origem`, `app.ip`, `app.user_agent` e `app.request_id`, para gravar o evento de login junto da mudança de credencial (seção 9.1). Recusa ser chamado dentro de uma transação do `NaEmpresa`, e nunca há empresa de negócio e credencial na mesma transação.
 - O sincronizador entre contas usa um terceiro pool (`poolSincronizacao`), conectado como `tenaz_sinc_conexao` (papel `tenaz_sinc`), com o mesmo helper. Ele é o único que define `app.conexao_empresa_id` (seção 2.10).
-- Contexto opcional da auditoria, lido por `app.tg_auditar()` (seção 9.3) e gravado como nulo quando ausente: `app.token_api_id` (requisição por token de API), `app.dispositivo_id` e `app.ocorrido_no_dispositivo_em` (comando do app, com o instante do aparelho, RF-ADM-011) e `app.user_agent`. Entram no mesmo lote do `set_config`, com o mesmo `is_local = true`.
+- O `NaEmpresa` fixa 14 variáveis, todas com `is_local = true`, no mesmo lote: `app.empresa_id`, `app.escopo`, `app.usuario_id`, `app.fornecedor_id`, `app.locatario_id`, `app.link_hash`, `app.ator_tipo`, `app.origem`, `app.ip`, `app.request_id` e as de contexto da auditoria, lidas por `app.tg_auditar()` (seção 9.3) e gravadas como nulo quando vazias: `app.user_agent`, `app.token_api_id` (requisição por token de API), `app.dispositivo_id` e `app.ocorrido_no_dispositivo_em` (comando do app, com o instante do aparelho, RF-ADM-011). `app.saude` deixou de existir (sumário 0.7, 3.6; migração `00006`). `app.conexao_empresa_id` é só do pool do sincronizador, em E04.
 - As consultas sqlc repetem o filtro, por defesa em profundidade e para o planejador:
 
 ```sql
@@ -448,16 +458,18 @@ O sumário fixa a meta "zero vazamento em testes automatizados a cada build" (ri
 | 3-b | As relações de membro de e para os papéis de execução são exatamente as de `relacoes_de_membro.txt`, com as opções `INHERIT` e `SET`; fica de fora só a concessão pura de `ADMIN`, que o PostgreSQL 16+ dá a quem cria o papel sem ser superusuário e que não transfere privilégio |
 | 4 | Toda partição tem RLS habilitado e forçado, nenhuma policy permissiva, nenhum privilégio de papel da aplicação (`SELECT`, `INSERT`, `UPDATE`, `DELETE`, `TRUNCATE`, `REFERENCES`, `TRIGGER`) e todos os triggers do pai |
 | 5 | Em todo esquema que não seja de sistema: nenhuma view sem `security_invoker` e nenhuma view materializada |
-| 6 | Toda função `SECURITY DEFINER` está em `funcoes_security_definer.txt`, com os executores aprovados ali, `search_path` exatamente `pg_catalog, pg_temp` e sem `EXECUTE` para `PUBLIC` |
+| 6 | Nenhuma função `SECURITY DEFINER`, em esquema nenhum que não seja do sistema — sem exceção para membros de extensão —, fora da lista aprovada `funcoes_security_definer.txt`; toda função da lista com `search_path` exatamente `pg_catalog, pg_temp`, sem `EXECUTE` para `PUBLIC` e com os executores da lista. Nomes sempre qualificados pelo esquema, inclusive `public` |
+| 6-b | Nenhuma função fora de `app` e `plataforma`, exceto as que pertencem a uma extensão de `extensoes.txt` |
+| 6-c | Extensões: só as de `extensoes.txt`, cada uma com versão, número de funções e md5 de assinatura, `SECURITY DEFINER`, linguagem e corpo de cada função. Uma função anexada a uma extensão (`ALTER EXTENSION ... ADD FUNCTION`) muda a impressão e quebra o build |
 | 7 | Nenhuma unicidade em `app` sem `empresa_id` como primeira coluna (salvo `app.empresa`) |
-| 8-b | `privilegios.txt` descreve, nos dois sentidos, todo privilégio em objeto fora de `app` concedido a papel `tenaz_*` ou a `PUBLIC`, todo privilégio do sincronizador, da autenticação e de `tenaz_credencial` em qualquer objeto, e os privilégios de esquema. Privilégio a mais alarga a superfície; a menos, a lista deixou de descrever o banco |
+| 8-b | `privilegios.txt` descreve, nos dois sentidos, todo privilégio em objeto fora de `app` concedido a papel `tenaz_*` ou a `PUBLIC`, todo privilégio do sincronizador, da autenticação e de `tenaz_credencial` em qualquer objeto, os privilégios de esquema e os privilégios padrão (`pg_default_acl`), como `padrao:<dono>:<esquema>:<tabelas|funcoes|sequencias|tipos|esquemas>`. Privilégio a mais alarga a superfície; a menos, a lista deixou de descrever o banco |
 | 9 | Dono `tenaz_dono` em todo objeto de `app` e `plataforma`, exceto as sete tabelas de credencial (com os índices e os tipos de linha delas) e as funções `plataforma.tg_acesso_empresa()` e `plataforma.purgar_credenciais_vencidas()`, de dono `tenaz_credencial` (ISO-E01-08). Tabela de `plataforma` sem RLS e de dono `tenaz_dono` só pode ser da classe `catalogo` ou `controle` |
 | 10 | Nenhum papel da aplicação tem `TRUNCATE`, `TRIGGER`, `REFERENCES` nem `CREATE` em esquema nenhum |
 | 11 | O acesso de escopo externo, por comando, é exatamente o de `tabelas_acesso_externo.txt`: a suíte calcula das policies quais comandos de cada tabela não estão travados por uma restritiva `app.escopo_interno()` para o `tenaz_app` |
 
 Toda consulta tem prova de detector numa transação desfeita: a suíte cria de propósito o defeito que a consulta procura e exige que ela o acuse. Achado demonstrado e devolvido ao dono da migração fica em `achadosAbertos`: falha no CI e mantém o portão de isolamento vermelho; quando o defeito some, o teste pede a retirada do item.
 
-As seis listas versionadas, com revisão de código obrigatória pelo `tenaz-isolamento`: `tabelas_globais.txt` (com classe), `excecoes_cobertura.txt`, `tabelas_acesso_externo.txt`, `funcoes_security_definer.txt`, `privilegios.txt` e `relacoes_de_membro.txt`.
+As sete listas versionadas, com revisão de código obrigatória pelo `tenaz-isolamento`: `tabelas_globais.txt` (com classe), `excecoes_cobertura.txt`, `tabelas_acesso_externo.txt`, `funcoes_security_definer.txt`, `privilegios.txt`, `relacoes_de_membro.txt` e `extensoes.txt`.
 
 **Parte 2: dados.** Um gerador de fixtures cria as empresas A e B com pelo menos uma linha em **cada** tabela de `app` (o teste falha se alguma tabela ficar vazia, o que obriga a manter o gerador junto com as migrações); as credenciais são gravadas pelo `tenaz_autenticacao`, como no serviço. A tabela de verificações abaixo é gerada do catálogo, tabela a tabela, para `tenaz_app`, `tenaz_job` e `tenaz_leitura`:
 
@@ -471,6 +483,13 @@ As seis listas versionadas, com revisão de código obrigatória pelo `tenaz-iso
 | Contexto A: `INSERT` de cópia de uma linha de B | Recusa de policy (row-level security, `42501`) para quem tem `INSERT`; falta de privilégio (`42501`) para quem não tem |
 | Contexto A: `INSERT` com `empresa_id = A` e FK apontando para linha de B | Erro `23503` (FK composta) |
 | Contexto que não vaza no pool | Provado com o `db.NaEmpresa` real e um pool de uma conexão: depois do `COMMIT`, e também depois de transação abortada, a mesma conexão física sem novo contexto vê 0 linhas |
+| Escopo desmentido pelo cadastro | `db.NaEmpresa` com escopo que `Escopo.Valido()` aceita e o cadastro desmente (usuário de F1 com o fornecedor F2) é recusado antes do caso de uso: prova de que `app.conferir_escopo()` é chamada |
+
+`app.conferir_escopo()` é testada como `tenaz_app` e `tenaz_job`, nunca como superusuário. Toda prova de detector e todo objeto de teste vivem numa transação desfeita. A prova roda numa transação desfeita e prefere objetos próprios da transação. Quando precisa alterar objeto real (policy, dono, trigger, privilégio), pega a trava com `lock_timeout` de 1 s e repete em `55P03` ou `40P01` (até 8 tentativas, cada uma num savepoint desfeito; helper `estragar` de `cobertura_test.go`), para não travar nem ser derrubada por outro pacote quando todos usam o mesmo banco (`tarefas.sh testar-rapido`).
+
+**Consultas sqlc.** Toda consulta sqlc de `backend/internal`, lida sem comentários nem literais de texto, que cite tabela de cliente: sem nome entre aspas e sem tabela de cliente sem esquema; em `SELECT`, `UPDATE` e `DELETE`, todo `WHERE` do nível de cima (subconsulta não conta) tem `empresa_id = sqlc.arg(empresa_id)` (com ou sem alias) como conjunção `AND` e nenhum `OR` no nível de cima; no `INSERT`, `empresa_id` na lista de colunas e o parâmetro `sqlc.arg(empresa_id)`; para `app.empresa`, `id = sqlc.arg(id)`. A verificação é por consulta, não por tabela da junção (limite registrado, até E02; seção 17.3, E01-17).
+
+**Sem dado de saúde.** Nenhuma tabela, coluna, função, constraint nem policy com `saude` no nome ou na definição, em `app` e `plataforma`; nenhuma função lê `app.saude`; `pessoa.saude.ler` é recusada pelo `ck_usuario_permissao_formato` (sumário 0.7, 3.6; migração `00006`).
 
 **Parte 3: API.** Para cada rota da API v1, o teste chama a rota com o token de A usando IDs de B. O esperado é `404`, nunca `403`, para não confirmar que o ID existe. **Pendente**: dono `tenaz-isolamento`, antes do aceite de E01.
 
@@ -522,11 +541,6 @@ AS $$ SELECT nullif(current_setting('app.locatario_id', true), '')::uuid $$;
 CREATE FUNCTION app.link_hash_atual() RETURNS bytea
   LANGUAGE sql STABLE PARALLEL SAFE
 AS $$ SELECT decode(nullif(current_setting('app.link_hash', true), ''), 'hex') $$;
-
--- permissão pessoa.saude.ler (dados de saúde, seção 5.10)
-CREATE FUNCTION app.pode_ler_saude() RETURNS boolean
-  LANGUAGE sql STABLE PARALLEL SAFE
-AS $$ SELECT coalesce(current_setting('app.saude', true), '') = 'sim' $$;
 
 CREATE FUNCTION app.escopo_interno() RETURNS boolean
   LANGUAGE sql STABLE PARALLEL SAFE
@@ -1061,7 +1075,7 @@ A carga é montada na origem só com os campos dos grupos ligados e conferida de
 | `registro_nr12` | subcontratada → cliente | Campos do item 12.11.2, como rascunho do `registro_nr12` do cliente | Não | Sim |
 | `valores` | subcontratada → cliente | `servico_os.preco_referencia` e `material_os.custo_unitario`; no cliente, viram custo de terceiros previsto | Não | Não |
 
-Nunca atravessam, qualquer que seja a configuração: custos internos, `valor_aquisicao`, `valor_reposicao`, `centro_custo`, `responsavel_custo`, `custo_hora`, usuários, perfis e permissões, CPF, contatos pessoais, documentos, capacitações e dados de saúde de técnicos, OS do ativo não vinculadas, dados de outros clientes da subcontratada e o filtro de ativos compartilhados do cliente.
+Nunca atravessam, qualquer que seja a configuração: custos internos, `valor_aquisicao`, `valor_reposicao`, `centro_custo`, `responsavel_custo`, `custo_hora`, usuários, perfis e permissões, CPF, contatos pessoais, documentos e capacitações de técnicos, OS do ativo não vinculadas, dados de outros clientes da subcontratada e o filtro de ativos compartilhados do cliente.
 
 **Configuração por segmento: fora da lista no lançamento** (sumário 3.6 e 3.7). Nenhum dos 15 grupos contém, e o `tenaz_sinc` não recebe privilégio de tabela nem de coluna em:
 
@@ -1726,7 +1740,6 @@ erDiagram
         uuid tipo_documento_id FK
         uuid ativo_id FK
         uuid pessoa_id FK
-        boolean dado_sensivel
         date valido_ate
     }
     bloqueio_ativo {
@@ -2262,8 +2275,8 @@ CREATE FUNCTION app.usuario_atual() RETURNS uuid
   LANGUAGE sql STABLE PARALLEL SAFE
 AS $$ SELECT nullif(current_setting('app.usuario_id', true), '')::uuid $$;
 
--- Funções de escopo externo e de dados de saúde: app.escopo_atual(), app.escopo_interno(),
--- app.fornecedor_atual(), app.locatario_atual(), app.link_hash_atual(), app.pode_ler_saude()
+-- Funções de escopo externo: app.escopo_atual(), app.escopo_interno(),
+-- app.fornecedor_atual(), app.locatario_atual(), app.link_hash_atual()
 -- e app.conferir_escopo(), na mesma migração (definições na seção 2.9).
 -- Conexão entre contas: app.conexao_atual() e as funções seguras de plataforma (seção 2.10.3).
 ```
@@ -2588,13 +2601,14 @@ GRANT USAGE ON SCHEMA plataforma TO tenaz_app, tenaz_job;
 
 -- Pessoa: colaborador ou terceiro que executa, conduz ou responde por algo
 -- (técnico, motorista, condutor eventual, técnico de fornecedor, PLH). Pode ou não ter usuário.
--- Documentos pessoais (CNH, ASO), capacitações e dados de saúde ligam-se à pessoa, nunca ao usuário.
+-- Documentos pessoais (CNH e outros) e capacitações ligam-se à pessoa, nunca ao usuário.
+-- A Tenaz não guarda dado de saúde da pessoa (sumário 0.7, 3.6).
 CREATE TABLE app.pessoa (
   empresa_id          uuid    NOT NULL,
   id                  uuid    NOT NULL DEFAULT app.uuid_v7(),
   nome                text    NOT NULL,
   cpf                 char(11),               -- dado pessoal (LGPD); visível só a perfis autorizados
-  data_nascimento     date,                   -- dado pessoal; usado em CNH e ASO
+  data_nascimento     date,                   -- dado pessoal; usado na CNH
   matricula           text,
   cargo               text,
   telefone            text,
@@ -2685,8 +2699,7 @@ CREATE TABLE app.perfil (
   CONSTRAINT ck_perfil_padrao CHECK (NOT padrao OR codigo IN
     ('administrador', 'gestor', 'planejador', 'tecnico', 'almoxarife', 'comprador', 'plh', 'motorista',
      'solicitante', 'visualizador', 'prestador', 'locatario')),
-  -- dados de saúde ficam fora de todo perfil padrão (sumário 3.1)
-  CONSTRAINT ck_perfil_saude CHECK (NOT padrao OR NOT ('pessoa.saude.ler' = ANY (permissoes))),
+  -- ck_perfil_saude existiu na 00004 e saiu na 00006: a Tenaz não guarda dado de saúde (sumário 0.7, 3.6)
   -- a liberação de OS nunca é dada a usuário externo (sumário 3.6)
   CONSTRAINT ck_perfil_origem CHECK (perfil_origem IN
     ('administrador', 'gestor', 'planejador', 'tecnico', 'almoxarife', 'comprador', 'plh', 'motorista',
@@ -2724,7 +2737,7 @@ CREATE TRIGGER trg_perfil_tipo BEFORE UPDATE OF codigo, perfil_origem, padrao ON
 -- AS $$ SELECT ARRAY['os.encerrar',
 --   'adm.gerenciar_regras', 'adm.gerenciar_configuracao', 'atv.colocar_em_operacao',
 --   'prj.gerenciar', 'prj.dispensar_etapa', 'prj.ajustar_medicao', 'ctr.gerenciar', 'ctr.fechar_medicao',
---   'ctr.reabrir_medicao', 'srv.gerenciar_conexao', 'pessoa.saude.ler',
+--   'ctr.reabrir_medicao', 'srv.gerenciar_conexao',     -- 'pessoa.saude.ler' saiu na 00006
 --   -- grupo Admin do catálogo de RF-ADM-005
 --   'adm.gerenciar_empresa', 'adm.gerenciar_plano', 'adm.gerenciar_usuarios', 'adm.gerenciar_perfis',
 --   'adm.gerenciar_parametros', 'adm.ler_auditoria', 'adm.gerenciar_sso', 'adm.exportar',
@@ -2805,7 +2818,7 @@ BEGIN
                  WHERE up.empresa_id = NEW.empresa_id AND up.usuario_id = NEW.id AND up.excluido_em IS NULL) THEN
     RAISE EXCEPTION 'o usuário tem perfis; o vínculo externo não pode mudar' USING ERRCODE = '23514';
   END IF;
-  -- interno com permissão avulsa vedada (ex.: pessoa.saude.ler) não vira externo
+  -- interno com permissão avulsa vedada (ex.: os.encerrar) não vira externo
   IF (NEW.fornecedor_id IS NOT NULL OR NEW.locatario_id IS NOT NULL)
      AND (NEW.fornecedor_id IS DISTINCT FROM OLD.fornecedor_id OR NEW.locatario_id IS DISTINCT FROM OLD.locatario_id)
      AND EXISTS (SELECT 1 FROM app.usuario_permissao pu
@@ -2837,23 +2850,22 @@ $$;
 CREATE TRIGGER trg_usuario_colunas_externo BEFORE UPDATE ON app.usuario
   FOR EACH ROW EXECUTE FUNCTION app.tg_usuario_colunas_externo();
 
--- Permissão avulsa concedida a um usuário (RF-ADM-005; sumário 3.2 e 3.6), como pessoa.saude.ler.
+-- Permissão avulsa concedida a um usuário (RF-ADM-005; sumário 3.2 e 3.6), como os.encerrar para quem não é gestor.
 -- Auditada: cada concessão e retirada é evento (RF-ADM-011). Retirar é exclusão lógica.
 -- O formato é conferido aqui; a existência do código no catálogo de RF-ADM-005, no Go.
 CREATE TABLE app.usuario_permissao (
   empresa_id  uuid NOT NULL,
   id          uuid NOT NULL DEFAULT app.uuid_v7(),
   usuario_id  uuid NOT NULL,
-  permissao   text NOT NULL,                -- <módulo>.<ação>; exceção aceita: pessoa.saude.ler
+  permissao   text NOT NULL,                -- <módulo>.<ação>, sem exceção (00006)
   versao bigint NOT NULL DEFAULT 1, alterado_xid xid8 NOT NULL DEFAULT pg_current_xact_id(),
   criado_em timestamptz NOT NULL DEFAULT now(), criado_por uuid,
   atualizado_em timestamptz NOT NULL DEFAULT now(), atualizado_por uuid, excluido_em timestamptz,
   CONSTRAINT pk_usuario_permissao PRIMARY KEY (empresa_id, id),
   CONSTRAINT fk_usuario_permissao_usuario FOREIGN KEY (empresa_id, usuario_id) REFERENCES app.usuario (empresa_id, id),
-  -- a ação começa por letra e aceita dígito depois dela (con.gerenciar_nr13); os 117 códigos do
-  -- catálogo de RF-ADM-005 passam neste padrão
-  CONSTRAINT ck_usuario_permissao_formato CHECK (permissao ~ '^[a-z]{2,3}\.[a-z][a-z0-9_]*[a-z0-9]$'
-                                                 OR permissao = 'pessoa.saude.ler')
+  -- a ação começa por letra e aceita dígito depois dela (con.gerenciar_nr13); os 116 códigos do
+  -- catálogo de RF-ADM-005 passam neste padrão; a exceção pessoa.saude.ler saiu na 00006
+  CONSTRAINT ck_usuario_permissao_formato CHECK (permissao ~ '^[a-z]{2,3}\.[a-z][a-z0-9_]*[a-z0-9]$')
 );
 -- uma concessão ativa por usuário e permissão; também o índice da leitura a cada requisição
 CREATE UNIQUE INDEX uq_usuario_permissao ON app.usuario_permissao (empresa_id, usuario_id, permissao)
@@ -2887,7 +2899,7 @@ CREATE TRIGGER trg_usuario_permissao_externo BEFORE INSERT OR UPDATE ON app.usua
   FOR EACH ROW EXECUTE FUNCTION app.tg_usuario_permissao_externo();
 ```
 
-**Permissões vedadas a usuário externo, no banco.** O catálogo de RF-ADM-005 (documento 1) é a lista completa e vive no Go; o banco guarda só o invariante barato: o usuário `prestador` ou `locatario` nunca recebe `os.encerrar`, as nove permissões da configuração, de PRJ e de CTR, `srv.gerenciar_conexao`, `pessoa.saude.ler` nem permissão do grupo Admin. São três barreiras, sobre a mesma lista `app.permissoes_vedadas_externo()`: `ck_perfil_externo_vedadas` (e `ck_perfil_externo_encerrar`, a do sumário) no perfil cuja origem é externa; `trg_usuario_permissao_externo` na permissão avulsa; e `trg_usuario_vinculo`, que impede um interno com permissão avulsa vedada de virar externo. A lista é `IMMUTABLE` para caber em `CHECK`; mudá-la é `CREATE OR REPLACE` mais a recriação dos dois CHECKs com `NOT VALID` e `VALIDATE`, porque um `CHECK` não reconfere sozinho as linhas antigas.
+**Permissões vedadas a usuário externo, no banco.** O catálogo de RF-ADM-005 (documento 1) é a lista completa e vive no Go; o banco guarda só o invariante barato: o usuário `prestador` ou `locatario` nunca recebe `os.encerrar`, as nove permissões da configuração, de PRJ e de CTR, `srv.gerenciar_conexao` nem permissão do grupo Admin. São três barreiras, sobre a mesma lista `app.permissoes_vedadas_externo()`: `ck_perfil_externo_vedadas` (e `ck_perfil_externo_encerrar`, a do sumário) no perfil cuja origem é externa; `trg_usuario_permissao_externo` na permissão avulsa; e `trg_usuario_vinculo`, que impede um interno com permissão avulsa vedada de virar externo. A lista é `IMMUTABLE` para caber em `CHECK`; mudá-la é `CREATE OR REPLACE` mais a recriação dos dois CHECKs com `NOT VALID` e `VALIDATE`, porque um `CHECK` não reconfere sozinho as linhas antigas.
 
 **Perfil derivado de externo.** `perfil.perfil_origem` diz de que perfil padrão um perfil deriva (no padrão, o próprio código, `ck_perfil_padrao_origem`). Externo é o perfil com `coalesce(perfil_origem, codigo)` em `prestador` ou `locatario`: assim `ck_perfil_externo_encerrar`, `ck_perfil_externo_vedadas` e `trg_usuario_perfil_externo` pegam também o perfil personalizado derivado de `prestador` ou `locatario` (Fase 2), que o código sozinho não revela. A regra "derivado só contém permissões do conjunto padrão da origem" (RF-ADM-005, proposta) fica no Go, porque depende do catálogo inteiro.
 
@@ -2898,11 +2910,11 @@ Base de cobrança (sumário 2.1), contada pelo job de cobrança, empresa por emp
 - **Técnico cobrado:** usuário em situação `ativo` com o perfil `tecnico`, mais o usuário ativo com o perfil `prestador` (que executa OS). O link de uso único não tem usuário e não conta. O técnico de uma subcontratada com conta própria não é usuário do cliente e não conta no cliente; conta na conta da subcontratada (plano Serviços, sumário 2.2), onde `gestor` e `planejador` sem perfil `tecnico` não pagam.
 - **Veículo cobrado:** ativo do tipo `veiculo` com `propriedade <> 'de_cliente'`, `status_operacional <> 'inativo'` e `excluido_em IS NULL`. Equipamento ou veículo de cliente atendido, na conta da subcontratada, não é cobrado. Veículo `em_implantacao` tem status `inativo` (`ck_ativo_fase_status`, seção 5.2) e, portanto, também não é cobrado até a entrada em operação.
 
-A liberação (encerramento) de OS é a permissão `os.encerrar`, presente por padrão nos perfis `gestor` e `planejador` e nunca em `prestador` nem `locatario`. As permissões seguem o formato `<módulo>.<ação>`; `pessoa.saude.ler` é a exceção já aceita. O destino de peça com defeito (conserto, sucata ou devolução) exige `est.decidir_destino`, padrão em `gestor`, `planejador` e `almoxarife` (seção 13.9). A leitura de dados de saúde é a permissão `pessoa.saude.ler`, que nenhum perfil padrão tem (`ck_perfil_saude`); o administrador a concede usuário a usuário, como permissão avulsa em `usuario_permissao`, com registro na auditoria (RF-ADM-005), ou num perfil personalizado. O helper `NaEmpresa` repassa essa permissão ao banco (`app.saude`), e as policies da seção 5.10 escondem os documentos sensíveis de quem não a tem.
+A liberação (encerramento) de OS é a permissão `os.encerrar`, presente por padrão nos perfis `gestor` e `planejador` e nunca em `prestador` nem `locatario`. As permissões seguem o formato `<módulo>.<ação>`, sem exceção. O destino de peça com defeito (conserto, sucata ou devolução) exige `est.decidir_destino`, padrão em `gestor`, `planejador` e `almoxarife` (seção 13.9). A Tenaz não guarda dado de saúde (sumário 0.7, seção 3.6): a permissão `pessoa.saude.ler`, o CHECK `ck_perfil_saude`, a função `app.pode_ler_saude()` e a variável `app.saude` existiram até a migração `00005` e saíram na `00006_remove_saude`, que também apaga concessões e retira a permissão de perfis, se houver. O banco não tem dado de saúde.
 
 Permissões da configuração por segmento, de PRJ e de CTR (sumário 3.6), conferidas no Go como `os.encerrar`: `adm.gerenciar_regras` (criar, alterar e ativar `regra_automacao`), `adm.gerenciar_configuracao` (definições de `campo_extra_os` e aplicação de pacotes de segmento), `atv.colocar_em_operacao` e, na Fase 2, `prj.gerenciar` (modelos e projetos: criar, iniciar, suspender, retomar, concluir, cancelar), `prj.dispensar_etapa`, `prj.ajustar_medicao`, `ctr.gerenciar` (contratos e itens), `ctr.fechar_medicao` (fechar a medição e decidir as exclusões, `decisao_exclusao`) e `ctr.reabrir_medicao`. Padrão: `administrador` e `gestor`; `planejador` recebe também `atv.colocar_em_operacao` e `prj.gerenciar`. Nenhuma delas entra nos perfis `prestador` e `locatario`.
 
-Proposta: ao receber os perfis `tecnico`, `motorista`, `plh` ou `prestador`, o usuário é ligado a uma pessoa (o serviço cria a pessoa se ela não existir), para que CNH, ASO e capacitações tenham onde ficar. `usuario.pessoa_id` continua opcional no esquema.
+Proposta: ao receber os perfis `tecnico`, `motorista`, `plh` ou `prestador`, o usuário é ligado a uma pessoa (o serviço cria a pessoa se ela não existir), para que CNH, outros documentos pessoais e capacitações tenham onde ficar. `usuario.pessoa_id` continua opcional no esquema.
 
 ```sql
 -- Parâmetros da empresa (chave-valor tipado no Go)
@@ -5219,23 +5231,21 @@ CALL app.preparar_tabela('app.bloqueio_ativo');
 CREATE TABLE app.tipo_documento (
   empresa_id               uuid      NOT NULL,
   id                       uuid      NOT NULL DEFAULT app.uuid_v7(),
-  codigo                   text      NOT NULL,     -- 'crlv_e','cronotacografo','civ','cipp','laudo_nr13','seguro','cnh','aso','toxicologico'
+  codigo                   text      NOT NULL,     -- 'crlv_e','cronotacografo','civ','cipp','laudo_nr13','seguro','cnh'; sem tipo de saúde (sumário 0.7, 3.6)
   nome                     text      NOT NULL,
   alvo                     text      NOT NULL,
   validade_sugerida_meses  integer,                -- ex.: cronotacógrafo 24; nulo para CIV e CIPP (sempre digitada)
   antecedencias_alerta     integer[] NOT NULL DEFAULT '{60,30,7}',
   impede_despacho          boolean   NOT NULL DEFAULT false, -- vencido bloqueia o veículo (exposto ao TMS)
-  dado_sensivel            boolean   NOT NULL DEFAULT false, -- dado de saúde (ASO, toxicológico): exige pessoa.saude.ler
   situacao                 text      NOT NULL DEFAULT 'ativo',
   versao bigint NOT NULL DEFAULT 1, alterado_xid xid8 NOT NULL DEFAULT pg_current_xact_id(),
   criado_em timestamptz NOT NULL DEFAULT now(), criado_por uuid,
   atualizado_em timestamptz NOT NULL DEFAULT now(), atualizado_por uuid, excluido_em timestamptz,
   CONSTRAINT pk_tipo_documento PRIMARY KEY (empresa_id, id),
   CONSTRAINT uq_tipo_documento_codigo UNIQUE (empresa_id, codigo),
-  CONSTRAINT uq_tipo_documento_sensivel UNIQUE (empresa_id, id, alvo, dado_sensivel),   -- alvo de fk de documento_vencimento
+  CONSTRAINT uq_tipo_documento_alvo UNIQUE (empresa_id, id, alvo),   -- alvo de fk de documento_vencimento
   CONSTRAINT ck_tipo_documento_alvo CHECK (alvo IN ('ativo', 'pessoa', 'empresa')),
   CONSTRAINT ck_tipo_documento_mopp CHECK (codigo <> 'mopp'),
-  CONSTRAINT ck_tipo_documento_sensivel CHECK (NOT dado_sensivel OR alvo = 'pessoa'),
   CONSTRAINT ck_tipo_documento_validade CHECK (validade_sugerida_meses > 0),
   CONSTRAINT ck_tipo_documento_civ_cipp CHECK (codigo NOT IN ('civ', 'cipp') OR validade_sugerida_meses IS NULL),
   CONSTRAINT ck_tipo_documento_situacao CHECK (situacao IN ('ativo', 'inativo'))
@@ -5248,7 +5258,6 @@ CREATE TABLE app.documento_vencimento (
   id                     uuid      NOT NULL DEFAULT app.uuid_v7(),
   tipo_documento_id      uuid      NOT NULL,
   alvo                   text      NOT NULL,     -- cópia de tipo_documento.alvo (fk composta)
-  dado_sensivel          boolean   NOT NULL DEFAULT false,   -- cópia de tipo_documento.dado_sensivel (fk composta)
   ativo_id               uuid,
   pessoa_id              uuid,
   unidade_id             uuid,
@@ -5264,9 +5273,9 @@ CREATE TABLE app.documento_vencimento (
   criado_em timestamptz NOT NULL DEFAULT now(), criado_por uuid,
   atualizado_em timestamptz NOT NULL DEFAULT now(), atualizado_por uuid, excluido_em timestamptz,
   CONSTRAINT pk_documento_vencimento PRIMARY KEY (empresa_id, id),
-  -- a fk leva alvo e sensibilidade do tipo; mudar o tipo propaga para os documentos
-  CONSTRAINT fk_documento_tipo FOREIGN KEY (empresa_id, tipo_documento_id, alvo, dado_sensivel)
-    REFERENCES app.tipo_documento (empresa_id, id, alvo, dado_sensivel) ON UPDATE CASCADE,
+  -- a fk leva o alvo do tipo; mudar o tipo propaga para os documentos
+  CONSTRAINT fk_documento_tipo FOREIGN KEY (empresa_id, tipo_documento_id, alvo)
+    REFERENCES app.tipo_documento (empresa_id, id, alvo) ON UPDATE CASCADE,
   CONSTRAINT fk_documento_ativo FOREIGN KEY (empresa_id, ativo_id) REFERENCES app.ativo (empresa_id, id),
   CONSTRAINT fk_documento_pessoa FOREIGN KEY (empresa_id, pessoa_id) REFERENCES app.pessoa (empresa_id, id),
   CONSTRAINT fk_documento_unidade FOREIGN KEY (empresa_id, unidade_id) REFERENCES app.unidade (empresa_id, id),
@@ -5291,15 +5300,8 @@ ALTER TABLE app.bloqueio_ativo ADD CONSTRAINT fk_bloqueio_ativo_tipo_liberacao
 ALTER TABLE app.bloqueio_ativo ADD CONSTRAINT fk_bloqueio_ativo_documento_liberacao
   FOREIGN KEY (empresa_id, documento_liberacao_id) REFERENCES app.documento_vencimento (empresa_id, id);
 
--- Dados de saúde (LGPD, dado sensível): sem a permissão pessoa.saude.ler, o documento não aparece.
--- Restritiva: soma-se ao isolamento por empresa e ao escopo externo.
-CREATE POLICY saude ON app.documento_vencimento AS RESTRICTIVE
-  FOR ALL TO tenaz_app, tenaz_job, tenaz_leitura
-  USING (NOT dado_sensivel OR app.pode_ler_saude())
-  WITH CHECK (NOT dado_sensivel OR app.pode_ler_saude());
--- O mesmo vale para os anexos desses documentos (seção 10):
--- policy saude em app.anexo: entidade <> 'documento_vencimento' OR app.pode_ler_saude()
---   OR entidade_id IN (SELECT d.id FROM app.documento_vencimento d)
+-- Sem policy de dado de saúde: a Tenaz não guarda dado de saúde (sumário 0.7, 3.6). Nenhum tipo de documento
+-- é de saúde (ASO e exame toxicológico saíram do escopo), e o RLS por empresa e o escopo externo bastam.
 
 -- Situação calculada na leitura, no fuso da empresa
 CREATE VIEW app.vw_documento_situacao WITH (security_invoker = true) AS
@@ -5319,9 +5321,9 @@ JOIN app.empresa e ON e.id = d.empresa_id
 WHERE d.excluido_em IS NULL;
 ```
 
-O job diário de alertas gera uma `notificacao` por documento e antecedência (D-60, D-30, D-7 por padrão), com chave de deduplicação `documento_id + antecedência`, para não repetir o aviso, e publica o evento `documento_vencimento.vencendo`. O job roda com `app.saude = 'sim'` para alcançar os documentos sensíveis; a notificação desses documentos vai só a usuários com a permissão `pessoa.saude.ler` e não leva o tipo de exame no título.
+O job diário de alertas gera uma `notificacao` por documento e antecedência (D-60, D-30, D-7 por padrão), com chave de deduplicação `documento_id + antecedência`, para não repetir o aviso, e publica o evento `documento_vencimento.vencendo`.
 
-Documentos pessoais, CNH, ASO e capacitações ligam-se a `pessoa`. A CNH do motorista e o ASO do técnico são linhas de `documento_vencimento` com `alvo = 'pessoa'`; a pessoa pode não ter login (condutor eventual, técnico de fornecedor).
+Documentos pessoais, CNH e capacitações ligam-se a `pessoa`; dado de saúde (ASO, exame toxicológico) não é guardado (sumário 0.7, 3.6). A CNH do motorista é uma linha de `documento_vencimento` com `alvo = 'pessoa'`; a pessoa pode não ter login (condutor eventual, técnico de fornecedor).
 
 **Apto para despacho e Atenção** (sumário 3.3) não são status gravados. "Apto para despacho" é uma verificação separada: o veículo não pode ter documento vigente vencido de tipo `impede_despacho` nem `bloqueio_ativo` vigente. Um veículo `operando` pode estar impedido de despacho, e a API expõe isso ao TMS. "Atenção" é calculada sobre `operando` na consulta da tela: plano vencendo (`programacao_plano.situacao = 'proximo'` ou `'vencido'`), documento a vencer ou leitura pendente de revisão.
 
@@ -6444,12 +6446,11 @@ ALTER TABLE app.contador_documento VALIDATE CONSTRAINT ck_contador_documento_tip
 | Login, falha de login, logout, MFA | Gravado pelo próprio `tenaz_autenticacao` ([ADR-011 do documento 5](5_ARQUITETURA_SOFTWARE.md#adr-011--papel-de-banco-próprio-para-as-credenciais-de-autenticação)), com `entidade = 'identidade'`, na trilha de **cada empresa** em que a identidade tem acesso habilitado (`acesso_empresa`): o login acontece antes da escolha da empresa, e o administrador de cada uma vê as tentativas contra o seu usuário. Na empresa da sessão, o evento vai na mesma transação que cria a sessão e zera as falhas; nas demais, uma transação por empresa, que não cita as outras. Falha com e-mail inexistente não tem empresa: vai só para o log de segurança (documento 9), nunca para a trilha. O `tenaz_app` não grava evento de autenticação |
 | Troca de senha, ativação de MFA | `acao = 'alteracao'`, `entidade = 'identidade'`, `campos_alterados` com o nome do campo e sem `antes` nem `depois`, gravado pelo `tenaz_autenticacao` em cada empresa da identidade (RF-ADM-006) |
 | Exportação de dados, relatório com dado pessoal | Gravado pelo serviço |
-| Visualização de dado sensível (CPF, ASO) | Gravado pelo serviço |
+| Visualização de dado sensível (CPF completo) | `acao = 'visualizacao_sensivel'`, gravado pelo serviço |
 | Alteração de perfil ou permissão | Trigger em `usuario_perfil` e `perfil` |
 | Acesso da equipe de suporte | `ator_tipo = 'suporte_tenaz'` em todos os eventos da sessão |
 | Execução por link de uso único | `ator_tipo = 'link_execucao'`, sem usuário; o id do link vai em `entidade_chave` dos eventos da transação |
 | Sincronização entre contas conectadas (SRV) | `ator_tipo = 'sincronizacao_conexao'`, `conexao_empresa_id` e `request_id` igual ao `mensagem_id`, nas duas contas; um evento `acao = 'sincronizacao'` por grupo entregue ou recebido (seção 2.10.8) |
-| Visualização de dado de saúde (ASO, toxicológico) | `acao = 'visualizacao_sensivel'`, gravado pelo serviço para quem tem `pessoa.saude.ler` |
 | Revisão de leitura, alteração de alto volume | Gravado pelo serviço, no nível do fato |
 | Disparo de regra configurável | O próprio `disparo_regra` (sem `trg_auditoria`); os efeitos (bloqueio, solicitação) pelo `trg_auditoria`, com `ator_tipo = 'sistema'` no job e o id do disparo em `request_id` (seção 5.13) |
 | Entrada em operação do ativo | `trg_auditoria` do `UPDATE` de `colocar_em_operacao`: quem, quando, `fase_ciclo_vida` e `data_entrada_operacao` antes e depois |
@@ -6672,7 +6673,9 @@ CREATE TABLE app.selo_auditoria (
 -- RLS padrão; somente inserção (mesmo trigger de evento_auditoria).
 ```
 
-**`selo_auditoria` não entra em E01.** Entra na mesma migração do job do selo, que não faz parte de E01 (proposta: antes do primeiro release candidato, em E11; data a fixar pelo orquestrador). Criar a tabela agora deixaria uma tabela sem escritor, que a suíte de vazamento exige preencher com dados de fixture (seção 2.8, parte 2) sem que nenhum código a use. Não há perda: os eventos continuam no banco, e o primeiro cálculo do selo percorre os dias desde a primeira partição e monta a cadeia inteira. Até lá, valem as três primeiras camadas.
+No desenvolvimento, a cópia vai para o bucket `tenaz-auditoria` do SeaweedFS do compose, com bloqueio de objeto COMPLIANCE e retenção padrão de 1 dia; em produção, para o S3 com Object Lock em modo de conformidade e a retenção da trilha (seção 9.5). O formato da chave do objeto (`selo_auditoria.chave_objeto`; proposta do `tenaz-plataforma-sre`: `selos/empresas/<empresa_id>/<AAAA-MM-DD>.selo`) é decidido no desenho da auditoria configurável (seção 17.3, E01-19).
+
+**`selo_auditoria` entra em E01** (decisão do dono do produto: sumário 0.7, seção 3.6, "Trilha de auditoria configurável"; RF-ADM-011 no documento 1). A auditoria configurável, com o controle de integridade por hash e selo encadeado, faz parte da etapa; a tabela entra na migração dessa entrega, junto com o job do selo. Substitui a proposta anterior desta seção (selo em E11). O primeiro cálculo percorre os dias desde a primeira partição e monta a cadeia inteira, então os eventos gravados antes do job também ficam selados.
 
 O selo de um dia é calculado com uma hora de folga após a meia-noite UTC, para incluir transações que começaram antes da virada (`ocorrido_em` é o início da transação).
 
@@ -9425,7 +9428,7 @@ Visão em alto nível. Procedimentos, responsáveis e testes estão no documento
 | D10 | TimescaleDB ou alternativa para séries de IoT, conforme o provedor | 13.6 |
 | D11 | Método de assinatura para OS NR-12 e relatórios NR-13 (depende da pendência P1) | 5.5 |
 | D12 | Escopo do prestador, do locatário e do link por policies restritivas de RLS, com conferência do escopo contra o cadastro e filtro no repositório como segunda camada | 2.9 |
-| D13 | Dados de saúde escondidos por policy restritiva ligada à permissão `pessoa.saude.ler` | 5.10 |
+| D13 | **Sem objeto** (versão 0.6): a Tenaz não guarda dado de saúde (sumário 0.7, 3.6), e a policy e a permissão `pessoa.saude.ler` deixam de existir | 5.10 |
 | D14 | Cobertura de catálogo e de contrato de prestação em arrays de ids, sem FK | 5.8, 13.8 |
 | D15 | Estoque geral sempre calculado da soma dos almoxarifados, sem saldo geral gravado; peça serializada em uma linha com uma coluna de lugar por situação | 5.9, 13.9 |
 | D16 | Link de uso único com segredo em hash, token no fragmento da URL, sessão curta, validade máxima de 30 dias e consumo atômico por `UPDATE ... WHERE usado_em IS NULL` | 5.8 |
@@ -9446,7 +9449,7 @@ Visão em alto nível. Procedimentos, responsáveis e testes estão no documento
 | D31 | Policy restritiva `escopo_externo_exclusao` em toda tabela com leitura externa | 2.9.4 |
 | D32 | `usuario.identidade_id` imutável depois de definida | 5.1 |
 | D33 | Escopo resolvido a cada requisição a partir do cadastro, sem cópia na sessão | 2.9.2 |
-| D34 | `selo_auditoria` e `arquivo_auditoria` fora de E01, criadas com os seus jobs | 9.4, 9.5 |
+| D34 | `selo_auditoria` entra em E01, com o job do selo e a auditoria configurável (sumário 0.7, 3.6); `arquivo_auditoria` fica fora de E01 e entra com o job de arquivamento | 9.4, 9.5 |
 | D35 | Permissões vedadas a usuário externo garantidas no banco por uma lista curta `IMMUTABLE` (CHECK no perfil, trigger na permissão avulsa e no vínculo); o catálogo completo só no Go, com CHECK de formato | 5.1 |
 | D36 | `perfil.perfil_origem` define se o perfil é externo, inclusive o personalizado derivado; o tipo do perfil é imutável depois de criado | 5.1 |
 | D37 | Fora do escopo interno, o usuário altera só `nome` e `telefone` da própria linha, por trigger com lista de colunas permitidas, e não por `UPDATE` só interno | 2.9.4, 5.1 |
@@ -9456,7 +9459,7 @@ Visão em alto nível. Procedimentos, responsáveis e testes estão no documento
 | # | Pendência | Dono | Quando |
 |---|---|---|---|
 | E01-1 | FKs que esperam tabela de etapa futura: `pessoa.fornecedor_id` e `usuario.fornecedor_id` → `app.fornecedor` (E06, RF-TER-001); `usuario.locatario_id` → `app.locatario` (fase 2, LOC); `sessao.dispositivo_id` → `app.dispositivo`. Entram como `ADD CONSTRAINT ... NOT VALID` seguido de `VALIDATE CONSTRAINT` (seção 14.3), compostas com `empresa_id`. Até lá, a regra do RF-ADM-015 ("pessoa com fornecedor só se liga a usuário `prestador` daquele fornecedor") fica no serviço | `tenaz-banco-dados` | Migração de cada tabela |
-| E01-2 | `selo_auditoria` e `arquivo_auditoria` (D34): entram com o job do selo (proposta: E11) e com o job de arquivamento (antes de novembro de 2028) | `tenaz-banco-dados` com `tenaz-plataforma-sre` | Ver seções 9.4 e 9.5 |
+| E01-2 | `selo_auditoria` (D34): entra em E01, com o job do selo e a auditoria configurável (sumário 0.7, 3.6). `arquivo_auditoria`: com o job de arquivamento, antes de novembro de 2028 | `tenaz-banco-dados` com `tenaz-plataforma-sre` | E01 (selo); antes de 11/2028 (arquivo) |
 | E01-3 | **Resolvido** pelo documento 5, versão 0.6, seção 6.6: `app.escopo_id()` não é criada; as policies usam `app.fornecedor_atual()`, `app.locatario_atual()` e `app.link_hash_atual()` (seção 2.9.2), e a do link confere também que o link não está revogado, expirado nem usado | `tenaz-arquiteto` | — |
 | E01-4 | **Resolvido** (confirmado pelo `tenaz-isolamento`). Suíte de vazamento, desalinhada da seção 2.8 e acusando o desenho desta etapa: (a) a consulta de cobertura olha `relkind = 'r'` sem excluir partições e não olha o pai `'p'` — acusa as cinco partições de `evento_auditoria` e deixaria passar uma tabela particionada sem RLS; (b) `evento_auditoria` precisa de exceção versionada, por não ter `isolamento_empresa` nem `escopo_externo` (policies por comando, seção 9.2); (c) `tabelas_globais.txt` precisa de `app.empresa`, `plataforma.identidade`, `plataforma.desafio_mfa` e `plataforma.token_renovacao` (e, pela consulta 8, de toda tabela de `plataforma`); (d) o caso "interno com usuário" de `TestConferirEscopoRecusaContextoInvalido` usa usuário aleatório, que a versão completa de `app.conferir_escopo()` agora recusa, corretamente; precisa de um usuário de fixture; (e) a lista aprovada de funções `SECURITY DEFINER` (consulta 6) ainda não é verificada | `tenaz-isolamento` | Antes do aceite de E01 |
 | E01-5 | `escopo_externo_exclusao` (D31) nas tabelas de etapas futuras com leitura externa: `almoxarifado`, `ativo`, `medidor`, `campo_extra_os` e as demais da tabela da seção 2.9.4 | `tenaz-banco-dados` e `tenaz-isolamento` | Migração de cada tabela |
@@ -9477,9 +9480,12 @@ Visão em alto nível. Procedimentos, responsáveis e testes estão no documento
 | ISO-E01-09 | **Aberto (risco residual do ISO-E01-08; só registro, sem mudança de migração agora).** O esquema `plataforma`, como o `app`, continua com dono `tenaz_dono`, e o dono do esquema pode apagar tabelas que não são dele. Quem roubar a credencial do `tenaz_manutencao` (`LOGIN`, membro de `tenaz_dono`) não lê as credenciais, mas pode: apagar e recriar as sete tabelas de credencial como `tenaz_dono` e conceder acesso ao `tenaz_autenticacao`, para capturar o que for gravado depois; desligar o `trg_acesso_empresa`, e a inativação deixa de revogar sessões; e, nas tabelas de `app`, tirar o `FORCE ROW LEVEL SECURITY` ou criar policy para si. Opções em aberto (documento 5, seção 16; ADR-011 emendado): (a) tirar o `tenaz_manutencao` de `tenaz_dono`, com funções estreitas para criar e remover partições e o privilégio `MAINTAIN` do PostgreSQL 17+ para `VACUUM` e `ANALYZE`; (b) deixá-lo só no pipeline, como o `tenaz_migrador`, sem credencial em tarefa de runtime | `tenaz-arquiteto` (decisão), `tenaz-banco-dados` e `tenaz-plataforma-sre` | Antes da primeira implantação em homologação |
 | ISO-E01-10 | **Aberto (falha fechada, não vazamento).** O `tenaz_sinc` não tem `USAGE` no esquema `app`: toda escrita do sincronizador falharia por falta de privilégio. O teste de `conexao_sinc` concede o `USAGE` só dentro da transação desfeita. Conceder na migração da conexão entre contas. O `tenaz-isolamento` o registrou como ISO-E01-09, ID que já é o risco residual do `tenaz_manutencao`; IDs não se reaproveitam | `tenaz-banco-dados` | Migração de E04 |
 | E01-15 | Sugestão da revisão de isolamento: `ALTER DEFAULT PRIVILEGES FOR ROLE tenaz_dono IN SCHEMA app REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC`. Hoje toda função de `app` tem `EXECUTE` para `PUBLIC`, o padrão do PostgreSQL, e o mapa de privilégios (consulta 8-b) a ignora | `tenaz-banco-dados` com `tenaz-isolamento` | A decidir |
-| E01-16 | Pendência da suíte: `TestPredicadoNuloNaoLiberaLinha` e `TestEmpresaIDEImutavel` ainda criam tabela no banco compartilhado, em vez de transação desfeita | `tenaz-isolamento` | Até E02 |
+| E01-16 | **Resolvido** (resíduo do item 13 da revisão de isolamento). `TestPredicadoNuloNaoLiberaLinha` e `TestEmpresaIDEImutavel` criavam tabela no banco compartilhado; hoje toda prova de detector e todo objeto de teste vivem numa transação desfeita (seção 2.8) | `tenaz-isolamento` | — |
+| E01-17 | A regra das consultas sqlc (seção 2.8) confere `empresa_id` por consulta, e não por tabela da junção: uma junção que filtre só a primeira tabela passaria. Conferir cada tabela citada | `tenaz-isolamento` | Até E02 |
 | E01-14 | Toda tabela futura de `plataforma` com dado sensível e sem RLS (a próxima é `conexao_empresa`, E04) não pode ter dono `tenaz_dono`, pelo mesmo motivo do ISO-E01-08: precisa de dono próprio sem membros de runtime ou de RLS forçado | `tenaz-banco-dados` com `tenaz-isolamento` | E04 |
-| E01-11 | **LGPD na trilha.** `tg_auditar` grava `cpf` e `data_nascimento` de `pessoa` em `antes` e `depois`, legíveis por quem tem `adm.ler_auditoria`. Resolver antes das tabelas de saúde (seção 5.10): omitir ou mascarar colunas pessoais na trilha (lista por tabela no `preparar_tabela`) ou restringir a leitura desses eventos a `pessoa.saude.ler` | `tenaz-banco-dados` com `tenaz-isolamento` e `tenaz-conformidade-br` (LGPD) | Antes de `documento_vencimento` com dado de saúde (E08) |
+| E01-19 | Desenho da auditoria configurável, em E01: tela, módulo, tipos de operação, hash por evento e selo encadeado (`selo_auditoria`, job do selo e cópia no bucket com bloqueio de objeto, seção 9.4), incluindo o formato da chave do objeto (proposta do `tenaz-plataforma-sre`: `selos/empresas/<empresa_id>/<AAAA-MM-DD>.selo`) e a E01-18 | `tenaz-banco-dados` | E01 |
+| E01-18 | **Retirada de perfil e de permissão sem o código retirado na trilha.** Hoje a retirada de perfil (`usuario_perfil`) ou de permissão avulsa (`usuario_permissao`), que é exclusão lógica (`excluido_em` preenchido), entra na trilha como `alteracao` só de `excluido_em`, sem dizer qual perfil ou permissão saiu. O RF-ADM-011 (documento 1, versão 0.6) distingue `exclusao` (exclusão lógica ou inativação) de `delecao` (remoção física). `tg_auditar` passa a tratar `excluido_em` de nulo para preenchido como `exclusao`, com a linha inteira em `antes`, e a remoção física como `delecao`; o `CHECK` de `acao` ganha o valor novo. Parte da implementação da auditoria configurável (tela, módulo, hash, tipos de operação) | `tenaz-banco-dados` | Próxima tarefa, com a auditoria configurável |
+| E01-11 | **LGPD na trilha** (revista na versão 0.6). A parte de saúde cai: não há dado de saúde. **Continua valendo** para CPF e data de nascimento: `tg_auditar` grava `cpf` e `data_nascimento` de `pessoa` em `antes` e `depois`, legíveis por quem tem `adm.ler_auditoria`, e o CPF completo segue como dado sensível (sumário 0.7, 3.6). **Decisão proposta:** a trilha registra que o campo mudou (`campos_alterados`) sem o valor, por uma lista de colunas mascaradas por tabela passada ao `preparar_tabela` (ex.: `pessoa`: `cpf`, `data_nascimento`); a consulta do valor atual continua pela tela de pessoa, com a sua própria regra de acesso | `tenaz-banco-dados` com `tenaz-isolamento` e `tenaz-conformidade-br` (LGPD) | Antes do primeiro cliente em produção (E12) |
 | E01-10 | `app.permissoes_vedadas_externo()` repete parte do catálogo de RF-ADM-005 (as vedadas a externo, com o grupo Admin). Permissão nova do grupo Admin ou vedada exige migração que atualize a lista e revalide os CHECKs; sugestão: teste no Go que compare a lista do banco com o catálogo | `tenaz-backend-go` e `tenaz-banco-dados` | E01 |
 
 ---
@@ -9493,4 +9499,8 @@ Visão em alto nível. Procedimentos, responsáveis e testes estão no documento
 | 0.2 | 12/11/2026 | Alinhamento ao sumário executivo 0.3: entidade `pessoa`; perfis novos; marcos `data_*`, transições e reconhecimento da OS; transições da solicitação; status do ativo e `bloqueio_ativo`; campos de propriedade e regime de operação do ativo; origem `iot`; numeração `OR` e `CL`; nomes das entidades auxiliares da seção 3.2 do sumário; módulo TER (fornecedor com papéis, catálogo, link de uso único, contratos, avaliação, orçamento); estoque em terceiros, peças serializadas e ordem de reparo; módulo LOC; isolamento do prestador e do locatário (R4); dados de saúde; KPIs pelo regime de operação |
 | 0.4 | 12/11/2026 | Alinhamento ao sumário executivo 0.5 (configuração por segmento): `ativo.fase_ciclo_vida` e `data_entrada_operacao`, `trg_ativo_fase` e `colocar_em_operacao`; `bloqueio_ativo.origem` com liberação por documento; OS tipo `implantacao`, origem `projeto` (sem origem `regra`), `campos_extras` e `causa_externa`; solicitação com origem `regra`; tabelas `campo_extra_os` (com `preenchido_pelo_prestador`), `regra_automacao` e `disparo_regra` (5.13); Fase 2: `plataforma.pacote_segmento` e `aplicacao_pacote` (13.11), PRJ com etapa `disponivel` (13.12), CTR com `decisao_exclusao` (13.13); numeração `PJ` e `CT`; permissões da configuração, de PRJ e de CTR; `cliente_servico` nas contas com CTR; lista de tabelas globais (2.11); campos que nunca atravessam a conexão (2.10.5); escopo externo das tabelas novas (2.9.4); diagramas 3.9 a 3.11; KPIs sem OS de implantação; seção 17.1 com S27 a S35 e decisões D21 a D26 |
 | 0.5 | 12/11/2026 | Etapa E01 (sumário 0.6), migrações `00003_auditoria`, `00004_adm` e `00005_autenticacao`: tabelas de autenticação `sessao`, `token_renovacao`, `codigo_autorizacao`, `desafio_mfa`, `token_email` e campos `identidade.falhas_login`, `bloqueada_ate`, `mfa_ativado_em`, com privilégios por coluna e FK composta para `usuario`; `turno_unidade` e `feriado_unidade`, com "pelo menos um turno" no serviço; `acesso_empresa` mantida por trigger `SECURITY DEFINER`; `tg_padrao_empresa` e `escopo_externo` da empresa; policies de escopo de `unidade`, `usuario` e `pessoa`, com `escopo_externo_exclusao`; `tg_usuario_vinculo` e identidade imutável; `evento_auditoria` particionada por `plataforma.criar_particoes_mensais()`, sem `pg_partman`, com partição padrão, `ocorrido_no_dispositivo_em` e contexto opcional na auditoria; `preparar_tabela` com conferência do dono; `USAGE` em `public` para os papéis do sistema; correção do `CASE` em `conferir_escopo`; `usuario_permissao`, `perfil.perfil_origem` e `app.permissoes_vedadas_externo()`, com `ck_perfil_externo_vedadas` e os triggers de permissão avulsa; `usuario.situacao` `convidado`, `ativo`, `inativo` (S37 resolvido); papel `tenaz_autenticacao` e privilégios das credenciais, `autenticacao_identidade`, revogação em `tg_acesso_empresa`, `purgar_credenciais_vencidas()` (ADR-011, ISO-E01-02); `evento_auditoria.escopo`, `identidade.mfa_ultimo_passo`, `uq_usuario_perfil` parcial e `ck_usuario_permissao_formato` com dígito (pendências do backend); `auditoria_sem_autenticacao` (ISO-E01-07); `empresa.mfa_obrigatorio` (sumário 3.6) e E01-13; dono `tenaz_credencial` das credenciais (ISO-E01-08); `pessoa.situacao` só `ativa` ou `inativa` (S39); risco ISO-E01-09 registrado; `tenaz_migrador` superusuário em desenvolvimento, CI e testes, membro de `tenaz_dono` e `tenaz_credencial` em homologação e produção (2.2); seção 2.8 alinhada à suíte reescrita (consultas 1 a 11, seis listas versionadas, partes 2 e 3); ISO-E01-10, E01-15 e E01-16; revisão de isolamento: `trg_usuario_colunas_externo` e `escopo_externo_insercao` em `usuario` (ISO-E01-01), `trg_perfil_tipo` (03), listagem do job restrita ao contexto (04), `INSERT` do sincronizador em todas as colunas de `tg_auditar` (05), `FOR SHARE` nos triggers de atribuição (06), trava de TRUNCATE nas partições, `TimeZone` e limite de `p_desde` em `criar_particoes_mensais`, `escopo_externo_insercao` em `evento_auditoria`; migrações numeradas `NNNNN_` e `SET LOCAL` nos limites (14.2); S36 a S39, D27 a D37 e pendências da etapa (17.3) |
-
+| 0.6 | 13/11/2026 | Alinhamento ao sumário 0.7 (seção 3.6, "Dados de saúde"): a Tenaz não guarda dado de saúde. Migração `00006_remove_saude` (sem editar 00001 a 00005, já em main): saem `app.pode_ler_saude()`, `ck_perfil_saude`, `pessoa.saude.ler` da lista de vedadas e da exceção de `ck_usuario_permissao_formato` (agora sem exceção), com limpeza de concessões e perfis. No documento: `app.saude` fora do `NaEmpresa` (2.4) e das funções de contexto (2.9.2, 4.2); "dados de saúde" fora do que nunca atravessa a conexão (2.10.5); `dado_sensivel`, a policy de saúde e o alerta com `app.saude` fora de 5.10; 9.1 sem ASO; D13 sem objeto; E01-11 revista (CPF e data de nascimento na trilha continuam pendentes, com decisão proposta). Seção 2.8 alinhada à suíte: consultas 6 e 6-b, privilégios padrão na 8-b, prova da chamada de `app.conferir_escopo()`, regra das consultas sqlc; pendências E01-16 e E01-17 |
+| 0.6 | 13/11/2026 | Seção 2.8 alinhada de novo à suíte: consulta 6 sem exceção para membros de extensão; 6-b só com extensões de `extensoes.txt`; nova 6-c (impressão das extensões); regra das consultas sqlc detalhada; verificação "sem dado de saúde"; `app.conferir_escopo()` testada como `tenaz_app` e `tenaz_job`; provas em transação desfeita; sétima lista `extensoes.txt`; E01-16 resolvida |
+| 0.6 | 13/11/2026 | Seção 2.4 alinhada a `backend/internal/plataforma/db/db.go`: o `NaEmpresa` fixa 14 variáveis, sem `app.saude`; `app.conexao_empresa_id` só no pool do sincronizador (E04). Pendência E01-18: retirada de perfil e de permissão como `exclusao`, com a linha inteira, e `delecao` para a remoção física (RF-ADM-011), na auditoria configurável |
+| 0.6 | 13/11/2026 | Seção 2.8: provas de detector com `lock_timeout` de 1 s e repetição em `55P03` e `40P01` quando alteram objeto real (helper `estragar` da suíte) |
+| 0.6 | 13/11/2026 | `selo_auditoria` passa para E01 (D34, 9.4, E01-2), com a auditoria configurável (sumário 0.7, 3.6); cópia do selo no bucket `tenaz-auditoria` do SeaweedFS no desenvolvimento e no S3 com Object Lock em produção; E01-19 (desenho da auditoria configurável e formato da chave) |

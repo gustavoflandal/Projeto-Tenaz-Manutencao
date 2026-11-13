@@ -37,6 +37,7 @@ type empresaFixture struct {
 	Turno            string
 	Feriado          string
 	PessoaInterna    string // pessoa com CPF e sem login: o alvo do vazamento por pessoa_id
+	PessoaDoInterno  string // pessoa com CPF ligada ao usuário interno: o CPF de quem tem login
 	Identidade       string
 	UsuarioInterno   string // ativo, com perfil gestor e permissão avulsa
 	UsuarioInativo   string
@@ -154,7 +155,11 @@ func povoarEmpresa(ctx context.Context, e *empresaFixture) error {
 				[]any{e.ID, cpfAleatorio()}, &e.PessoaInterna},
 			{"identidade", `INSERT INTO plataforma.identidade (email, senha_hash) VALUES ($1, 'argon2id-falso') RETURNING id`,
 				[]any{"interno-" + e.ID + "@teste.tenaz"}, &e.Identidade},
-			{"usuário interno", `INSERT INTO app.usuario (empresa_id, nome, identidade_id) VALUES ($1, 'Interno', $2) RETURNING id`,
+			{"pessoa do interno", `INSERT INTO app.pessoa (empresa_id, nome, cpf, data_nascimento)
+			                       VALUES ($1, 'Pessoa do usuário interno', $2, '1975-05-05') RETURNING id`,
+				[]any{e.ID, cpfAleatorio()}, &e.PessoaDoInterno},
+			{"usuário interno", `INSERT INTO app.usuario (empresa_id, nome, identidade_id, pessoa_id)
+			                     VALUES ($1, 'Interno', $2, $3) RETURNING id`,
 				nil, &e.UsuarioInterno},
 			{"usuário inativo", `INSERT INTO app.usuario (empresa_id, nome, situacao) VALUES ($1, 'Inativo', 'inativo') RETURNING id`,
 				[]any{e.ID}, &e.UsuarioInativo},
@@ -170,7 +175,7 @@ func povoarEmpresa(ctx context.Context, e *empresaFixture) error {
 			{"usuario_perfil", `INSERT INTO app.usuario_perfil (empresa_id, usuario_id, perfil_id) VALUES ($1, $2, $3) RETURNING id`,
 				nil, &e.UsuarioPerfil},
 			{"usuario_permissao", `INSERT INTO app.usuario_permissao (empresa_id, usuario_id, permissao)
-			                       VALUES ($1, $2, 'pessoa.saude.ler') RETURNING id`, nil, &e.UsuarioPermissao},
+			                       VALUES ($1, $2, 'os.encerrar') RETURNING id`, nil, &e.UsuarioPermissao},
 		}
 		for _, p := range passos {
 			// Argumentos que dependem de passos anteriores são montados aqui.
@@ -179,7 +184,7 @@ func povoarEmpresa(ctx context.Context, e *empresaFixture) error {
 			case "turno", "feriado":
 				args = []any{e.ID, e.Unidade}
 			case "usuário interno":
-				args = []any{e.ID, e.Identidade}
+				args = []any{e.ID, e.Identidade, e.PessoaDoInterno}
 			case "usuario_perfil":
 				args = []any{e.ID, e.UsuarioInterno, e.PerfilGestor}
 			case "usuario_permissao":

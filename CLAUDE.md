@@ -84,6 +84,7 @@ Regere o PDF de todo documento alterado. O conversor precisa de internet para de
 - **Isolamento:** coluna `empresa_id` em toda tabela de negócio, RLS forçado, escopos `interno`, `prestador`, `locatario`, `link`; conexão entre contas (SRV) só pelo processo de sincronização.
 - **Versionamento:** SemVer `MAJOR.MINOR.PATCH` vindo da tag `vX.Y.Z`; versão sempre visível no canto inferior direito da tela principal e do login (RNF-039); `CHANGELOG.md` sempre atualizado (RNF-040).
 - **Configuração por segmento:** a empresa configura blocos de catálogo fechado (campos extras, regras de condição e efeito, modelos de projeto, contratos com clientes, pacotes de segmento). Estados, fórmulas de indicadores, regras do offline, isolamento e campos da conexão entre contas não são configuráveis. Condição ou efeito novo entra por requisito com teste, nunca por configuração (sumário 3.7, risco R7).
+- **Ferramentas:** só software 100% gratuito ou open source no que o sistema usa diretamente em execução; ferramentas do ambiente de desenvolvimento (Docker Desktop, navegador, editor, GitHub) ficam fora da regra. A hospedagem de produção na AWS é exceção explícita. Ver sumário 3.6 e ADR-012.
 - **Marca:** cores Aço `#14202E` e Sinal `#FF6A13`; Archivo Expanded, Inter, JetBrains Mono; regras de contraste em [marca/README.md](marca/README.md). Texto sobre Sinal é sempre Aço.
 
 ## 5. Pendências que dependem do dono do produto
@@ -111,7 +112,7 @@ backend/                Go: cmd/tenaz, internal/plataforma, internal/modulos,
                         db/migracoes, api/openapi.yaml, testes/vazamento
 web/                    React + TypeScript (Vite)
 app/                    React Native + Expo, offline-first (src/sync: fila de comandos)
-infra/docker/           compose de desenvolvimento (PostgreSQL, Valkey, MinIO)
+infra/docker/           compose de desenvolvimento (PostgreSQL, Valkey, Mailpit, SeaweedFS)
 .github/workflows/      esteira de CI
 marca/                  identidade visual (brandbook, logos, regras)
 docs/                   documentação do projeto (0 a 9)

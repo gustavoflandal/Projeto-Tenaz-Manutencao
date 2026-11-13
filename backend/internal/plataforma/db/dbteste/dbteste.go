@@ -10,8 +10,12 @@ package dbteste
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -23,8 +27,11 @@ import (
 	"tenaz/internal/plataforma/migracao"
 )
 
-// Imagem igual à de desenvolvimento e produção.
-const imagemPostgres = "postgres:17-alpine"
+// ImagemPostgres é a imagem do PostgreSQL de teste: a mesma do compose de
+// desenvolvimento (infra/docker), fixada por versão e digest, para que o
+// teste, o desenvolvimento e o CI rodem o mesmo binário. Muda junto com o
+// compose. Exportada para a suíte de vazamento usar a mesma.
+const ImagemPostgres = "postgres:17.11-alpine3.24@sha256:e5d2edd28b1f8d40a0a6c0c9cdc545b19b56a0d5d88f94bc11a97d970d4700d0"
 
 // Ambiente são os três pools de um teste de integração.
 type Ambiente struct {
@@ -81,16 +88,36 @@ func subir(ctx context.Context) (string, func(), error) {
 	if url := os.Getenv("TENAZ_TESTE_BANCO_URL"); url != "" {
 		return url, func() {}, nil
 	}
-	cont, err := postgres.Run(ctx, imagemPostgres,
-		postgres.WithDatabase("tenaz"),
-		postgres.WithUsername("tenaz_migrador"),
-		postgres.WithPassword("tenaz_teste"),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2).
-				WithStartupTimeout(90*time.Second),
-		),
-	)
+	// go test ./... roda os pacotes em processos paralelos, e vários deles
+	// sobem um contêiner. No Docker Desktop do Windows, clientes criados ao
+	// mesmo tempo fazem o testcontainers falhar ao detectar o Docker ("failed
+	// to create Docker provider") por quase um minuto. A subida é serializada
+	// entre os processos por um arquivo de trava; os testes continuam em
+	// paralelo, cada pacote no seu banco.
+	soltar, err := travarSubida(ctx)
+	if err != nil {
+		return "", nil, err
+	}
+	var cont *postgres.PostgresContainer
+	for tentativa := 1; ; tentativa++ {
+		cont, err = postgres.Run(ctx, ImagemPostgres,
+			postgres.WithDatabase("tenaz"),
+			postgres.WithUsername("tenaz_migrador"),
+			postgres.WithPassword("tenaz_teste"),
+			testcontainers.WithWaitStrategy(
+				wait.ForLog("database system is ready to accept connections").
+					WithOccurrence(2).
+					WithStartupTimeout(90*time.Second),
+			),
+		)
+		// Falha de detecção do Docker é transitória: repete com recuo;
+		// qualquer outro erro sai na hora.
+		if err == nil || tentativa == 4 || !strings.Contains(err.Error(), "failed to create Docker provider") {
+			break
+		}
+		time.Sleep(time.Duration(tentativa) * 3 * time.Second)
+	}
+	soltar()
 	if err != nil {
 		return "", nil, fmt.Errorf("subir PostgreSQL de teste: %w", err)
 	}
@@ -101,4 +128,30 @@ func subir(ctx context.Context) (string, func(), error) {
 		return "", nil, err
 	}
 	return url, encerrar, nil
+}
+
+// travarSubida espera a vez de subir o contêiner: cria o arquivo de trava
+// com O_EXCL e o apaga ao soltar. Trava mais velha que 3 minutos é de um
+// processo que morreu no meio e é descartada.
+func travarSubida(ctx context.Context) (func(), error) {
+	caminho := filepath.Join(os.TempDir(), "tenaz-dbteste-subida.trava")
+	for {
+		f, err := os.OpenFile(caminho, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		if err == nil {
+			_ = f.Close()
+			return func() { _ = os.Remove(caminho) }, nil
+		}
+		if !errors.Is(err, fs.ErrExist) {
+			return nil, fmt.Errorf("trava da subida do PostgreSQL de teste: %w", err)
+		}
+		if info, err := os.Stat(caminho); err == nil && time.Since(info.ModTime()) > 3*time.Minute {
+			_ = os.Remove(caminho)
+			continue
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(250 * time.Millisecond):
+		}
+	}
 }

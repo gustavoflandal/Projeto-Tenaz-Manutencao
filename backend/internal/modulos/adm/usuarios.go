@@ -99,9 +99,11 @@ func tipoDosPerfis(m map[string]consultas.AdmBuscarPerfisPorCodigosRow, codigos 
 	return tipos
 }
 
-// conferirPessoa aplica a regra de RF-ADM-015: pessoa com fornecedor só se
-// liga a usuário prestador daquele fornecedor. A unicidade (uma pessoa, um
-// usuário) fica com o índice uq_usuario_pessoa.
+// conferirPessoa aplica RN-ADM-020 e RN-ADM-021 ao ligar usuário a pessoa:
+// a pessoa existe e está ativa, e o fornecedor dos dois é o mesmo, nos dois
+// sentidos (pessoa de fornecedor só com prestador dele; prestador só com
+// pessoa do seu fornecedor). A unicidade (uma pessoa, um usuário) fica com o
+// índice uq_usuario_pessoa.
 func conferirPessoa(ctx context.Context, q *consultas.Queries, empresaID, pessoaID uuid.UUID, fornecedorUsuario *uuid.UUID) error {
 	p, err := q.AdmTravarPessoa(ctx, consultas.AdmTravarPessoaParams{EmpresaID: empresaID, ID: pessoaID})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -110,9 +112,13 @@ func conferirPessoa(ctx context.Context, q *consultas.Queries, empresaID, pessoa
 	if err != nil {
 		return err
 	}
-	if p.FornecedorID != nil && !mesmoID(p.FornecedorID, fornecedorUsuario) {
+	if p.Situacao != "ativa" {
+		return erros.EntradaInvalida.ComCampo("pessoa_id", erros.CampoInativo,
+			"A pessoa está inativa; reative-a antes de ligar um usuário.")
+	}
+	if !mesmoID(p.FornecedorID, fornecedorUsuario) {
 		return erros.EntradaInvalida.ComCampo("pessoa_id", erros.CampoValorInvalido,
-			"Pessoa de fornecedor só se liga a usuário prestador do mesmo fornecedor.")
+			"Pessoa de fornecedor só se liga a usuário prestador do mesmo fornecedor, e vice-versa.")
 	}
 	return nil
 }
@@ -149,7 +155,17 @@ func (s *servico) CriarUsuario(ctx context.Context, a autorizacao.Ator, e Entrad
 	}
 	var novaPessoa *pessoaValida
 	if e.NovaPessoa != nil {
-		pv, err := validarPessoa("nova_pessoa.", *e.NovaPessoa)
+		np := *e.NovaPessoa
+		// A pessoa criada junto com um prestador é técnico do mesmo
+		// fornecedor, com vínculo terceiro (RN-ADM-020).
+		if e.FornecedorID != nil {
+			if np.FornecedorID != nil && *np.FornecedorID != *e.FornecedorID {
+				return UsuarioCriado{}, erros.EntradaInvalida.ComCampo("nova_pessoa.fornecedor_id", erros.CampoValorInvalido,
+					"A pessoa de um prestador é do mesmo fornecedor do usuário.")
+			}
+			np.FornecedorID, np.Vinculo = e.FornecedorID, VinculoTerceiro
+		}
+		pv, err := validarPessoa("nova_pessoa.", np)
 		if err != nil {
 			return UsuarioCriado{}, err
 		}
@@ -596,7 +612,7 @@ func (s *servico) EncerrarSessoes(ctx context.Context, a autorizacao.Ator, id uu
 }
 
 // ConcederPermissao concede uma permissão avulsa (RF-ADM-005), como
-// pessoa.saude.ler. A concessão vai para a trilha pelo trg_auditoria de
+// os.encerrar. A concessão vai para a trilha pelo trg_auditoria de
 // usuario_permissao.
 func (s *servico) ConcederPermissao(ctx context.Context, a autorizacao.Ator, id uuid.UUID, permissao string) (Usuario, error) {
 	if err := apenasInterno(a, autorizacao.AdmGerenciarUsuarios); err != nil {

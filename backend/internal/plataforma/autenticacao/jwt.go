@@ -46,7 +46,10 @@ type ClaimsAcesso struct {
 	Audiencia string `json:"aud"`
 	EmitidoEm int64  `json:"iat"`
 	ExpiraEm  int64  `json:"exp"`
-	ID        string `json:"jti"`
+	// NaoAntesDe (nbf) não é emitido pela Tenaz; presente, é respeitado (RFC
+	// 7519, seção 4.1.5): um token que ainda não vale é recusado.
+	NaoAntesDe int64  `json:"nbf,omitempty"`
+	ID         string `json:"jti"`
 }
 
 type cabecalhoJWT struct {
@@ -106,7 +109,8 @@ func (a *Assinador) Emitir(usuarioID, empresaID, sessaoID uuid.UUID, agora time.
 
 var errTokenInvalido = errors.New("access token inválido")
 
-// Verificar confere assinatura, cabeçalho, emissor, audiência e validade.
+// Verificar confere assinatura, cabeçalho, emissor, audiência e validade
+// (exp obrigatório; iat e nbf não podem estar no futuro).
 // Não confere a sessão: isso é do serviço, no banco.
 func (a *Assinador) Verificar(token string, agora time.Time) (ClaimsAcesso, error) {
 	if len(token) > tamanhoMaxJWT {
@@ -146,8 +150,9 @@ func (a *Assinador) Verificar(token string, agora time.Time) (ClaimsAcesso, erro
 	if c.Emissor != emissorTenaz || c.Audiencia != audienciaAPI {
 		return ClaimsAcesso{}, errTokenInvalido
 	}
-	if agora.After(time.Unix(c.ExpiraEm, 0).Add(toleranciaRelogi)) ||
-		time.Unix(c.EmitidoEm, 0).After(agora.Add(toleranciaRelogi)) {
+	if c.ExpiraEm <= 0 || agora.After(time.Unix(c.ExpiraEm, 0).Add(toleranciaRelogi)) ||
+		time.Unix(c.EmitidoEm, 0).After(agora.Add(toleranciaRelogi)) ||
+		time.Unix(c.NaoAntesDe, 0).After(agora.Add(toleranciaRelogi)) {
 		return ClaimsAcesso{}, errTokenInvalido
 	}
 	return c, nil

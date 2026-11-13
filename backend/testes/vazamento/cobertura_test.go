@@ -2,8 +2,10 @@ package vazamento
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -182,12 +184,50 @@ func criarTabelasDeProva(t *testing.T, ctx context.Context, comandos []string) p
 		t.Fatalf("abrir transação da prova: %v", err)
 	}
 	t.Cleanup(func() { _ = tx.Rollback(context.Background()) })
-	for _, c := range comandos {
-		if _, err := tx.Exec(ctx, c); err != nil {
-			t.Fatalf("preparar prova (%s): %v", c, err)
-		}
-	}
+	estragar(t, ctx, tx, comandos...)
 	return tx
+}
+
+// estragar executa os comandos da prova num savepoint, com lock_timeout curto,
+// e repete se a trava não vier ou se o banco escolher esta transação como
+// vítima de deadlock (55P03, 40P01). Com um banco compartilhado entre pacotes
+// (tarefas.sh testar-rapido), outra conexão pode estar escrevendo na tabela
+// que a prova altera: a prova espera a vez, nunca segura a outra por muito
+// tempo, e não falha por concorrência alheia. Erro de outro tipo é falha.
+func estragar(t *testing.T, ctx context.Context, tx pgx.Tx, comandos ...string) {
+	t.Helper()
+	const tentativas = 8
+	for i := 1; ; i++ {
+		err := func() error {
+			sub, err := tx.Begin(ctx)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = sub.Rollback(ctx) }()
+			if _, err := sub.Exec(ctx, "SET LOCAL lock_timeout = '1s'"); err != nil {
+				return err
+			}
+			for _, c := range comandos {
+				if _, err := sub.Exec(ctx, c); err != nil {
+					return fmt.Errorf("%s: %w", c, err)
+				}
+			}
+			// O SET LOCAL de um savepoint liberado sobrevive na transação: o
+			// limite volta ao padrão para o resto da prova.
+			if _, err := sub.Exec(ctx, "SET LOCAL lock_timeout = 0"); err != nil {
+				return err
+			}
+			return sub.Commit(ctx)
+		}()
+		if err == nil {
+			return
+		}
+		if codigo := sqlstate(err); (codigo == "55P03" || codigo == "40P01") && i < tentativas {
+			time.Sleep(time.Duration(i*150) * time.Millisecond)
+			continue
+		}
+		t.Fatalf("preparar prova: %v", err)
+	}
 }
 
 func contem(lista []string, item string) bool {

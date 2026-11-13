@@ -44,8 +44,7 @@ type Escopo struct {
 	LocatarioID  *uuid.UUID // escopo locatario
 	LinkHashHex  string     // escopo link: sha256 do segredo, em hexadecimal
 
-	UsuarioID    *uuid.UUID
-	PodeLerSaude bool // permissão pessoa.saude.ler, das permissões efetivas
+	UsuarioID *uuid.UUID
 }
 
 // Interno é o escopo de usuários da própria empresa, de jobs e de chaves de API.
@@ -86,11 +85,6 @@ func (e Escopo) Valido() error {
 		}
 	default:
 		return fmt.Errorf("escopo inválido: %q", e.Tipo)
-	}
-	// Dado de saúde nunca é lido fora do escopo interno: pessoa.saude.ler é
-	// vedada a usuário externo (RF-ADM-005) e o link não tem usuário.
-	if e.PodeLerSaude && e.Tipo != EscopoInterno {
-		return errors.New("pessoa.saude.ler só existe no escopo interno")
 	}
 	return nil
 }
@@ -226,21 +220,20 @@ const contextoSQL = `SELECT
   set_config('app.fornecedor_id',              $4,  true),
   set_config('app.locatario_id',               $5,  true),
   set_config('app.link_hash',                  $6,  true),
-  set_config('app.saude',                      $7,  true),
-  set_config('app.ator_tipo',                  $8,  true),
-  set_config('app.origem',                     $9,  true),
-  set_config('app.ip',                         $10, true),
-  set_config('app.request_id',                 $11, true),
-  set_config('app.user_agent',                 $12, true),
-  set_config('app.token_api_id',               $13, true),
-  set_config('app.dispositivo_id',             $14, true),
-  set_config('app.ocorrido_no_dispositivo_em', $15, true)`
+  set_config('app.ator_tipo',                  $7,  true),
+  set_config('app.origem',                     $8,  true),
+  set_config('app.ip',                         $9,  true),
+  set_config('app.request_id',                 $10, true),
+  set_config('app.user_agent',                 $11, true),
+  set_config('app.token_api_id',               $12, true),
+  set_config('app.dispositivo_id',             $13, true),
+  set_config('app.ocorrido_no_dispositivo_em', $14, true)`
 
 func fixarContexto(ctx context.Context, tx pgx.Tx, empresaID uuid.UUID, escopo Escopo, req Requisicao) error {
 	lote := &pgx.Batch{}
 	lote.Queue(contextoSQL,
 		empresaID.String(), escopo.Tipo, textoUUID(escopo.UsuarioID), textoUUID(escopo.FornecedorID),
-		textoUUID(escopo.LocatarioID), escopo.LinkHashHex, simNao(escopo.PodeLerSaude),
+		textoUUID(escopo.LocatarioID), escopo.LinkHashHex,
 		req.AtorTipo, req.Origem, req.IP, req.RequestID, req.UserAgent,
 		textoUUID(req.TokenAPIID), textoUUID(req.DispositivoID), textoInstante(req.OcorridoNoDispositivoEm))
 	// O banco confere o escopo contra o cadastro e recusa a transação se
@@ -290,11 +283,4 @@ func textoUUID(id *uuid.UUID) string {
 		return ""
 	}
 	return id.String()
-}
-
-func simNao(v bool) string {
-	if v {
-		return "sim"
-	}
-	return "nao"
 }

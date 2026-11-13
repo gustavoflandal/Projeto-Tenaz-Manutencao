@@ -201,8 +201,13 @@ func TestAntiEscalada(t *testing.T) {
 	}
 
 	// Permissões avulsas.
-	if e := ConferirConcessao(adm, alvo, autorizacao.PessoaSaudeLer, ""); e != nil {
-		t.Errorf("administrador concede pessoa.saude.ler a outro: %v", e)
+	for _, p := range []string{autorizacao.OsEncerrar, autorizacao.EstDecidirDestino} {
+		if e := ConferirConcessao(adm, alvo, p, ""); e != nil {
+			t.Errorf("administrador concede %s a outro, sem tê-la: %v", p, e)
+		}
+	}
+	if e := ConferirConcessao(adm, alvo, "pessoa.saude.ler", ""); e == nil {
+		t.Error("pessoa.saude.ler não existe mais: a concessão é recusada")
 	}
 	if e := ConferirConcessao(adm, adm.UsuarioID, autorizacao.OsEncerrar, ""); e == nil {
 		t.Error("o administrador nunca concede a si mesmo")

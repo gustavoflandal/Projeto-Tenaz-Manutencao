@@ -402,8 +402,11 @@ func registrarAutenticacao(s *Servidor) {
 
 	Registrar(s, proprio(Rota{
 		ID: "desativarMFA", Metodo: http.MethodPost, Caminho: "/v1/auth/mfa/desativar", Status: http.StatusNoContent,
-		Resumo:    "Desativar o segundo fator",
-		Descricao: "Exige um código válido. 401 mfa_codigo_invalido; 409 transicao_invalida se não está ativo.",
+		Resumo: "Desativar o segundo fator",
+		Descricao: "Exige um código válido. Código errado soma uma falha ao bloqueio progressivo, como no login, e código " +
+			"de um passo TOTP já usado vale como errado: 401 mfa_codigo_invalido. 409 transicao_invalida com " +
+			"estado_atual \"inativo\" se o segundo fator não está ativo, e com estado_atual \"exigido_pela_empresa\" " +
+			"enquanto a identidade tiver acesso a alguma empresa que exige MFA (RN-ADM-027).",
 	}), func(ctx context.Context, in *entradaCodigoMFA) (*saidaVazia, error) {
 		a, err := AtorDe(ctx)
 		if err != nil {

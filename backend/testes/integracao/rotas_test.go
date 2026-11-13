@@ -82,8 +82,8 @@ func (c cenarioADM) rotas() []rotaTeste {
 		{metodo: "POST", caminho: us + "/reativar", ifMatch: true, visNega: true, comID: true},
 		{metodo: "POST", caminho: us + "/reenviar-convite", visNega: true, comID: true},
 		{metodo: "POST", caminho: us + "/encerrar-sessoes", visNega: true, comID: true},
-		{metodo: "POST", caminho: us + "/permissoes", corpo: map[string]any{"permissao": "pessoa.saude.ler"}, visNega: true, comID: true},
-		{metodo: "DELETE", caminho: us + "/permissoes/pessoa.saude.ler", visNega: true, comID: true},
+		{metodo: "POST", caminho: us + "/permissoes", corpo: map[string]any{"permissao": "os.encerrar"}, visNega: true, comID: true},
+		{metodo: "DELETE", caminho: us + "/permissoes/os.encerrar", visNega: true, comID: true},
 		{metodo: "GET", caminho: "/v1/perfis", visNega: true},
 		{metodo: "GET", caminho: "/v1/permissoes", visNega: true},
 		{metodo: "GET", caminho: "/v1/eventos-auditoria", visNega: true},
@@ -121,6 +121,13 @@ func TestMatrizDeAcesso(t *testing.T) {
 				semCSRF := comT(c.admA)
 				semCSRF.csrf = ""
 				semCSRF.req(r.metodo, r.caminho, r.corpo, ifm).problema(http.StatusForbidden, "csrf_invalido")
+				// Cookie válido com o CSRF de outra sessão válida, ou com o
+				// próprio cookie no lugar do token: também csrf_invalido.
+				for _, errado := range []string{c.admB.csrf, c.visA.csrf, c.admA.cookie} {
+					outro := comT(c.admA)
+					outro.csrf = errado
+					outro.req(r.metodo, r.caminho, r.corpo, ifm).problema(http.StatusForbidden, "csrf_invalido")
+				}
 				outraOrigem := comT(c.admA)
 				outraOrigem.origem = "https://atacante.exemplo"
 				outraOrigem.req(r.metodo, r.caminho, r.corpo, ifm).problema(http.StatusForbidden, "csrf_invalido")
@@ -248,11 +255,11 @@ func TestRotasADMCaminhoFeliz(t *testing.T) {
 	if len(us["perfis"].([]any)) != 2 || us["telefone"] != "11988887777" {
 		t.Fatalf("PATCH usuário: %v", us)
 	}
-	pc := adm.post("/v1/usuarios/"+tecID+"/permissoes", map[string]any{"permissao": "pessoa.saude.ler"})
-	if us = pc.ok(http.StatusCreated); len(us["permissoes_avulsas"].([]any)) != 1 || !strings.HasSuffix(pc.cab.Get("Location"), "/permissoes/pessoa.saude.ler") {
+	pc := adm.post("/v1/usuarios/"+tecID+"/permissoes", map[string]any{"permissao": "os.encerrar"})
+	if us = pc.ok(http.StatusCreated); len(us["permissoes_avulsas"].([]any)) != 1 || !strings.HasSuffix(pc.cab.Get("Location"), "/permissoes/os.encerrar") {
 		t.Fatalf("permissão avulsa: %v", us)
 	}
-	adm.req("DELETE", "/v1/usuarios/"+tecID+"/permissoes/pessoa.saude.ler", nil).ok(http.StatusNoContent)
+	adm.req("DELETE", "/v1/usuarios/"+tecID+"/permissoes/os.encerrar", nil).ok(http.StatusNoContent)
 	es := adm.post("/v1/usuarios/"+tecID+"/encerrar-sessoes", nil).ok(http.StatusOK)
 	if es["sessoes_encerradas"] != float64(1) {
 		t.Fatalf("encerrar sessões: %v", es)

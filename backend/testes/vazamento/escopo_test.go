@@ -265,7 +265,7 @@ func TestPrestadorEscreveSoAPropriaLinhaSemTrocarVinculo(t *testing.T) {
 			_, err := tx.Exec(ctx, `UPDATE app.usuario SET pessoa_id = $2 WHERE id = $1`, f.UsuarioL1, f.A.PessoaInterna)
 			return err
 		})
-		if err != nil && sqlstate(err) != erroPrivilegio && sqlstate(err) != "23505" {
+		if err != nil && sqlstate(err) != erroPrivilegio {
 			t.Fatalf("erro inesperado: %v", err)
 		}
 		confirmarAchado(t, "ISO-E01-01", err == nil, "o locatário ligou a si a pessoa interna")
@@ -291,8 +291,8 @@ func TestUsuarioExternoNaoEscala(t *testing.T) {
 		{"perfil derivado de locatário com permissão de Admin",
 			`INSERT INTO app.perfil (empresa_id, codigo, nome, perfil_origem, permissoes)
 			 VALUES ($1, 'loc_x', 'x', 'locatario', '{adm.gerenciar_usuarios}')`, []any{f.A.ID}, erroCheck},
-		{"perfil padrão com pessoa.saude.ler",
-			`UPDATE app.perfil SET permissoes = permissoes || '{pessoa.saude.ler}' WHERE id = $1`, []any{f.A.PerfilGestor}, erroCheck},
+		{"perfil padrão de prestador com os.encerrar",
+			`UPDATE app.perfil SET permissoes = permissoes || '{os.encerrar}' WHERE id = $1`, []any{f.A.PerfilPrestador}, erroCheck},
 		{"perfil gestor para o prestador",
 			`INSERT INTO app.usuario_perfil (empresa_id, usuario_id, perfil_id) VALUES ($1, $2, $3)`,
 			[]any{f.A.ID, f.UsuarioF1, f.A.PerfilGestor}, erroCheck},
@@ -305,8 +305,8 @@ func TestUsuarioExternoNaoEscala(t *testing.T) {
 		{"os.encerrar avulsa para o prestador",
 			`INSERT INTO app.usuario_permissao (empresa_id, usuario_id, permissao) VALUES ($1, $2, 'os.encerrar')`,
 			[]any{f.A.ID, f.UsuarioF1}, erroCheck},
-		{"pessoa.saude.ler avulsa para o locatário",
-			`INSERT INTO app.usuario_permissao (empresa_id, usuario_id, permissao) VALUES ($1, $2, 'pessoa.saude.ler')`,
+		{"permissão de Admin avulsa para o locatário",
+			`INSERT INTO app.usuario_permissao (empresa_id, usuario_id, permissao) VALUES ($1, $2, 'adm.gerenciar_usuarios')`,
 			[]any{f.A.ID, f.UsuarioL1}, erroCheck},
 		{"prestador com perfil vira interno",
 			`UPDATE app.usuario SET fornecedor_id = NULL WHERE id = $1`, []any{f.UsuarioF1}, erroCheck},

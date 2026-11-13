@@ -77,3 +77,19 @@ esquema:public      tenaz_leitura       USAGE   # tipo citext e operadores das e
 esquema:public      tenaz_sinc          USAGE   # tipo citext e operadores das extensões
 esquema:public      tenaz_autenticacao  USAGE   # tipo citext de identidade.email
 esquema:public      tenaz_credencial    USAGE   # tipo citext nas tabelas que ele possui
+
+# --- privilégios padrão (ALTER DEFAULT PRIVILEGES) --------------------------
+# Valem para todo objeto que tenaz_dono criar em app (seção 2.2): por isso a
+# tabela nova já nasce com o tenaz_app sob RLS, e o TRUNCATE nunca entra aqui.
+padrao:tenaz_dono:app:tabelas  tenaz_app      SELECT   # leitura de tabela de empresa, sob RLS
+padrao:tenaz_dono:app:tabelas  tenaz_app      INSERT   # gravação de tabela de empresa, sob RLS
+padrao:tenaz_dono:app:tabelas  tenaz_app      UPDATE   # gravação de tabela de empresa, sob RLS
+padrao:tenaz_dono:app:tabelas  tenaz_app      DELETE   # gravação de tabela de empresa, sob RLS
+padrao:tenaz_dono:app:tabelas  tenaz_job      SELECT   # jobs por empresa, sob RLS
+padrao:tenaz_dono:app:tabelas  tenaz_job      INSERT   # jobs por empresa, sob RLS
+padrao:tenaz_dono:app:tabelas  tenaz_job      UPDATE   # jobs por empresa, sob RLS
+padrao:tenaz_dono:app:tabelas  tenaz_job      DELETE   # jobs por empresa, sob RLS
+padrao:tenaz_dono:app:tabelas  tenaz_leitura  SELECT   # réplica de leitura, sob RLS
+padrao:tenaz_dono:app:funcoes  tenaz_app      EXECUTE  # funções de contexto e triggers, SECURITY INVOKER
+padrao:tenaz_dono:app:funcoes  tenaz_job      EXECUTE  # funções de contexto e triggers, SECURITY INVOKER
+padrao:tenaz_dono:app:funcoes  tenaz_leitura  EXECUTE  # funções de contexto, SECURITY INVOKER

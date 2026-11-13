@@ -24,22 +24,184 @@ titulo()   { printf '\n\033[1m== %s\033[0m\n' "$*"; }
 
 # ----------------------------------------------------------------------- infra
 
+# Sobe tudo e espera cada serviço ficar saudável pelo healthcheck do compose;
+# depois prepara o bucket da trilha de auditoria.
 infra() {
-  titulo "Subindo PostgreSQL e Valkey"
-  "${COMPOSE[@]}" up -d
-  printf 'aguardando o banco'
-  for _ in $(seq 1 60); do
-    if "${COMPOSE[@]}" exec -T postgres pg_isready -U tenaz_migrador -d tenaz >/dev/null 2>&1; then
-      echo; verde "infraestrutura no ar"; return 0
-    fi
-    printf '.'; sleep 1
-  done
-  echo; vermelho "o banco não respondeu no prazo"; return 1
+  titulo "Subindo PostgreSQL, Valkey, Mailpit e SeaweedFS (S3)"
+  if ! "${COMPOSE[@]}" up -d --wait --wait-timeout 180; then
+    "${COMPOSE[@]}" ps
+    vermelho "algum serviço não ficou saudável no prazo"
+    return 1
+  fi
+  "${COMPOSE[@]}" ps
+  armazenamento_preparar
+  verde "infraestrutura no ar"
 }
 
 infra_parar()  { "${COMPOSE[@]}" stop; }
 infra_limpar() { "${COMPOSE[@]}" down -v; }
 infra_estado() { "${COMPOSE[@]}" ps; }
+
+# ------------------------------------------------------------- armazenamento
+#
+# SeaweedFS do compose, falado só pela API S3 (ADR-012, decisões 4 e 5, em
+# docs/5_ARQUITETURA_SOFTWARE.md). O cliente é o contêiner `s3-cli` do compose
+# (aws-cli com versão e digest fixos): nada é instalado no host. As credenciais
+# abaixo são as de desenvolvimento de infra/docker/seaweedfs/s3.json.
+
+S3_BUCKET_AUDITORIA="tenaz-auditoria"
+# Retenção padrão do bucket, em modo de conformidade. Em produção é a da trilha
+# (5 anos no mínimo, RNF-019); aqui é 1 dia, para que o objeto de teste não
+# fique preso por anos. `infra-limpar` apaga o volume e, com ele, tudo.
+S3_RETENCAO_DIAS_DEV=1
+S3_AUDITORIA_CHAVE="tenaz_auditoria"
+S3_AUDITORIA_SEGREDO="tenaz_auditoria_dev_secreto"
+
+# s3 <args do aws>: roda o aws-cli na rede do compose, como `tenaz_operacao`.
+# MSYS_NO_PATHCONV impede o Git Bash de reescrever caminhos como /tmp/x.
+s3() {
+  MSYS_NO_PATHCONV=1 "${COMPOSE[@]}" --profile ferramentas run --rm --no-deps -T s3-cli "$@"
+}
+
+# s3_roteiro <args>: roda no contêiner do cliente o roteiro bash lido da
+# entrada padrão, com o aws e o curl da imagem.
+s3_roteiro() {
+  MSYS_NO_PATHCONV=1 "${COMPOSE[@]}" --profile ferramentas run --rm --no-deps -T \
+    -e S3_AUDITORIA_CHAVE="$S3_AUDITORIA_CHAVE" -e S3_AUDITORIA_SEGREDO="$S3_AUDITORIA_SEGREDO" \
+    --entrypoint bash s3-cli -s -- "$@"
+}
+
+# Cria o bucket da trilha, se não existir, com bloqueio de objeto (que liga o
+# versionamento) e retenção padrão COMPLIANCE; e confere os dois, exista ou não.
+# Idempotente: rodar de novo não muda nada.
+armazenamento_preparar() {
+  titulo "Bucket $S3_BUCKET_AUDITORIA (bloqueio de objeto, versionamento)"
+  s3_roteiro "$S3_BUCKET_AUDITORIA" "$S3_RETENCAO_DIAS_DEV" <<'ROTEIRO'
+set -euo pipefail
+B="$1"; DIAS="$2"
+if aws s3api head-bucket --bucket "$B" >/dev/null 2>&1; then
+  echo "bucket $B já existe"
+else
+  aws s3api create-bucket --bucket "$B" --object-lock-enabled-for-bucket >/dev/null
+  aws s3api put-object-lock-configuration --bucket "$B" --object-lock-configuration \
+    "{\"ObjectLockEnabled\":\"Enabled\",\"Rule\":{\"DefaultRetention\":{\"Mode\":\"COMPLIANCE\",\"Days\":$DIAS}}}"
+  echo "bucket $B criado"
+fi
+versionamento="$(aws s3api get-bucket-versioning --bucket "$B" --query Status --output text)"
+bloqueio="$(aws s3api get-object-lock-configuration --bucket "$B" \
+  --query 'ObjectLockConfiguration.[ObjectLockEnabled,Rule.DefaultRetention.Mode,Rule.DefaultRetention.Days]' --output text)"
+echo "versionamento: $versionamento"
+echo "bloqueio de objeto: $bloqueio"
+[[ "$versionamento" == "Enabled" ]] || { echo "versionamento desligado em $B" >&2; exit 1; }
+[[ "$bloqueio" == Enabled*COMPLIANCE* ]] || { echo "bloqueio de objeto fora do modo COMPLIANCE em $B" >&2; exit 1; }
+ROTEIRO
+  verde "bucket pronto"
+}
+
+# Prova o endurecimento do ADR-012 contra o contêiner do compose: o objeto em
+# retenção COMPLIANCE não é apagado, encurtado, rebaixado nem sobrescrito pela
+# API S3, nem pela identidade Admin; a identidade da trilha não mexe no
+# bloqueio nem apaga o bucket; o anônimo não lê; a URL pré-assinada vale e a
+# adulterada não; e a API do filer não é alcançável pela rede e, sem JWT,
+# recebe 401. É a semente do teste de integração do armazenamento (decisão 5)
+# e qualifica toda versão nova da imagem. Cada execução deixa dois objetos
+# pequenos em ensaio/, retidos por 1 hora e 1 dia; somem com `infra-limpar`.
+armazenamento_provar() {
+  titulo "Prova do armazenamento (ADR-012): bloqueio de objeto e filer"
+  local chave saida versao codigo
+  chave="ensaio/$(date -u +%Y%m%dT%H%M%SZ)-$RANDOM.selo"
+
+  if ! saida="$(s3_roteiro "$S3_BUCKET_AUDITORIA" "$chave" <<'ROTEIRO'
+set -uo pipefail
+B="$1"; K="$2"; FALHAS=0
+ok()    { printf '  ok     %s\n' "$*"; }
+falha() { printf '  FALHA  %s\n' "$*"; FALHAS=$((FALHAS + 1)); }
+aud()   { AWS_ACCESS_KEY_ID="$S3_AUDITORIA_CHAVE" AWS_SECRET_ACCESS_KEY="$S3_AUDITORIA_SEGREDO" aws "$@"; }
+# negado <descrição> <comando...>: o comando tem de falhar com AccessDenied.
+negado() {
+  local d="$1"; shift; local s rc
+  s="$("$@" 2>&1)"; rc=$?
+  if [[ $rc -ne 0 && "$s" == *AccessDenied* ]]; then ok "$d: AccessDenied"; else falha "$d: veio rc=$rc $s"; fi
+}
+ATE="$(date -u -d '+1 hour' +%Y-%m-%dT%H:%M:%SZ)"
+CURTO="$(date -u -d '+5 minutes' +%Y-%m-%dT%H:%M:%SZ)"
+
+[[ "$(aws s3api get-bucket-versioning --bucket "$B" --query Status --output text)" == Enabled ]] \
+  && ok "1. versionamento ligado" || falha "1. versionamento"
+[[ "$(aws s3api get-object-lock-configuration --bucket "$B" --query ObjectLockConfiguration.Rule.DefaultRetention.Mode --output text)" == COMPLIANCE ]] \
+  && ok "2. retenção padrão COMPLIANCE" || falha "2. retenção padrão"
+
+printf 'selo-original' > /tmp/original
+V="$(aud s3api put-object --bucket "$B" --key "$K" --body /tmp/original \
+  --object-lock-mode COMPLIANCE --object-lock-retain-until-date "$ATE" --query VersionId --output text 2>&1)"
+[[ -n "$V" && "$V" != *rror* ]] && ok "3. identidade da trilha grava o selo em COMPLIANCE até $ATE (versão $V)" || falha "3. gravar: $V"
+[[ "$(aud s3api get-object-retention --bucket "$B" --key "$K" --version-id "$V" --query Retention.Mode --output text)" == COMPLIANCE ]] \
+  && ok "4. retenção da versão lida de volta: COMPLIANCE" || falha "4. retenção da versão"
+
+negado "5. Admin apaga a versão protegida" aws s3api delete-object --bucket "$B" --key "$K" --version-id "$V"
+negado "6. Admin apaga com bypass de governança" aws s3api delete-object --bucket "$B" --key "$K" --version-id "$V" --bypass-governance-retention
+negado "7. Admin encurta a retenção" aws s3api put-object-retention --bucket "$B" --key "$K" --version-id "$V" \
+  --retention "{\"Mode\":\"COMPLIANCE\",\"RetainUntilDate\":\"$CURTO\"}"
+negado "8. Admin rebaixa para GOVERNANCE" aws s3api put-object-retention --bucket "$B" --key "$K" --version-id "$V" \
+  --retention "{\"Mode\":\"GOVERNANCE\",\"RetainUntilDate\":\"$ATE\"}" --bypass-governance-retention
+negado "9. identidade da trilha muda o bloqueio do bucket" aud s3api put-object-lock-configuration --bucket "$B" \
+  --object-lock-configuration '{"ObjectLockEnabled":"Enabled","Rule":{"DefaultRetention":{"Mode":"GOVERNANCE","Days":1}}}'
+negado "10. identidade da trilha apaga o bucket" aud s3api delete-bucket --bucket "$B"
+
+printf 'selo-FORJADO' > /tmp/forjado
+V2="$(aud s3api put-object --bucket "$B" --key "$K" --body /tmp/forjado --query VersionId --output text 2>&1)"
+[[ -n "$V2" && "$V2" != "$V" && "$V2" != *rror* ]] && ok "11. sobrescrever cria versão nova ($V2), a protegida fica" || falha "11. sobrescrever: $V2"
+[[ "$(aws s3api delete-object --bucket "$B" --key "$K" --query DeleteMarker --output text 2>&1)" == True ]] \
+  && ok "12. apagar sem versão só cria marcador de exclusão" || falha "12. marcador de exclusão"
+if s="$(aws s3api delete-bucket --bucket "$B" 2>&1)"; then falha "13. Admin apagou o bucket"
+else ok "13. Admin apaga o bucket: recusado ($(grep -o '([A-Za-z]*)' <<<"$s" | head -1 | tr -d '()'))"; fi
+
+codigo="$(curl -s -o /dev/null -w '%{http_code}' "$AWS_ENDPOINT_URL/$B/$K")"
+[[ "$codigo" == 403 ]] && ok "14. leitura anônima: HTTP 403" || falha "14. leitura anônima: HTTP $codigo"
+
+printf 'anexo' > /tmp/anexo
+aud s3api put-object --bucket "$B" --key "$K.anexo" --body /tmp/anexo >/dev/null
+URL="$(aud s3 presign "s3://$B/$K.anexo" --expires-in 300)"
+codigo="$(curl -s -o /dev/null -w '%{http_code}' "$URL")"
+[[ "$codigo" == 200 ]] && ok "15. URL pré-assinada de 5 minutos: HTTP 200" || falha "15. pré-assinada: HTTP $codigo"
+codigo="$(curl -s -o /dev/null -w '%{http_code}' "${URL/.anexo/}")"
+[[ "$codigo" == 403 ]] && ok "16. URL pré-assinada adulterada: HTTP 403" || falha "16. adulterada: HTTP $codigo"
+
+codigo="$(curl -s -m 5 -o /dev/null -w '%{http_code}' -X DELETE "http://seaweedfs:8888/buckets/$B?recursive=true&ignoreRecursiveError=true")"; rc=$?
+[[ $rc -ne 0 && "$codigo" == 000 ]] && ok "17. API do filer (8888) inalcançável pela rede do compose (curl rc=$rc)" \
+  || falha "17. filer respondeu pela rede: HTTP $codigo"
+
+echo "VERSAO=$V"
+exit $((FALHAS > 0))
+ROTEIRO
+  )"; then
+    echo "$saida"; vermelho "prova do armazenamento falhou"; return 1
+  fi
+  echo "$saida" | grep -v '^VERSAO='
+  versao="$(echo "$saida" | sed -n 's/^VERSAO=//p' | tr -d '\r')"
+
+  # De dentro do próprio contêiner, onde o filer escuta: sem JWT, 401.
+  codigo="$(MSYS_NO_PATHCONV=1 "${COMPOSE[@]}" exec -T seaweedfs curl -s -o /dev/null -w '%{http_code}' \
+    -X DELETE "http://127.0.0.1:8888/buckets/$S3_BUCKET_AUDITORIA?recursive=true&ignoreRecursiveError=true")"
+  if [[ "$codigo" != 401 ]]; then
+    vermelho "  FALHA  18. DELETE recursivo no filer sem JWT: HTTP $codigo (esperado 401)"; return 1
+  fi
+  echo "  ok     18. DELETE recursivo no filer sem JWT, de dentro do contêiner: HTTP 401"
+
+  if ! saida="$(s3_roteiro "$S3_BUCKET_AUDITORIA" "$chave" "$versao" <<'ROTEIRO'
+set -euo pipefail
+aws s3api get-object --bucket "$1" --key "$2" --version-id "$3" /tmp/lido >/dev/null
+cat /tmp/lido
+ROTEIRO
+  )"; then
+    echo "$saida"; vermelho "  FALHA  19. a versão protegida sumiu"; return 1
+  fi
+  if [[ "$(echo "$saida" | tr -d '\r')" != "selo-original" ]]; then
+    vermelho "  FALHA  19. conteúdo da versão protegida mudou: $saida"; return 1
+  fi
+  echo "  ok     19. depois de tudo, a versão protegida continua lá com o conteúdo original"
+  verde "armazenamento endurecido: 19 de 19"
+}
 
 migrar() {
   titulo "Aplicando migrações"
@@ -232,10 +394,15 @@ ajuda() {
 uso: ferramentas/tarefas.sh <tarefa>
 
 Infraestrutura
-  infra                sobe PostgreSQL e Valkey locais
+  infra                sobe PostgreSQL, Valkey, Mailpit e SeaweedFS (S3), espera
+                       todos saudáveis e prepara o bucket da trilha de auditoria
   infra-parar          para os contêineres, preservando os dados
   infra-limpar         para e APAGA os dados
   infra-estado         mostra o estado dos contêineres
+  armazenamento-preparar  cria o bucket tenaz-auditoria, se faltar, com bloqueio
+                       de objeto COMPLIANCE e versionamento, e confere os dois
+  armazenamento-provar    prova o endurecimento do ADR-012: retenção COMPLIANCE
+                       resiste à API S3 e o filer sem JWT recebe 401
   migrar               aplica as migrações no banco local
   migrar-situacao      mostra o estado das migrações
 
@@ -280,6 +447,8 @@ case "$tarefa" in
   infra-parar)       infra_parar "$@" ;;
   infra-limpar)      infra_limpar "$@" ;;
   infra-estado)      infra_estado "$@" ;;
+  armazenamento-preparar) armazenamento_preparar "$@" ;;
+  armazenamento-provar)   armazenamento_provar "$@" ;;
   migrar)            migrar "$@" ;;
   migrar-situacao)   migrar_situacao "$@" ;;
   compilar)          compilar "$@" ;;

@@ -198,9 +198,11 @@ func (s *servico) EditarPessoa(ctx context.Context, a autorizacao.Ator, id uuid.
 		case errors.Is(err, pgx.ErrNoRows):
 		case err != nil:
 			return err
-		case !mesmoID(pv.fornecedorID, u.FornecedorID) && pv.fornecedorID != nil:
+		case !mesmoID(pv.fornecedorID, u.FornecedorID):
+			// Nos dois sentidos: a pessoa de um prestador mantém o fornecedor
+			// dele, e a de um usuário interno não ganha fornecedor (RN-ADM-020).
 			return erros.EntradaInvalida.ComCampo("fornecedor_id", erros.CampoValorInvalido,
-				"A pessoa está ligada a um usuário de outro vínculo; o fornecedor da pessoa tem de ser o do usuário prestador.")
+				"A pessoa está ligada a um usuário; o fornecedor dela tem de ser o do usuário (nenhum, se o usuário é interno).")
 		}
 		err = q.AdmAtualizarPessoa(ctx, consultas.AdmAtualizarPessoaParams{
 			EmpresaID: a.EmpresaID, ID: id, Nome: pv.nome, Cpf: pv.cpf, DataNascimento: pv.nascimento,
@@ -247,6 +249,19 @@ func (s *servico) situacaoPessoa(ctx context.Context, a autorizacao.Ator, id uui
 		}
 		if atual.Situacao == nova {
 			return erros.TransicaoInvalida.Com("a pessoa já está %s", nova).ComDado("estado_atual", atual.Situacao)
+		}
+		// Pessoa ligada a usuário ativo ou convidado não é inativada: o
+		// usuário é inativado antes, por quem gerencia usuários (RN-ADM-021).
+		if nova == "inativa" {
+			u, err := q.AdmBuscarUsuarioDaPessoa(ctx, consultas.AdmBuscarUsuarioDaPessoaParams{EmpresaID: a.EmpresaID, PessoaID: &id})
+			switch {
+			case errors.Is(err, pgx.ErrNoRows):
+			case err != nil:
+				return err
+			case u.Situacao != "inativo":
+				return erros.TransicaoInvalida.Com("a pessoa está ligada a um usuário %s; inative o usuário antes", u.Situacao).
+					ComDado("estado_atual", atual.Situacao)
+			}
 		}
 		if err := q.AdmDefinirSituacaoPessoa(ctx, consultas.AdmDefinirSituacaoPessoaParams{
 			EmpresaID: a.EmpresaID, ID: id, Situacao: nova,

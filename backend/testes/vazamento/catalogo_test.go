@@ -256,7 +256,7 @@ func TestDetectorAcusaExclusaoPorEscopoExterno(t *testing.T) {
 // ------------------------------------------------------ SECURITY DEFINER
 
 const sqlSecurityDefiner = `
-SELECT p.oid::regprocedure::text,
+SELECT CASE WHEN n.nspname = 'public' THEN 'public.' ELSE '' END || p.oid::regprocedure::text,
        coalesce(array_to_string(p.proconfig, '|'), ''),
        EXISTS (SELECT 1 FROM aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x
                WHERE x.grantee = 0 AND x.privilege_type = 'EXECUTE'),
@@ -265,7 +265,11 @@ SELECT p.oid::regprocedure::text,
          WHERE has_function_privilege(r, p.oid, 'EXECUTE') ORDER BY r), ',')
 FROM pg_proc p
 JOIN pg_namespace n ON n.oid = p.pronamespace
-WHERE n.nspname IN ('app', 'plataforma') AND p.prosecdef
+WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg\_%'
+  AND p.prosecdef
+  -- SEM exceção para membro de extensão: as extensões permitidas não têm
+  -- nenhuma função SECURITY DEFINER, e uma função nossa anexada a uma extensão
+  -- (mutação m37) passaria por código do PostgreSQL
 ORDER BY 1`
 
 type funcaoDefiner struct {
@@ -377,6 +381,160 @@ func TestDetectorAcusaSecurityDefinerSemSearchPath(t *testing.T) {
 	}
 }
 
+// Nenhuma função nossa fora de app e plataforma. O esquema public é das
+// extensões, e os papéis da aplicação têm USAGE nele (o tipo citext mora lá):
+// uma função SECURITY DEFINER criada em public por engano — de dono
+// tenaz_credencial lendo identidade (mutação m25), ou do superusuário lendo
+// app.pessoa (m26) — entregaria a qualquer papel, sem contexto, as senhas ou os
+// CPFs de todas as empresas. Função de extensão (pg_depend.deptype = 'e') fica
+// de fora.
+const sqlFuncoesForaDoLugar = `
+SELECT CASE WHEN n.nspname = 'public' THEN 'public.' ELSE '' END || p.oid::regprocedure::text || ' de ' || pg_get_userbyid(p.proowner) ||
+       CASE WHEN p.prosecdef THEN ' (SECURITY DEFINER)' ELSE '' END
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname NOT IN ('pg_catalog', 'information_schema', 'app', 'plataforma') AND n.nspname NOT LIKE 'pg\_%'
+  AND NOT EXISTS (SELECT 1 FROM pg_depend d
+                  WHERE d.classid = 'pg_proc'::regclass AND d.objid = p.oid AND d.deptype = 'e')
+ORDER BY 1`
+
+func TestNenhumaFuncaoForaDeAppEPlataforma(t *testing.T) {
+	ctx := context.Background()
+	for _, f := range listarTexto(t, ctx, pool, sqlFuncoesForaDoLugar) {
+		t.Errorf("função fora de app e plataforma, e que não é de extensão: %s; função nossa mora em app "+
+			"(sem SECURITY DEFINER) ou em plataforma (na lista aprovada)", f)
+	}
+}
+
+func TestDetectorAcusaFuncaoDefinerEmPublic(t *testing.T) {
+	ctx := context.Background()
+	tx := criarTabelasDeProva(t, ctx, []string{
+		// m25: dono das credenciais, lendo a identidade
+		`CREATE FUNCTION public.vaza_senhas() RETURNS SETOF text LANGUAGE sql SECURITY DEFINER
+		   AS 'SELECT senha_hash FROM plataforma.identidade'`,
+		"ALTER FUNCTION public.vaza_senhas() OWNER TO tenaz_credencial",
+		// m26: dono o superusuário da suíte, lendo app.pessoa sem RLS
+		`CREATE FUNCTION public.vaza_cpfs() RETURNS SETOF text LANGUAGE sql SECURITY DEFINER
+		   AS 'SELECT cpf FROM app.pessoa'`,
+	})
+
+	// Primeiro, que a mutação é de fato um vazamento: o tenaz_app, sem
+	// contexto, lê senhas e CPFs de todas as empresas por ela.
+	for _, f := range []string{"public.vaza_senhas()", "public.vaza_cpfs()"} {
+		var n int64
+		sub, err := tx.Begin(ctx)
+		if err != nil {
+			t.Fatalf("savepoint: %v", err)
+		}
+		if _, err := sub.Exec(ctx, "SET LOCAL ROLE tenaz_app"); err != nil {
+			t.Fatalf("assumir tenaz_app: %v", err)
+		}
+		err = sub.QueryRow(ctx, "SELECT count(*) FROM "+f+" x WHERE x IS NOT NULL").Scan(&n)
+		_ = sub.Rollback(ctx)
+		if err != nil || n == 0 {
+			t.Fatalf("a mutação %s não reproduziu o vazamento (n=%d, err=%v); a prova não prova nada", f, n, err)
+		}
+	}
+
+	fora := strings.Join(listarTexto(t, ctx, tx, sqlFuncoesForaDoLugar), " | ")
+	definer := map[string]string{}
+	for _, f := range funcoesDefiner(t, ctx, tx) {
+		definer[f.Assinatura] = strings.Join(problemasDefiner(f, map[string]string{}), " | ")
+	}
+	for _, f := range []string{"public.vaza_senhas()", "public.vaza_cpfs()"} {
+		if !strings.Contains(fora, f) {
+			t.Errorf("%s não foi acusada como função fora de app e plataforma; acusadas: %s", f, fora)
+		}
+		if !strings.Contains(definer[f], "fora da lista aprovada") {
+			t.Errorf("%s não foi acusada pela verificação de SECURITY DEFINER: %q", f, definer[f])
+		}
+	}
+	// E nenhuma função de extensão foi acusada.
+	if strings.Contains(fora, "citext") || strings.Contains(fora, "similarity") {
+		t.Errorf("função de extensão acusada: %s", fora)
+	}
+}
+
+// Extensões: só as de extensoes.txt, cada uma com a impressão exata das suas
+// funções. É o que fecha a exceção "membro de extensão" da regra de função
+// fora de app e plataforma: uma função anexada a uma extensão muda a
+// impressão dela.
+const sqlImpressaoDasExtensoes = `
+SELECT e.extname || ' ' || e.extversion || ' ' || count(p.oid) || ' ' ||
+       coalesce(md5(string_agg(n.nspname || '.' || p.proname || '(' || oidvectortypes(p.proargtypes) || ')' || ':' ||
+                               p.prosecdef || ':' || l.lanname || ':' || md5(p.prosrc), ','
+                               ORDER BY n.nspname, p.proname, oidvectortypes(p.proargtypes))), '-')
+FROM pg_extension e
+LEFT JOIN pg_depend d ON d.refclassid = 'pg_extension'::regclass AND d.refobjid = e.oid
+                     AND d.deptype = 'e' AND d.classid = 'pg_proc'::regclass
+LEFT JOIN pg_proc p ON p.oid = d.objid
+LEFT JOIN pg_namespace n ON n.oid = p.pronamespace
+LEFT JOIN pg_language l ON l.oid = p.prolang
+GROUP BY e.extname, e.extversion
+ORDER BY 1`
+
+func diferencasDasExtensoes(t *testing.T, ctx context.Context, q consultor) (aMais, aMenos []string) {
+	t.Helper()
+	l, err := lerListaDe(arquivoExtensoes, false)
+	if err != nil {
+		t.Fatalf("ler %s: %v", arquivoExtensoes, err)
+	}
+	declarado := map[string]bool{}
+	for _, e := range l {
+		declarado[e.Nome+" "+strings.Join(e.Campos, " ")] = true
+	}
+	existentes := map[string]bool{}
+	for _, x := range listarTexto(t, ctx, q, sqlImpressaoDasExtensoes) {
+		existentes[x] = true
+		if !declarado[x] {
+			aMais = append(aMais, x)
+		}
+	}
+	for x := range declarado {
+		if !existentes[x] {
+			aMenos = append(aMenos, x)
+		}
+	}
+	return aMais, aMenos
+}
+
+func TestExtensoesSaoAsDeclaradas(t *testing.T) {
+	ctx := context.Background()
+	aMais, aMenos := diferencasDasExtensoes(t, ctx, pool)
+	for _, x := range aMais {
+		t.Errorf("extensão fora de %s, ou com funções diferentes das declaradas: %s (extensão versão funções md5); "+
+			"função anexada a extensão escapa das regras de função", arquivoExtensoes, x)
+	}
+	for _, x := range aMenos {
+		t.Errorf("extensão declarada em %s e ausente do banco: %s", arquivoExtensoes, x)
+	}
+}
+
+// Mutação m37: função nossa, SECURITY DEFINER, lendo os CPFs de todas as
+// empresas, anexada à citext. Precisa ser acusada pela regra de SECURITY
+// DEFINER e pela impressão da extensão.
+func TestDetectorAcusaFuncaoAnexadaAExtensao(t *testing.T) {
+	ctx := context.Background()
+	tx := criarTabelasDeProva(t, ctx, []string{
+		`CREATE FUNCTION public.citext_ajuda() RETURNS SETOF text LANGUAGE sql SECURITY DEFINER
+		   AS 'SELECT cpf FROM app.pessoa'`,
+		"ALTER EXTENSION citext ADD FUNCTION public.citext_ajuda()",
+	})
+	var definer bool
+	for _, f := range funcoesDefiner(t, ctx, tx) {
+		if f.Assinatura == "public.citext_ajuda()" {
+			definer = strings.Contains(strings.Join(problemasDefiner(f, map[string]string{}), " | "), "fora da lista aprovada")
+		}
+	}
+	if !definer {
+		t.Error("a função SECURITY DEFINER anexada à citext não foi acusada pela regra de SECURITY DEFINER")
+	}
+	aMais, aMenos := diferencasDasExtensoes(t, ctx, tx)
+	if !strings.HasPrefix(strings.Join(aMais, "|"), "citext 1.6 48 ") || len(aMenos) != 1 {
+		t.Errorf("a impressão da citext não acusou a função anexada: a mais %v, a menos %v", aMais, aMenos)
+	}
+}
+
 // ------------------------------------------------------ privilégios
 
 // Mapa fechado de privilégios onde o RLS não é a defesa. Entram:
@@ -403,12 +561,13 @@ WITH papeis AS (
   SELECT oid, nspname, nspacl, nspowner FROM pg_namespace
   WHERE nspname NOT IN ('pg_catalog', 'information_schema') AND nspname NOT LIKE 'pg\_%'
 ), objetos AS (
-  SELECT e.nspname AS esquema, c.oid::regclass::text AS nome, c.relacl AS acl, c.relowner AS dono, c.oid AS rel,
-         false AS funcao
+  SELECT e.nspname AS esquema, e.nspname || '.' || c.relname AS nome, c.relacl AS acl, c.relowner AS dono,
+         c.oid AS rel, false AS funcao
   FROM pg_class c JOIN esquemas e ON e.oid = c.relnamespace
   WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f', 'S') AND NOT c.relispartition
   UNION ALL
-  SELECT e.nspname, p.oid::regprocedure::text, p.proacl, p.proowner, NULL::oid, true
+  SELECT e.nspname, CASE WHEN e.nspname = 'public' THEN 'public.' ELSE '' END || p.oid::regprocedure::text,
+         p.proacl, p.proowner, NULL::oid, true
   FROM pg_proc p JOIN esquemas e ON e.oid = p.pronamespace
 ), privs AS (
   SELECT o.esquema, o.nome, o.funcao, x.grantee, x.privilege_type, NULL::text AS colunas
@@ -433,6 +592,18 @@ FROM esquemas e
 CROSS JOIN LATERAL aclexplode(e.nspacl) x
 JOIN papeis pa ON pa.oid = x.grantee
 WHERE x.grantee <> e.nspowner
+UNION ALL
+-- Privilégios padrão (ALTER DEFAULT PRIVILEGES): valem para todo objeto que o
+-- papel ainda vai criar. Um padrão a mais abre cada tabela nova sem que a
+-- migração dela diga nada.
+SELECT 'padrao:' || pg_get_userbyid(d.defaclrole) || ':' || coalesce(n.nspname, '*') || ':' ||
+       CASE d.defaclobjtype WHEN 'r' THEN 'tabelas' WHEN 'f' THEN 'funcoes' WHEN 'S' THEN 'sequencias'
+                            WHEN 'T' THEN 'tipos' WHEN 'n' THEN 'esquemas' ELSE d.defaclobjtype::text END ||
+       ' ' || CASE x.grantee WHEN 0 THEN 'PUBLIC' ELSE pg_get_userbyid(x.grantee) END || ' ' || x.privilege_type
+FROM pg_default_acl d
+LEFT JOIN pg_namespace n ON n.oid = d.defaclnamespace
+CROSS JOIN LATERAL aclexplode(d.defaclacl) x
+WHERE x.grantee <> d.defaclrole
 ORDER BY 1`
 
 // diferencasDoMapa compara o catálogo com privilegios.txt nos dois sentidos.
@@ -486,10 +657,11 @@ func TestDetectorAcusaPrivilegioForaDoMapa(t *testing.T) {
 		"GRANT SELECT ON rel_prova.pessoa TO tenaz_app",
 		"GRANT SELECT ON plataforma.sessao TO tenaz_leitura",
 		"REVOKE UPDATE (revogada_em) ON plataforma.sessao FROM tenaz_autenticacao",
+		"ALTER DEFAULT PRIVILEGES FOR ROLE tenaz_dono IN SCHEMA app GRANT TRUNCATE ON TABLES TO tenaz_app",
 	})
 	aMais, aMenos := diferencasDoMapa(t, ctx, tx)
 	for _, esperado := range []string{"esquema:rel_prova tenaz_app USAGE", "rel_prova.pessoa tenaz_app SELECT",
-		"plataforma.sessao tenaz_leitura SELECT"} {
+		"plataforma.sessao tenaz_leitura SELECT", "padrao:tenaz_dono:app:tabelas tenaz_app TRUNCATE"} {
 		if !contem(aMais, esperado) {
 			t.Errorf("o mapa não acusou %q; a mais: %v", esperado, aMais)
 		}
