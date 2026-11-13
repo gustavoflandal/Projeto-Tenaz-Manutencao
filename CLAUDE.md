@@ -101,6 +101,7 @@ Consulte a seção 6 do sumário. Principais: P1 (ICP-Brasil na NR-1), P4 (preç
 - Quando houver código: testes junto com a funcionalidade, inclusive o teste de vazamento entre empresas, prestadores, locatários e contas conectadas (R2, R4, R5).
 - Commits em português, mensagem curta no imperativo ou descritiva, citando os IDs afetados.
 - Faça commit e push somente quando o dono do produto pedir.
+- **Um branch por etapa:** Cada etapa tem um branch próprio, `etapa/eNN-titulo-curto` (ex.: `etapa/e01-conta-e-acesso`), saído de `main`. Os commits da etapa vão para esse branch; no fechamento abre-se um pull request para `main`, que só é integrado com o CI verde e a pedido do dono do produto. Nada vai direto para `main` (decisão do dono do produto, 13/11/2026, na etapa E01).
 
 ## 7. Estrutura do repositório
 
@@ -124,7 +125,7 @@ docs/screenshots/       evidência visual das telas entregues
 docs/pdf/               PDFs gerados dos documentos
 docs/pesquisa/          estudo de mercado e notas de pesquisa
 ferramentas/            md2pdf.py, verificar_docs.py, versao.sh, tarefas.sh
-.claude/agents/         os 16 agentes especializados do projeto
+.claude/agents/         os 18 agentes especializados do projeto
 .claude/skills/         as 12 skills com os procedimentos obrigatórios
 ```
 
@@ -134,8 +135,11 @@ Todas as tarefas passam por um script único, para que "passa na minha máquina"
 
 ```bash
 ferramentas/tarefas.sh ajuda         # lista todas as tarefas
-ferramentas/tarefas.sh infra         # sobe PostgreSQL e Valkey
+ferramentas/tarefas.sh infra         # sobe PostgreSQL, Valkey, Mailpit e SeaweedFS (S3) e cria o bucket da auditoria
 ferramentas/tarefas.sh migrar        # aplica as migrações
+ferramentas/tarefas.sh api           # sobe a API local (com o S3 do selo, só de desenvolvimento)
+ferramentas/tarefas.sh selar-auditoria  # sela a trilha pendente e copia o selo ao bucket imutável
+ferramentas/tarefas.sh armazenamento-provar  # prova o bloqueio de objeto e o filer sem JWT
 ferramentas/tarefas.sh conferir      # formato, análise, contrato, tipos, documentação
 ferramentas/tarefas.sh tudo          # conferências + todos os testes
 ferramentas/tarefas.sh vazamento     # suíte de isolamento (bloqueia merge e deploy)

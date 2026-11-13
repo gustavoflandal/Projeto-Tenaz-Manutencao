@@ -1,0 +1,379 @@
+{
+  "erro": {
+    "requisicao_invalida": {
+      "titulo": "Solicitud no válida"
+    },
+    "campo_nao_permitido": {
+      "titulo": "Campo no permitido"
+    },
+    "filtro_nao_suportado": {
+      "titulo": "Filtro no admitido"
+    },
+    "cursor_invalido": {
+      "titulo": "Cursor no válido"
+    },
+    "nao_autenticado": {
+      "titulo": "Se requiere autenticación"
+    },
+    "credencial_invalida": {
+      "titulo": "Credencial no válida"
+    },
+    "mfa_obrigatorio": {
+      "titulo": "Se requiere el segundo factor"
+    },
+    "mfa_codigo_invalido": {
+      "titulo": "Código del segundo factor no válido"
+    },
+    "csrf_invalido": {
+      "titulo": "Token CSRF ausente o no válido"
+    },
+    "permissao_negada": {
+      "titulo": "Sin permiso para esta acción"
+    },
+    "plano_nao_inclui_recurso": {
+      "titulo": "Recurso fuera del plan contratado"
+    },
+    "recurso_nao_encontrado": {
+      "titulo": "Recurso no encontrado"
+    },
+    "conflito": {
+      "titulo": "Registro duplicado"
+    },
+    "transicao_invalida": {
+      "titulo": "Acción no permitida en el estado actual"
+    },
+    "idempotencia_em_processamento": {
+      "titulo": "La solicitud aún se está procesando"
+    },
+    "link_email_invalido": {
+      "titulo": "Enlace no válido o vencido"
+    },
+    "versao_desatualizada": {
+      "titulo": "El registro cambió desde la lectura"
+    },
+    "payload_muito_grande": {
+      "titulo": "Cuerpo por encima del límite"
+    },
+    "tipo_midia_nao_suportado": {
+      "titulo": "Tipo de contenido no admitido"
+    },
+    "validacao_falhou": {
+      "titulo": "Los datos enviados no pasaron la validación"
+    },
+    "campo_somente_leitura": {
+      "titulo": "Campo de solo lectura"
+    },
+    "idempotencia_conflito": {
+      "titulo": "Identificador de idempotencia ya usado con otro cuerpo"
+    },
+    "senha_fraca": {
+      "titulo": "Contraseña débil"
+    },
+    "pre_condicao_obrigatoria": {
+      "titulo": "Se requiere el encabezado If-Match"
+    },
+    "limite_requisicoes_excedido": {
+      "titulo": "Límite de solicitudes excedido"
+    },
+    "erro_interno": {
+      "titulo": "Error interno"
+    },
+    "sem_contexto_empresa": {
+      "titulo": "Error interno"
+    },
+    "servico_indisponivel": {
+      "titulo": "Servicio no disponible"
+    },
+    "ultimo_administrador": {
+      "titulo": "La empresa quedaría sin administrador"
+    }
+  },
+  "detalhe": {
+    "empresa_id_requisicao": "La empresa siempre viene de la credencial; quite empresa_id de la solicitud.",
+    "filtro": "La ruta no admite uno de los parámetros de consulta; revise el contrato.",
+    "corpo_json": "El cuerpo de la solicitud no es un JSON válido.",
+    "campo_ou_tipo": "La solicitud tiene un campo desconocido o un valor de tipo incorrecto; revise el contrato.",
+    "somente_leitura": "La solicitud intenta cambiar un campo de solo lectura.",
+    "campos_problema_one": "{{n}} campo con problema.",
+    "campos_problema_other": "{{n}} campos con problema.",
+    "corpo_grande": "El cuerpo supera el límite que admite la ruta.",
+    "tipo_midia": "Envíe el cuerpo como application/json.",
+    "requisicao_ilegivel": "No se pudo leer la solicitud; revise el contrato.",
+    "rota_inexistente": "La ruta no existe.",
+    "plano_segunda_unidade": "El plan tiene una unidad; la segunda requiere el plan Profesional.",
+    "verificacao_nao_configurada": "La verificación de integridad no está configurada en este servidor.",
+    "pessoa_ja_situacao": "La persona ya está {{situacao}}.",
+    "pessoa_com_usuario": "La persona está vinculada a un usuario {{situacao}}; inactive al usuario antes.",
+    "versao_gravada": "El registro está en la versión {{versao}}.",
+    "unidade_ja_situacao": "La unidad ya está {{situacao}}.",
+    "empresa_uma_unidade_ativa": "La empresa necesita al menos una unidad activa.",
+    "so_administrador_altera": "Solo un administrador modifica a un administrador.",
+    "ultimo_administrador": "La empresa necesita al menos un administrador activo.",
+    "usuario_ja_inativo": "El usuario ya está inactivo.",
+    "so_inativo_reativa": "Solo se reactiva a un usuario inactivo.",
+    "so_convidado_convite": "Solo un usuario invitado recibe invitación.",
+    "ninguem_altera_proprias_permissoes": "Nadie modifica sus propios permisos.",
+    "so_admin_retira": "Solo el administrador retira {{permissao}}.",
+    "sem_a_permissao": "Usted no tiene el permiso {{permissao}}.",
+    "usuario_sem_permissao_avulsa": "El usuario no tiene el permiso individual {{permissao}}.",
+    "ninguem_altera_proprios_perfis": "Nadie modifica sus propios perfiles.",
+    "perfil_da_permissao": "El perfil {{perfil}} otorga el permiso {{permissao}}, que usted no tiene.",
+    "ninguem_concede_a_si": "Nadie se concede un permiso a sí mismo.",
+    "so_admin_concede": "Solo el administrador concede {{permissao}}.",
+    "combinacao_nao_permitida": "La combinación de datos no está permitida.",
+    "adm_nao_configurado": "El módulo ADM no está configurado en este servidor.",
+    "idempotencia_conflito": "El identificador de idempotencia ya se usó con otro cuerpo; genere uno nuevo.",
+    "idempotencia_processando": "La solicitud con este identificador aún se está procesando; intente de nuevo en 1 segundo.",
+    "idempotencia_formato": "Idempotency-Key admite hasta 64 caracteres visibles, como un UUID.",
+    "corpo_ilegivel": "No se pudo leer el cuerpo de la solicitud.",
+    "origem_invalida": "La solicitud vino de un origen que no es el de la web de Tenaz.",
+    "autenticacao_nao_configurada": "La autenticación no está configurada en este servidor.",
+    "so_sessao_web": "Esta ruta solo admite la sesión web.",
+    "entre_para_continuar": "Inicie sesión en Tenaz para continuar.",
+    "csrf_origem": "Envíe la solicitud desde la web de Tenaz.",
+    "csrf_cabecalho": "Envíe el encabezado X-CSRF-Token con el csrf_token de la sesión.",
+    "sessao_invalida": "La sesión terminó o no es válida; inicie sesión de nuevo.",
+    "if_match_obrigatorio": "Envíe el encabezado If-Match con el ETag leído del recurso.",
+    "if_match_formato": "If-Match debe ser el ETag leído del recurso, como \"12\".",
+    "versao_desatualizada": "El registro cambió desde la lectura (versión actual {{versao}}); lea de nuevo y rehaga el cambio.",
+    "patch_objeto": "El cuerpo del PATCH debe ser un objeto JSON.",
+    "patch_tipo": "El PATCH tiene un valor de tipo incorrecto.",
+    "login_invalido": "Correo electrónico o contraseña incorrectos, o acceso bloqueado por un tiempo. Revise los datos o solicite un enlace para restablecer la contraseña.",
+    "mfa_codigo_incorreto": "Código incorrecto. Revise el código actual de la aplicación de autenticación.",
+    "mfa_desafio": "El código venció, ya se usó o se agotaron los intentos; inicie sesión de nuevo con correo electrónico y contraseña.",
+    "mfa_informe_codigo": "Informe el código de la aplicación de autenticación en POST /v1/auth/mfa/verificar.",
+    "refresh_invalido": "Código o refresh token no válido, vencido o ya usado; inicie sesión de nuevo.",
+    "selo_nao_configurado": "El almacenamiento inmutable del sello no está configurado en este servidor.",
+    "selo_copia": "No fue posible verificar la copia del sello en el almacenamiento inmutable.",
+    "identidade_sso": "La identidad inicia sesión por SSO y no tiene contraseña.",
+    "convite_email_nao_saiu": "La invitación se guardó, pero el correo electrónico no se envió; reenvíe la invitación.",
+    "mfa_ja_ativo": "El segundo factor ya está activo.",
+    "mfa_iniciar_antes": "Inicie la activación antes de confirmar.",
+    "mfa_empresa_exige": "Una empresa a la que usted accede exige el segundo factor; no se puede desactivar.",
+    "mfa_inativo": "El segundo factor no está activo.",
+    "perfil_sem_app": "El perfil no usa la app (mob.usar_app).",
+    "mfa_empresa_ativar": "Esta empresa exige el segundo factor. Active el MFA desde la web para continuar.",
+    "perfil_sem_app_empresa": "El perfil en esta empresa no usa la app.",
+    "falta_permissao": "Falta el permiso {{permissao}}.",
+    "falta_uma_permissao": "Falta uno de los permisos {{permissoes}}.",
+    "acesso_mudou": "El acceso del usuario cambió; inicie sesión de nuevo.",
+    "cursor_invalido": "Cursor dañado, de otra consulta o vencido; reinicie sin cursor."
+  },
+  "campo": {
+    "informe": "Informe {{campo}}.",
+    "tamanho_maximo": "Use como máximo {{max}} caracteres.",
+    "email_obrigatorio": "Informe el correo electrónico.",
+    "email_invalido": "Correo electrónico no válido.",
+    "fuso_obrigatorio": "Informe una zona horaria IANA, como America/Argentina/Buenos_Aires.",
+    "fuso_desconhecido": "Zona horaria desconocida.",
+    "data_formato": "Use la fecha en el formato AAAA-MM-DD.",
+    "plano_obrigatorio": "Elija un plan o habilite el módulo SRV (plan Servicios).",
+    "plano_desconhecido": "Plan desconocido.",
+    "dia_semana": "Día de la semana de 1 (lunes) a 7 (domingo).",
+    "hora_inicio": "Use HH:MM, de 00:00 a 23:59.",
+    "hora_fim": "Use HH:MM, de 00:00 a 24:00.",
+    "hora_fim_igual": "El fin del turno debe ser distinto del inicio.",
+    "ultimo_turno": "La unidad necesita al menos un turno de trabajo (RN-ADM-019).",
+    "latitude": "Latitud de -90 a 90.",
+    "longitude": "Longitud de -180 a 180.",
+    "turnos_na_edicao": "Los turnos cambian con las operaciones de turno, no al editar la unidad.",
+    "vinculo": "El campo vinculo admite: empregado, terceiro o autonomo.",
+    "vinculo_fornecedor": "La persona de un proveedor tiene vinculo terceiro.",
+    "acao_desconhecida": "Tipo de operación desconocido.",
+    "modulo_desconhecido": "Módulo desconocido.",
+    "tela_desconhecida": "La pantalla no existe en el catálogo de pantallas del sistema.",
+    "ip_formato": "Use una dirección IPv4 o IPv6.",
+    "ip_exige_inicio": "El filtro por IP requiere el inicio del período.",
+    "periodo_fim_depois": "El fin del período debe ser posterior al inicio.",
+    "exportacao_inicio": "La exportación requiere el inicio del período.",
+    "exportacao_fim": "La exportación requiere el fin del período.",
+    "exportacao_grande": "El período tiene demasiados eventos para una exportación (más de 50.000); reduzca el período o use la exportación completa.",
+    "pessoa_fornecedor_usuario": "La persona está vinculada a un usuario; su proveedor debe ser el del usuario (ninguno, si el usuario es interno).",
+    "perfil_nao_encontrado": "Perfil no encontrado: {{perfil}}.",
+    "pessoa_nao_encontrada": "Persona no encontrada.",
+    "pessoa_inativa": "La persona está inactiva; reactívela antes de vincular un usuario.",
+    "pessoa_fornecedor_prestador": "La persona de un proveedor solo se vincula a un usuario prestador del mismo proveedor, y viceversa.",
+    "pessoa_ou_nova": "Informe pessoa_id o nova_pessoa, no ambos.",
+    "nova_pessoa_fornecedor": "La persona de un prestador es del mismo proveedor del usuario.",
+    "turno_sobrepoe": "El turno se superpone con el del {{dia}}, de {{inicio}} a {{fim}}.",
+    "fornecedor_ou_locatario": "El usuario es de un proveedor o de un arrendatario, no de ambos.",
+    "perfil_obrigatorio": "El usuario necesita al menos un perfil.",
+    "perfil_repetido": "Perfil repetido.",
+    "perfil_fornecedor": "El usuario de un proveedor tiene solo el perfil prestador.",
+    "perfil_locatario": "El usuario de un arrendatario tiene solo el perfil arrendatario.",
+    "perfil_exige_vinculo": "El perfil {{perfil}} (perfis[{{indice}}]) exige el vínculo con {{alvo}}.",
+    "permissao_fora_catalogo": "Permiso fuera del catálogo de RF-ADM-005.",
+    "permissao_externo": "Este permiso nunca se concede a un usuario prestador o arrendatario.",
+    "permissao_do_perfil": "El usuario {{perfil}} solo recibe permisos del conjunto estándar de su perfil.",
+    "duplicado": "Ya existe un registro con este valor.",
+    "referencia_nao_encontrada": "Registro referenciado no encontrado.",
+    "data_hora_z": "Use fecha y hora ISO 8601 en UTC, con Z.",
+    "periodo_verificacao": "El período debe tener inicio, fin y como máximo 400 días.",
+    "senha_atual": "La contraseña actual no coincide.",
+    "oauth_cliente": "Cliente OAuth desconocido.",
+    "oauth_redirect": "URI de retorno no registrada.",
+    "oauth_s256": "Solo se admite S256.",
+    "oauth_challenge": "code_challenge debe ser el sha256 del verificador en base64url, con 43 caracteres.",
+    "senha_caracteres": "La contraseña tiene caracteres no válidos.",
+    "senha_minimo": "Use al menos {{min}} caracteres.",
+    "senha_vazada": "Esta contraseña aparece en listas de contraseñas filtradas. Elija otra.",
+    "senha_sequencia": "La contraseña no puede ser un único carácter repetido ni una secuencia.",
+    "senha_email": "La contraseña no puede contener su correo electrónico.",
+    "idempotencia_formato": "Use un UUID o un texto de hasta 64 caracteres.",
+    "fuso_fora_do_pais": "La zona horaria no es una de las admitidas para el país de la empresa ({{pais}}).",
+    "subdivisao_fora_do_pais": "La subdivisión no es una de las admitidas para el país de la empresa ({{pais}}); use el código ISO 3166-2.",
+    "codigo_postal_formato": "El código postal no tiene la forma usada en el país de la empresa ({{pais}}).",
+    "codigo_postal_cpa_subdivisao": "La primera letra del CPA debe ser la de la subdivisión ({{subdivisao}})."
+  },
+  "identificacao": {
+    "tipo_obrigatorio": "Informe el tipo de identificación.",
+    "valor_obrigatorio": "Informe el número de identificación.",
+    "tipo_desconhecido": "Tipo de identificación desconocido.",
+    "tipo_da_empresa": "En este país, el tipo de identificación de la empresa es {{tipo}}.",
+    "tipo_da_pessoa": "Tipo de identificación de persona no admitido.",
+    "formato": "Número de {{tipo}} con formato no válido.",
+    "digito": "{{tipo}} no válido: el dígito verificador no coincide."
+  },
+  "pais": {
+    "obrigatorio": "Informe el país.",
+    "desconhecido": "País no admitido. Use BR, AR o PY.",
+    "idioma_invalido": "Idioma no admitido. Use pt-BR o es-419."
+  },
+  "validacao": {
+    "valor_invalido": "Valor no válido.",
+    "consulta_desconhecida": "Parámetro de consulta no admitido en esta ruta.",
+    "empresa_id": "La empresa viene de la credencial; no envíe empresa_id.",
+    "somente_leitura": "Campo de solo lectura.",
+    "campo_desconhecido": "Campo desconocido en esta ruta.",
+    "obrigatorio": "Campo obligatorio.",
+    "tamanho_minimo": "Use al menos {{min}} caracteres.",
+    "itens_minimo": "Informe al menos {{min}} elementos.",
+    "itens_maximo": "Informe como máximo {{max}} elementos.",
+    "numero_minimo": "El valor mínimo es {{min}}.",
+    "numero_maximo": "El valor máximo es {{max}}.",
+    "valor_nao_aceito": "Valor no admitido.",
+    "valor_nao_aceito_use": "Valor no admitido. Use uno de estos: {{valores}}.",
+    "tipo_errado": "Tipo de valor incorrecto: se esperaba {{tipo}}.",
+    "tipo": {
+      "string": "texto",
+      "integer": "número entero",
+      "number": "número",
+      "boolean": "verdadero o falso",
+      "array": "lista",
+      "object": "objeto",
+      "null": "nulo"
+    },
+    "data_hora": "Use fecha y hora ISO 8601 en UTC, con Z: 2026-11-12T13:45:00Z.",
+    "uuid": "Use un identificador UUID.",
+    "email": "Informe un correo electrónico válido.",
+    "formato": "Formato no válido.",
+    "corpo_json": "El cuerpo de la solicitud no es un JSON válido."
+  },
+  "email": {
+    "convite": {
+      "assunto": "Invitación a Tenaz: {{empresa}}",
+      "corpo": "Hola, {{nome}}.\n\nUsted recibió una invitación para acceder a la empresa {{empresa}} en Tenaz.\n\nPara aceptar, abra el siguiente enlace dentro de {{dias}} días:\n\n{{link}}\n\nSi no esperaba esta invitación, ignore este correo electrónico.\n"
+    },
+    "redefinicao_senha": {
+      "assunto": "Restablecimiento de contraseña en Tenaz",
+      "corpo": "Recibimos una solicitud para restablecer su contraseña en Tenaz.\n\nPara crear una contraseña nueva, abra el siguiente enlace dentro de 1 hora:\n\n{{link}}\n\nSi no fue usted, ignore este correo electrónico: su contraseña sigue siendo la misma.\n"
+    }
+  },
+  "tela": {
+    "adm": {
+      "empresa": "Empresa",
+      "unidades": "Unidades",
+      "unidade_detalhe": "Detalle de la unidad",
+      "pessoas": "Personas",
+      "pessoa_detalhe": "Detalle de la persona",
+      "usuarios": "Usuarios",
+      "usuario_detalhe": "Detalle del usuario",
+      "perfis": "Perfiles y permisos",
+      "auditoria": "Pista de auditoría",
+      "parametros": "Parámetros"
+    },
+    "ind": {
+      "painel": "Panel"
+    },
+    "atv": {
+      "ativos": "Activos",
+      "ativo_detalhe": "Detalle del activo"
+    },
+    "med": {
+      "medidores": "Medidores y lecturas"
+    },
+    "sol": {
+      "solicitacoes": "Solicitudes",
+      "solicitacao_detalhe": "Detalle de la solicitud"
+    },
+    "os": {
+      "ordens": "Órdenes de trabajo",
+      "ordem_detalhe": "Detalle de la orden de trabajo"
+    },
+    "pre": {
+      "planos": "Planes de mantenimiento"
+    },
+    "chk": {
+      "modelos": "Modelos de lista de verificación"
+    },
+    "est": {
+      "itens": "Artículos de inventario",
+      "movimentacoes": "Movimientos de inventario"
+    },
+    "ter": {
+      "fornecedores": "Proveedores y prestadores"
+    },
+    "srv": {
+      "conexoes": "Conexiones entre cuentas"
+    },
+    "prj": {
+      "projetos": "Proyectos"
+    },
+    "ctr": {
+      "contratos": "Contratos"
+    },
+    "loc": {
+      "locatarios": "Arrendatarios",
+      "contratos": "Contratos de alquiler"
+    },
+    "fro": {
+      "veiculos": "Vehículos de la flota"
+    },
+    "con": {
+      "conformidade": "Cumplimiento normativo y documentos"
+    },
+    "int": {
+      "integracoes": "Integraciones"
+    }
+  },
+  "situacao": {
+    "ativa": "activa",
+    "inativa": "inactiva",
+    "usuario": {
+      "ativo": "activo",
+      "inativo": "inactivo",
+      "convidado": "invitado"
+    }
+  },
+  "dia": {
+    "1": "lunes",
+    "2": "martes",
+    "3": "miércoles",
+    "4": "jueves",
+    "5": "viernes",
+    "6": "sábado",
+    "7": "domingo"
+  },
+  "alvo": {
+    "fornecedor": "un proveedor",
+    "locatario": "un arrendatario"
+  },
+  "dinheiro": {
+    "formato_valor": "Use un valor decimal con punto, sin separador de miles ni signo más, con hasta 16 dígitos enteros y hasta 2 decimales, como \"125.50\".",
+    "formato_preco": "Use un valor decimal con punto, sin separador de miles ni signo más, con hasta 12 dígitos enteros y hasta 6 decimales, como \"6.299\".",
+    "formato_quantidade": "Use una cantidad decimal con punto, con hasta 12 dígitos enteros y hasta 6 decimales, como \"45.37\".",
+    "sem_negativo": "Este campo no admite valores negativos.",
+    "casas_da_moeda": "El valor tiene decimales que la moneda {{moeda}} no admite; Tenaz no redondea lo que se escribió.",
+    "fora_da_faixa": "El resultado supera el límite que admite el campo."
+  }
+}

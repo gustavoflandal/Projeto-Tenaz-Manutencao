@@ -94,3 +94,5 @@ O Markdown é a fonte; **o PDF nunca é editado à mão**. A conversão precisa 
 ## 9. Commit
 
 **Só quando o dono do produto pedir** ([CLAUDE.md](../../../CLAUDE.md), seção 6). Mensagem em português, citando os IDs afetados, no padrão de commits convencionais.
+
+O commit vai para o **branch da etapa** (`etapa/eNN-titulo-curto`), nunca direto para `main`. No fechamento, abra o pull request para `main` com o resumo da etapa e o link do registro; a integração só acontece com o CI verde e a pedido do dono do produto ([docs/execucao/1_MODELO_EXECUCAO.md](../../../docs/execucao/1_MODELO_EXECUCAO.md), seção 4.1).

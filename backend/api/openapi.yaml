@@ -39,6 +39,43 @@ components:
         - codigo
         - mensagem
       type: object
+    CapturaAuditoria:
+      additionalProperties: false
+      properties:
+        configurada:
+          description: "Falso: a empresa ainda não mudou nenhuma chave desta tela e vale o padrão (impressão e extração ligadas, visualização desligada)"
+          type: boolean
+        extracao:
+          description: Grava a extração (lista, relatório, exportação) feita nesta tela
+          type: boolean
+        impressao:
+          description: Grava a impressão (PDF ou tela) feita nesta tela
+          type: boolean
+        modulo:
+          examples:
+            - adm
+          type: string
+        nome:
+          examples:
+            - Pessoas
+          type: string
+        tela:
+          description: <modulo>.<tela> do catálogo fechado
+          examples:
+            - adm.pessoas
+          type: string
+        visualizacao:
+          description: Grava um evento por registro aberto nesta tela
+          type: boolean
+      required:
+        - tela
+        - modulo
+        - nome
+        - visualizacao
+        - impressao
+        - extracao
+        - configurada
+      type: object
     ConfiguracaoMFA:
       additionalProperties: false
       properties:
@@ -83,17 +120,40 @@ components:
       required:
         - identidade_nova
       type: object
+    DiaVerificado:
+      additionalProperties: false
+      properties:
+        dia:
+          description: Dia UTC
+          format: date
+          type: string
+        estado:
+          enum:
+            - integro
+            - violado
+            - nao_selado
+          type: string
+        evento_id:
+          description: Primeiro evento alterado, quando há como apontar
+          format: uuid
+          type: string
+        motivo:
+          description: "Em violado: evento_alterado, eventos_divergentes, selo_adulterado, cadeia_quebrada, selo_ausente, evento_anterior_ao_primeiro_selo, copia_ausente ou copia_divergente. Em nao_selado: ainda_nao_selado ou anterior_ao_primeiro_selo"
+          type:
+            - string
+            - "null"
+      required:
+        - dia
+        - estado
+        - motivo
+        - evento_id
+      type: object
     Empresa:
       additionalProperties: false
       properties:
         atualizado_em:
           format: date-time
           type: string
-        cnpj:
-          description: 14 dígitos, sem máscara
-          type:
-            - string
-            - "null"
         criado_em:
           format: date-time
           type: string
@@ -104,13 +164,43 @@ components:
         id:
           format: uuid
           type: string
+        identificacao:
+          description: "Normalizada: maiúsculas, só letras e dígitos, sem máscara"
+          type:
+            - string
+            - "null"
+        identificacao_tipo:
+          description: cnpj no BR, cuit na AR, ruc no PY
+          type:
+            - string
+            - "null"
+        idioma_padrao:
+          description: Idioma que o usuário convidado recebe; cada usuário muda o seu em PATCH /v1/usuarios/eu
+          enum:
+            - pt-BR
+            - es-419
+          type: string
         mfa_obrigatorio:
           description: "Segundo fator exigido de todos os usuários (RN-ADM-027): quem não o tem entra com sessão restrita à ativação"
           type: boolean
+        moeda:
+          description: Moeda da empresa, dada pelo país; só leitura
+          enum:
+            - BRL
+            - ARS
+            - PYG
+          type: string
         nome_fantasia:
           type:
             - string
             - "null"
+        pais:
+          description: Define a moeda, o idioma padrão sugerido e o tipo de identificação; só leitura depois da criação da conta
+          enum:
+            - BR
+            - AR
+            - PY
+          type: string
         plano:
           description: essencial, profissional ou enterprise; nulo na conta só do plano Serviços
           type:
@@ -142,7 +232,11 @@ components:
         - id
         - razao_social
         - nome_fantasia
-        - cnpj
+        - pais
+        - moeda
+        - idioma_padrao
+        - identificacao_tipo
+        - identificacao
         - plano
         - srv_habilitado
         - mfa_obrigatorio
@@ -174,7 +268,27 @@ components:
     EmpresaSessao:
       additionalProperties: false
       properties:
+        idioma_padrao:
+          description: Idioma padrão da empresa (empresa.idioma_padrao)
+          enum:
+            - pt-BR
+            - es-419
+          type: string
+        moeda:
+          description: Moeda da empresa, dada pelo país; só leitura
+          enum:
+            - BRL
+            - ARS
+            - PYG
+          type: string
         nome:
+          type: string
+        pais:
+          description: País da empresa (ISO 3166-1 alfa-2); só leitura
+          enum:
+            - BR
+            - AR
+            - PY
           type: string
         plano:
           description: Nulo na conta só do plano Serviços
@@ -192,6 +306,9 @@ components:
         - nome
         - plano
         - srv_habilitado
+        - pais
+        - moeda
+        - idioma_padrao
       type: object
     Endereco:
       additionalProperties: false
@@ -199,8 +316,9 @@ components:
         bairro:
           maxLength: 100
           type: string
-        cep:
-          maxLength: 9
+        codigo_postal:
+          description: CEP (BR), CPA ou código de 4 dígitos (AR), 6 dígitos (PY); recebido com ou sem máscara, devolvido normalizado
+          maxLength: 16
           type: string
         complemento:
           maxLength: 100
@@ -214,8 +332,9 @@ components:
         numero:
           maxLength: 20
           type: string
-        uf:
-          maxLength: 2
+        subdivisao:
+          description: Código ISO 3166-2 do país da empresa (BR-SP, AR-C, PY-ASU)
+          maxLength: 6
           type: string
       type: object
     EntradaAutorizarPOSTBody:
@@ -253,6 +372,20 @@ components:
         - code_challenge_method
         - empresa_escolhida_id
       type: object
+    EntradaCapturaAuditoria:
+      additionalProperties: false
+      properties:
+        extracao:
+          type: boolean
+        impressao:
+          type: boolean
+        visualizacao:
+          type: boolean
+      required:
+        - visualizacao
+        - impressao
+        - extracao
+      type: object
     EntradaCodigoMFABody:
       additionalProperties: false
       properties:
@@ -265,6 +398,12 @@ components:
     EntradaConviteAceitarBody:
       additionalProperties: false
       properties:
+        idioma:
+          description: "Idioma em que a pessoa aceitou; passa a ser o dela. Ausente: o do convite (padrão da empresa)"
+          enum:
+            - pt-BR
+            - es-419
+          type: string
         senha:
           description: Obrigatória quando pede_senha; ignorada quando o e-mail já tem login
           maxLength: 1024
@@ -356,10 +495,6 @@ components:
         cargo:
           maxLength: 100
           type: string
-        cpf:
-          description: Com ou sem máscara
-          maxLength: 14
-          type: string
         data_nascimento:
           format: date
           type: string
@@ -368,6 +503,18 @@ components:
           type: string
         fornecedor_id:
           format: uuid
+          type: string
+        identificacao:
+          description: Com ou sem máscara; a forma e, no CPF, o dígito verificador são conferidos
+          maxLength: 24
+          type: string
+        identificacao_tipo:
+          description: Qualquer país suportado; vai junto com identificacao
+          enum:
+            - cpf
+            - cuil
+            - dni
+            - ci
           type: string
         matricula:
           maxLength: 40
@@ -515,9 +662,6 @@ components:
     EntradaUnidade:
       additionalProperties: false
       properties:
-        cnpj:
-          maxLength: 18
-          type: string
         codigo:
           maxLength: 20
           minLength: 1
@@ -526,6 +670,16 @@ components:
           $ref: "#/components/schemas/Endereco"
         fuso_horario:
           maxLength: 64
+          type: string
+        identificacao:
+          maxLength: 24
+          type: string
+        identificacao_tipo:
+          description: Só o tipo do país da empresa; vai junto com identificacao
+          enum:
+            - cnpj
+            - cuit
+            - ruc
           type: string
         latitude:
           format: double
@@ -557,9 +711,10 @@ components:
       additionalProperties: false
       properties:
         custo_hora:
+          description: Preço unitário em texto decimal, até 6 casas, sem sinal; recusado, sem arredondar, o que a moeda da empresa não representa
           examples:
             - "125.50"
-          maxLength: 16
+          pattern: ^(0|[1-9][0-9]{0,11})(\.[0-9]{1,6})?$
           type: string
         email:
           maxLength: 254
@@ -607,6 +762,17 @@ components:
       additionalProperties: false
       properties:
         acao:
+          description: Tipo de operação (lista fechada, sumário 3.6)
+          enum:
+            - login
+            - logout
+            - inclusao
+            - alteracao
+            - exclusao
+            - delecao
+            - visualizacao
+            - impressao
+            - extracao
           type: string
         antes:
           description: Valores antes da alteração; nulo na criação
@@ -629,7 +795,9 @@ components:
           format: uuid
           type: string
         depois:
-          description: Valores depois da alteração; nulo na exclusão
+          description: Valores depois da alteração; nulo na exclusão. Na falha de login, traz o motivo
+        detalhe:
+          description: Filtros, formato e quantidade de uma impressão ou extração; nunca o conteúdo mostrado
         dispositivo_id:
           format: uuid
           type: string
@@ -642,10 +810,19 @@ components:
         entidade_id:
           format: uuid
           type: string
+        hash:
+          description: sha256, em hexadecimal, do conteúdo do evento (formato 1, documento 2, seção 9.2.1)
+          pattern: ^[0-9a-f]{64}$
+          type: string
         id:
           format: uuid
           type: string
         ip:
+          type:
+            - string
+            - "null"
+        modulo:
+          description: Código do módulo (sumário, seção 2), em minúsculas
           type:
             - string
             - "null"
@@ -671,6 +848,20 @@ components:
           type:
             - string
             - "null"
+        resultado:
+          description: falha só em login; o motivo está em depois do detalhe do evento
+          enum:
+            - sucesso
+            - falha
+          type: string
+        sensivel:
+          description: O registro mostrado, impresso ou extraído tem dado sensível
+          type: boolean
+        tela:
+          description: Tela de origem, <modulo>.<tela> do catálogo fechado; nula em API, job e sincronização
+          type:
+            - string
+            - "null"
         token_api_id:
           format: uuid
           type: string
@@ -681,20 +872,32 @@ components:
         usuario_id:
           format: uuid
           type: string
+        usuario_nome:
+          description: Nome do usuário no instante do evento; a troca de nome não reescreve o histórico
+          type:
+            - string
+            - "null"
       required:
         - antes
         - depois
+        - detalhe
+        - hash
         - user_agent
         - id
         - ocorrido_em
         - ator_tipo
         - usuario_id
+        - usuario_nome
         - token_api_id
         - acao
+        - resultado
         - entidade
         - entidade_id
         - entidade_chave
         - campos_alterados
+        - modulo
+        - tela
+        - sensivel
         - origem
         - ip
         - dispositivo_id
@@ -725,6 +928,36 @@ components:
         - data
         - descricao
         - versao
+      type: object
+    ListaCapturaAuditoria:
+      additionalProperties: false
+      properties:
+        dados:
+          items:
+            $ref: "#/components/schemas/CapturaAuditoria"
+          type:
+            - array
+            - "null"
+        paginacao:
+          $ref: "#/components/schemas/Paginacao"
+      required:
+        - dados
+        - paginacao
+      type: object
+    ListaDiaVerificado:
+      additionalProperties: false
+      properties:
+        dados:
+          items:
+            $ref: "#/components/schemas/DiaVerificado"
+          type:
+            - array
+            - "null"
+        paginacao:
+          $ref: "#/components/schemas/Paginacao"
+      required:
+        - dados
+        - paginacao
       type: object
     ListaFeriado:
       additionalProperties: false
@@ -834,16 +1067,36 @@ components:
     NovaEmpresa:
       additionalProperties: false
       properties:
-        cnpj:
-          description: Com ou sem máscara; dígito verificador conferido
-          maxLength: 18
-          type: string
         fuso_horario:
-          description: "IANA; ausente: America/Sao_Paulo"
+          description: "IANA; ausente: o do país (America/Sao_Paulo, America/Argentina/Buenos_Aires, America/Asuncion)"
           maxLength: 64
+          type: string
+        identificacao:
+          description: Com ou sem máscara; a forma e, no CNPJ, o dígito verificador são conferidos
+          maxLength: 24
+          type: string
+        identificacao_tipo:
+          description: "Só o tipo de pessoa jurídica do país: cnpj no BR, cuit na AR, ruc no PY"
+          enum:
+            - cnpj
+            - cuit
+            - ruc
+          type: string
+        idioma_padrao:
+          description: "Ausente: o do país (pt-BR no BR, es-419 na AR e no PY)"
+          enum:
+            - pt-BR
+            - es-419
           type: string
         nome_fantasia:
           maxLength: 200
+          type: string
+        pais:
+          description: Define a moeda (BRL, ARS, PYG), o idioma padrão sugerido e o tipo de identificação; não muda depois
+          enum:
+            - BR
+            - AR
+            - PY
           type: string
         plano:
           description: Ausente só com srv_habilitado (conta do plano Serviços)
@@ -865,7 +1118,9 @@ components:
           $ref: "#/components/schemas/EntradaUnidade"
           description: Unidade inicial; sem turnos, segunda a sexta das 08:00 às 17:00
       required:
-        - cnpj
+        - pais
+        - identificacao_tipo
+        - identificacao
         - razao_social
         - responsavel
         - unidade
@@ -895,12 +1150,24 @@ components:
     PatchEmpresa:
       additionalProperties: false
       properties:
-        cnpj:
-          description: Com ou sem máscara
-          maxLength: 18
-          type: string
         fuso_horario:
           maxLength: 64
+          type: string
+        identificacao:
+          description: Com ou sem máscara; a forma e, no CNPJ, o dígito verificador são conferidos
+          maxLength: 24
+          type: string
+        identificacao_tipo:
+          description: Só o tipo do país da empresa
+          enum:
+            - cnpj
+            - cuit
+            - ruc
+          type: string
+        idioma_padrao:
+          enum:
+            - pt-BR
+            - es-419
           type: string
         mfa_obrigatorio:
           description: Exige segundo fator de todos os usuários da empresa
@@ -923,8 +1190,8 @@ components:
           type:
             - string
             - "null"
-        cep:
-          maxLength: 9
+        codigo_postal:
+          maxLength: 16
           type:
             - string
             - "null"
@@ -948,8 +1215,8 @@ components:
           type:
             - string
             - "null"
-        uf:
-          maxLength: 2
+        subdivisao:
+          maxLength: 6
           type:
             - string
             - "null"
@@ -959,6 +1226,12 @@ components:
     PatchEu:
       additionalProperties: false
       properties:
+        idioma:
+          description: Só o próprio usuário altera o idioma
+          enum:
+            - pt-BR
+            - es-419
+          type: string
         nome:
           maxLength: 200
           minLength: 1
@@ -977,11 +1250,6 @@ components:
           type:
             - string
             - "null"
-        cpf:
-          maxLength: 14
-          type:
-            - string
-            - "null"
         data_nascimento:
           format: date
           type:
@@ -994,6 +1262,16 @@ components:
             - "null"
         fornecedor_id:
           format: uuid
+          type:
+            - string
+            - "null"
+        identificacao:
+          maxLength: 24
+          type:
+            - string
+            - "null"
+        identificacao_tipo:
+          description: cpf, cuil, dni ou ci; vai junto com identificacao
           type:
             - string
             - "null"
@@ -1051,11 +1329,6 @@ components:
     PatchUnidade:
       additionalProperties: false
       properties:
-        cnpj:
-          maxLength: 18
-          type:
-            - string
-            - "null"
         codigo:
           maxLength: 20
           minLength: 1
@@ -1065,6 +1338,16 @@ components:
           description: Mesclado campo a campo; null apaga o endereço
         fuso_horario:
           maxLength: 64
+          type:
+            - string
+            - "null"
+        identificacao:
+          maxLength: 24
+          type:
+            - string
+            - "null"
+        identificacao_tipo:
+          description: "cnpj, cuit ou ruc: o do país da empresa; vai junto com identificacao"
           type:
             - string
             - "null"
@@ -1091,7 +1374,7 @@ components:
       additionalProperties: false
       properties:
         custo_hora:
-          maxLength: 16
+          pattern: ^(0|[1-9][0-9]{0,11})(\.[0-9]{1,6})?$
           type:
             - string
             - "null"
@@ -1219,11 +1502,6 @@ components:
           type:
             - string
             - "null"
-        cpf:
-          description: 11 dígitos, sem máscara
-          type:
-            - string
-            - "null"
         criado_em:
           format: date-time
           type: string
@@ -1242,6 +1520,16 @@ components:
         id:
           format: uuid
           type: string
+        identificacao:
+          description: Normalizada, sem máscara; dado sensível
+          type:
+            - string
+            - "null"
+        identificacao_tipo:
+          description: cpf, cuil, dni ou ci
+          type:
+            - string
+            - "null"
         matricula:
           type:
             - string
@@ -1280,7 +1568,8 @@ components:
       required:
         - id
         - nome
-        - cpf
+        - identificacao_tipo
+        - identificacao
         - data_nascimento
         - matricula
         - cargo
@@ -1402,6 +1691,17 @@ components:
       additionalProperties: false
       properties:
         acao:
+          description: Tipo de operação (lista fechada, sumário 3.6)
+          enum:
+            - login
+            - logout
+            - inclusao
+            - alteracao
+            - exclusao
+            - delecao
+            - visualizacao
+            - impressao
+            - extracao
           type: string
         ator_tipo:
           enum:
@@ -1440,6 +1740,11 @@ components:
           type:
             - string
             - "null"
+        modulo:
+          description: Código do módulo (sumário, seção 2), em minúsculas
+          type:
+            - string
+            - "null"
         ocorrido_em:
           format: date-time
           type: string
@@ -1462,23 +1767,47 @@ components:
           type:
             - string
             - "null"
+        resultado:
+          description: falha só em login; o motivo está em depois do detalhe do evento
+          enum:
+            - sucesso
+            - falha
+          type: string
+        sensivel:
+          description: O registro mostrado, impresso ou extraído tem dado sensível
+          type: boolean
+        tela:
+          description: Tela de origem, <modulo>.<tela> do catálogo fechado; nula em API, job e sincronização
+          type:
+            - string
+            - "null"
         token_api_id:
           format: uuid
           type: string
         usuario_id:
           format: uuid
           type: string
+        usuario_nome:
+          description: Nome do usuário no instante do evento; a troca de nome não reescreve o histórico
+          type:
+            - string
+            - "null"
       required:
         - id
         - ocorrido_em
         - ator_tipo
         - usuario_id
+        - usuario_nome
         - token_api_id
         - acao
+        - resultado
         - entidade
         - entidade_id
         - entidade_chave
         - campos_alterados
+        - modulo
+        - tela
+        - sensivel
         - origem
         - ip
         - dispositivo_id
@@ -1493,12 +1822,6 @@ components:
           type:
             - string
             - "null"
-        cpf_mascarado:
-          examples:
-            - "***.***.789-01"
-          type:
-            - string
-            - "null"
         criado_em:
           format: date-time
           type: string
@@ -1508,6 +1831,17 @@ components:
         id:
           format: uuid
           type: string
+        identificacao_mascarada:
+          description: CPF mostra o miolo; os demais tipos, os 3 últimos caracteres
+          examples:
+            - "***.982.247-**"
+          type:
+            - string
+            - "null"
+        identificacao_tipo:
+          type:
+            - string
+            - "null"
         matricula:
           type:
             - string
@@ -1537,7 +1871,8 @@ components:
       required:
         - id
         - nome
-        - cpf_mascarado
+        - identificacao_tipo
+        - identificacao_mascarada
         - matricula
         - cargo
         - vinculo
@@ -1554,10 +1889,6 @@ components:
         atualizado_em:
           format: date-time
           type: string
-        cnpj:
-          type:
-            - string
-            - "null"
         codigo:
           type: string
         criado_em:
@@ -1573,6 +1904,15 @@ components:
         id:
           format: uuid
           type: string
+        identificacao:
+          type:
+            - string
+            - "null"
+        identificacao_tipo:
+          description: Só o tipo do país da empresa
+          type:
+            - string
+            - "null"
         latitude:
           format: double
           type:
@@ -1597,7 +1937,8 @@ components:
         - id
         - codigo
         - nome
-        - cnpj
+        - identificacao_tipo
+        - identificacao
         - endereco
         - fuso_horario
         - latitude
@@ -1889,10 +2230,6 @@ components:
         atualizado_em:
           format: date-time
           type: string
-        cnpj:
-          type:
-            - string
-            - "null"
         codigo:
           type: string
         criado_em:
@@ -1908,6 +2245,15 @@ components:
         id:
           format: uuid
           type: string
+        identificacao:
+          type:
+            - string
+            - "null"
+        identificacao_tipo:
+          description: Só o tipo do país da empresa
+          type:
+            - string
+            - "null"
         latitude:
           format: double
           type:
@@ -1939,7 +2285,8 @@ components:
         - id
         - codigo
         - nome
-        - cnpj
+        - identificacao_tipo
+        - identificacao
         - endereco
         - fuso_horario
         - latitude
@@ -1959,9 +2306,10 @@ components:
           format: date-time
           type: string
         custo_hora:
-          description: Custo por hora, texto decimal
+          description: "Custo por hora: preço unitário em texto decimal, com ponto, no mínimo as casas da moeda e até 6; sem sinal"
           examples:
             - "125.50"
+          pattern: ^(0|[1-9][0-9]{0,11})(\.[0-9]{1,6})?$
           type:
             - string
             - "null"
@@ -1981,10 +2329,30 @@ components:
         id:
           format: uuid
           type: string
+        idioma:
+          description: Idioma do usuário; só ele o altera, em PATCH /v1/usuarios/eu
+          enum:
+            - pt-BR
+            - es-419
+          type: string
         locatario_id:
           format: uuid
           type: string
+        moeda:
+          description: "Moeda de custo_hora: a da empresa; só leitura"
+          enum:
+            - BRL
+            - ARS
+            - PYG
+          type: string
         nome:
+          type: string
+        pais:
+          description: País da empresa; só leitura. A interface lê este campo e nunca o deriva da moeda
+          enum:
+            - BR
+            - AR
+            - PY
           type: string
         perfis:
           items:
@@ -2028,6 +2396,9 @@ components:
         - email
         - telefone
         - custo_hora
+        - pais
+        - moeda
+        - idioma
         - unidade_padrao_id
         - situacao
         - perfis
@@ -2049,9 +2420,10 @@ components:
           format: date-time
           type: string
         custo_hora:
-          description: Custo por hora, texto decimal
+          description: "Custo por hora: preço unitário em texto decimal, com ponto, no mínimo as casas da moeda e até 6; sem sinal"
           examples:
             - "125.50"
+          pattern: ^(0|[1-9][0-9]{0,11})(\.[0-9]{1,6})?$
           type:
             - string
             - "null"
@@ -2071,10 +2443,30 @@ components:
         id:
           format: uuid
           type: string
+        idioma:
+          description: Idioma do usuário; só ele o altera, em PATCH /v1/usuarios/eu
+          enum:
+            - pt-BR
+            - es-419
+          type: string
         locatario_id:
           format: uuid
           type: string
+        moeda:
+          description: "Moeda de custo_hora: a da empresa; só leitura"
+          enum:
+            - BRL
+            - ARS
+            - PYG
+          type: string
         nome:
+          type: string
+        pais:
+          description: País da empresa; só leitura. A interface lê este campo e nunca o deriva da moeda
+          enum:
+            - BR
+            - AR
+            - PY
           type: string
         perfis:
           items:
@@ -2119,6 +2511,9 @@ components:
         - email
         - telefone
         - custo_hora
+        - pais
+        - moeda
+        - idioma
         - unidade_padrao_id
         - situacao
         - perfis
@@ -2136,6 +2531,12 @@ components:
         id:
           format: uuid
           type: string
+        idioma:
+          description: Idioma do usuário (usuario.idioma); só leitura aqui, a troca é PATCH /v1/usuarios/eu
+          enum:
+            - pt-BR
+            - es-419
+          type: string
         mfa_ativo:
           description: Segundo fator por TOTP ativo
           type: boolean
@@ -2150,6 +2551,7 @@ components:
         - email
         - pessoa_id
         - mfa_ativo
+        - idioma
       type: object
     Versao:
       additionalProperties: false
@@ -3344,6 +3746,156 @@ paths:
       x-fase: MVP
       x-modulo: ADM
       x-plano-minimo: E
+  /v1/capturas-auditoria:
+    get:
+      description: Todas as telas do catálogo, por módulo, com o nome da tela no idioma da resposta (Accept-Language, depois o idioma do usuário e o da empresa; Content-Language informa qual), com as chaves de visualização, impressão e extração da empresa (o padrão onde ela não mudou nada). Login, logout, inclusão, alteração, exclusão, deleção e a visualização de dado sensível nunca se desligam e não têm chave. Lista curta, inteira numa página.
+      operationId: listarCapturasAuditoria
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListaCapturaAuditoria"
+          description: OK
+          headers:
+            Content-Language:
+              schema:
+                type: string
+            Vary:
+              schema:
+                type: string
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Captura da trilha por tela
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.gerenciar_parametros
+      x-plano-minimo: E
+  /v1/capturas-auditoria/{tela}:
+    put:
+      description: Grava as três chaves da tela (todas obrigatórias). A troca é uma alteração sempre gravada na trilha e só vale para eventos futuros. 422 validacao_falhou se a tela não está no catálogo.
+      operationId: alterarCapturaAuditoria
+      parameters:
+        - description: <modulo>.<tela> do catálogo fechado
+          in: path
+          name: tela
+          required: true
+          schema:
+            description: <modulo>.<tela> do catálogo fechado
+            examples:
+              - adm.pessoas
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntradaCapturaAuditoria"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CapturaAuditoria"
+          description: OK
+          headers:
+            Content-Language:
+              schema:
+                type: string
+            Vary:
+              schema:
+                type: string
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Ligar ou desligar a captura de uma tela
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.gerenciar_parametros
+      x-plano-minimo: E
   /v1/empresa:
     get:
       description: A empresa da credencial. Traz ETag.
@@ -3416,7 +3968,7 @@ paths:
         - adm.ler
       x-plano-minimo: E
     patch:
-      description: "JSON Merge Patch com If-Match. Plano e módulo SRV mudam pela cobrança (RF-ADM-009), não aqui: 422 campo_somente_leitura. mfa_obrigatorio liga o segundo fator obrigatório: quem não o tem passa a entrar com sessão restrita à ativação (RN-ADM-027)."
+      description: "JSON Merge Patch com If-Match. Plano e módulo SRV mudam pela cobrança (RF-ADM-009), não aqui; país e moeda não mudam pela API: 422 campo_somente_leitura. A identificação é a do tipo do país da empresa e idioma_padrao é o que o usuário convidado recebe. mfa_obrigatorio liga o segundo fator obrigatório: quem não o tem passa a entrar com sessão restrita à ativação (RN-ADM-027)."
       operationId: alterarEmpresa
       parameters:
         - description: ETag lido do recurso; obrigatório
@@ -3518,7 +4070,7 @@ paths:
       x-plano-minimo: E
   /v1/empresas:
     post:
-      description: Cria a empresa com a unidade inicial, os 12 perfis padrão com a matriz de RF-ADM-005 e o responsável como administrador convidado, e envia o convite, que confirma o e-mail antes do primeiro acesso (RF-ADM-001; RF-SRV-001 com srv_habilitado). 409 conflito em CNPJ já cadastrado.
+      description: Cria a empresa com a unidade inicial, os 12 perfis padrão com a matriz de RF-ADM-005 e o responsável como administrador convidado, e envia o convite, que confirma o e-mail antes do primeiro acesso (RF-ADM-001; RF-SRV-001 com srv_habilitado). O pais define a moeda e o idioma padrão. 409 conflito em identificação já cadastrada.
       operationId: criarEmpresa
       requestBody:
         content:
@@ -3579,7 +4131,7 @@ paths:
       x-plano-minimo: E
   /v1/eventos-auditoria:
     get:
-      description: Filtros por entidade, registro, usuário, ação e período; paginada por cursor, do mais recente (RF-ADM-011).
+      description: Filtros por usuário, tela ou módulo, tipo de operação (acao), período, IP, entidade e registro; todos juntos valem como E. Paginada por cursor, do mais recente (RF-ADM-011). O filtro por IP exige ocorrido_em[gte].
       operationId: listarEventosAuditoria
       parameters:
         - explode: false
@@ -3602,13 +4154,45 @@ paths:
           schema:
             format: uuid
             type: string
-        - explode: false
+        - description: "Tipo de operação: login, logout, inclusao, alteracao, exclusao, delecao, visualizacao, impressao ou extracao"
+          explode: false
           in: query
           name: acao
           schema:
+            description: "Tipo de operação: login, logout, inclusao, alteracao, exclusao, delecao, visualizacao, impressao ou extracao"
             examples:
               - alteracao
             maxLength: 40
+            type: string
+        - description: Código do módulo, em minúsculas
+          explode: false
+          in: query
+          name: modulo
+          schema:
+            description: Código do módulo, em minúsculas
+            examples:
+              - adm
+            maxLength: 3
+            type: string
+        - description: <modulo>.<tela> do catálogo fechado
+          explode: false
+          in: query
+          name: tela
+          schema:
+            description: <modulo>.<tela> do catálogo fechado
+            examples:
+              - adm.pessoas
+            maxLength: 80
+            type: string
+        - description: Endereço exato; exige ocorrido_em[gte]
+          explode: false
+          in: query
+          name: ip
+          schema:
+            description: Endereço exato; exige ocorrido_em[gte]
+            examples:
+              - 203.0.113.7
+            maxLength: 45
             type: string
         - description: A partir deste instante, inclusive
           explode: false
@@ -3699,7 +4283,7 @@ paths:
       x-plano-minimo: E
   /v1/eventos-auditoria/{id}:
     get:
-      description: Com os valores antes e depois. O evento é imutável.
+      description: Com antes, depois, detalhe, hash e sensivel. O evento é imutável. Abrir o detalhe é uma visualizacao, gravada quando a captura da tela de origem está ligada.
       operationId: obterEventoAuditoria
       parameters:
         - description: Identificador (UUID)
@@ -3767,6 +4351,132 @@ paths:
         - sessao: []
         - bearer: []
       summary: Evento de auditoria
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.ler_auditoria
+      x-plano-minimo: E
+  /v1/exportacoes-eventos-auditoria:
+    get:
+      description: "As mesmas linhas e os mesmos filtros de GET /v1/eventos-auditoria, do mais recente ao mais antigo, em CSV UTF-8. Exige o período inteiro (ocorrido_em[gte] e ocorrido_em[lt]) e no máximo 50.000 eventos. A exportação é uma extracao: grava um evento quando a captura de extração da tela de origem está ligada, inclusive na tela de auditoria (RF-ADM-011)."
+      operationId: exportarEventosAuditoria
+      parameters:
+        - explode: false
+          in: query
+          name: entidade
+          schema:
+            maxLength: 60
+            type: string
+        - explode: false
+          in: query
+          name: entidade_id
+          schema:
+            format: uuid
+            type: string
+        - explode: false
+          in: query
+          name: usuario_id
+          schema:
+            format: uuid
+            type: string
+        - explode: false
+          in: query
+          name: acao
+          schema:
+            maxLength: 40
+            type: string
+        - explode: false
+          in: query
+          name: modulo
+          schema:
+            maxLength: 3
+            type: string
+        - explode: false
+          in: query
+          name: tela
+          schema:
+            maxLength: 80
+            type: string
+        - explode: false
+          in: query
+          name: ip
+          schema:
+            maxLength: 45
+            type: string
+        - description: Obrigatório
+          explode: false
+          in: query
+          name: ocorrido_em[gte]
+          schema:
+            description: Obrigatório
+            format: date-time
+            type: string
+        - description: Obrigatório
+          explode: false
+          in: query
+          name: ocorrido_em[lt]
+          schema:
+            description: Obrigatório
+            format: date-time
+            type: string
+      responses:
+        "200":
+          content:
+            text/csv:
+              schema:
+                type: string
+          description: Arquivo text/csv
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+            Content-Type:
+              schema:
+                type: string
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Exportar a trilha em CSV
       tags:
         - ADM — Administração
       x-escopos-acesso:
@@ -3898,7 +4608,7 @@ paths:
       x-plano-minimo: E
   /v1/pessoas:
     get:
-      description: Paginada por cursor, ordem -criado_em. O CPF sai mascarado; o inteiro só no detalhe.
+      description: Paginada por cursor, ordem -criado_em. A identificação sai mascarada (identificacao_mascarada); a inteira só no detalhe.
       operationId: listarPessoas
       parameters:
         - description: Trecho do nome
@@ -4013,7 +4723,7 @@ paths:
         - adm.ler_pessoas
       x-plano-minimo: E
     post:
-      description: Com ou sem usuário (RF-ADM-015). 409 conflito em CPF repetido na empresa.
+      description: Com ou sem usuário (RF-ADM-015). 409 conflito em identificação repetida na empresa.
       operationId: criarPessoa
       requestBody:
         content:
@@ -4181,7 +4891,7 @@ paths:
         - adm.gerenciar_pessoas
       x-plano-minimo: E
     get:
-      description: Com o CPF inteiro; a leitura é registrada na trilha. O titular lê a própria pessoa sem adm.ler_pessoas. Traz ETag.
+      description: Com a identificação inteira; a leitura é registrada na trilha como sensível. O titular lê a própria pessoa sem adm.ler_pessoas. Traz ETag.
       operationId: obterPessoa
       parameters:
         - description: Identificador (UUID)
@@ -4772,7 +5482,7 @@ paths:
         - adm.ler
       x-plano-minimo: E
     patch:
-      description: Nome, código, endereço, fuso, CNPJ e coordenadas. JSON Merge Patch com If-Match.
+      description: Nome, código, endereço, fuso, identificação (do tipo do país da empresa) e coordenadas. JSON Merge Patch com If-Match.
       operationId: alterarUnidade
       parameters:
         - in: path
@@ -5793,7 +6503,7 @@ paths:
       x-modulo: ADM
       x-plano-minimo: E
     patch:
-      description: Só nome e telefone. JSON Merge Patch com If-Match.
+      description: "Nome, telefone e idioma (pt-BR ou es-419): só o próprio usuário altera o idioma. JSON Merge Patch com If-Match."
       operationId: alterarUsuarioEu
       parameters:
         - description: ETag lido do recurso; obrigatório
@@ -6611,6 +7321,89 @@ paths:
       x-modulo: ADM
       x-permissoes:
         - adm.gerenciar_usuarios
+      x-plano-minimo: E
+  /v1/verificacoes-auditoria:
+    get:
+      description: "Para cada dia UTC do período (de..ate, inclusive, até 400 dias), recalcula no banco o hash dos eventos, o selo e a cadeia, e compara o selo com a cópia no armazenamento imutável. Estados: integro, violado (motivo e primeiro evento alterado, quando há como apontar) e nao_selado (dia que ainda não tem selo). 503 servico_indisponivel se o armazenamento do selo não responde: sem a cópia não se afirma integridade (RF-ADM-011)."
+      operationId: verificarIntegridadeAuditoria
+      parameters:
+        - description: Primeiro dia UTC, inclusive
+          explode: false
+          in: query
+          name: de
+          schema:
+            description: Primeiro dia UTC, inclusive
+            format: date
+            type: string
+        - description: Último dia UTC, inclusive; no máximo 400 dias depois de de
+          explode: false
+          in: query
+          name: ate
+          schema:
+            description: Último dia UTC, inclusive; no máximo 400 dias depois de de
+            format: date
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListaDiaVerificado"
+          description: OK
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+        "503":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Service Unavailable
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Verificar a integridade da trilha
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.ler_auditoria
       x-plano-minimo: E
   /v1/versao:
     get:

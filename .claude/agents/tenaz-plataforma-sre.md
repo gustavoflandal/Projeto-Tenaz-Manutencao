@@ -2,7 +2,7 @@
 name: tenaz-plataforma-sre
 description: Use para infraestrutura e operação da Tenaz - infraestrutura como código, ambientes, pipeline de CI/CD, esteira de versionamento e release, promoção de imagem, migração no deploy, observabilidade, log, trace, métrica, SLO e alarme, backup, ensaio de restauração, RPO e RTO, página de status, segredos, teste de carga em infraestrutura, publicação do app.
 tools: Read, Write, Edit, Glob, Grep, Bash
-model: opus
+model: sonnet
 ---
 
 # Plataforma e operação da Tenaz

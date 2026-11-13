@@ -636,40 +636,51 @@ func (q *Queries) AuthIncrementarTentativaMFA(ctx context.Context, id uuid.UUID)
 const authInserirEvento = `-- name: AuthInserirEvento :exec
 
 INSERT INTO app.evento_auditoria
-  (empresa_id, ator_tipo, usuario_id, acao, entidade, entidade_id, depois, campos_alterados, origem, ip,
-   dispositivo_id, user_agent, request_id)
+  (empresa_id, ator_tipo, usuario_id, usuario_nome, acao, resultado, entidade, entidade_id, depois,
+   campos_alterados, origem, ip, dispositivo_id, user_agent, request_id, tela)
 VALUES
-  ($1, 'usuario', $2, $3, 'identidade', $4,
-   $5, $6::text[], nullif(current_setting('app.origem', true), ''),
-   nullif(current_setting('app.ip', true), '')::inet, $7,
-   nullif(current_setting('app.user_agent', true), ''), nullif(current_setting('app.request_id', true), ''))
+  ($1, 'usuario', $2, $3, $4,
+   $5, 'identidade', $6,
+   $7, $8::text[], nullif(current_setting('app.origem', true), ''),
+   nullif(current_setting('app.ip', true), '')::inet, $9,
+   nullif(current_setting('app.user_agent', true), ''), nullif(current_setting('app.request_id', true), ''),
+   $10)
 `
 
 type AuthInserirEventoParams struct {
 	EmpresaID       uuid.UUID  `json:"empresa_id"`
 	UsuarioID       *uuid.UUID `json:"usuario_id"`
+	UsuarioNome     *string    `json:"usuario_nome"`
 	Acao            string     `json:"acao"`
+	Resultado       string     `json:"resultado"`
 	IdentidadeID    *uuid.UUID `json:"identidade_id"`
 	Depois          []byte     `json:"depois"`
 	CamposAlterados []string   `json:"campos_alterados"`
 	DispositivoID   *uuid.UUID `json:"dispositivo_id"`
+	Tela            *string    `json:"tela"`
 }
 
 // ------------------------------------------------- trilha (app.evento_auditoria)
 // Evento de autenticação na trilha da empresa (seção 6.9 do documento 5),
 // gravado na transação NaTrilha, que fixou app.empresa_id e os dados da
-// requisição. Só estas 13 colunas têm INSERT para tenaz_autenticacao, e não há
+// requisição. Só estas 16 colunas têm INSERT (as 13 da 00005, mais nome, resultado e tela da 00007) para tenaz_autenticacao, e não há
 // SELECT: sem RETURNING. ator_tipo e entidade são fixos; a política restritiva
 // do papel confere a ação e que usuario_id é o da identidade naquela empresa.
+// O nome do usuário no evento é o de acesso_empresa naquela empresa
+// (AuthNomeDoAcesso): a policy autenticacao_identidade confere que o nome
+// gravado é o desta linha.
 func (q *Queries) AuthInserirEvento(ctx context.Context, arg AuthInserirEventoParams) error {
 	_, err := q.db.Exec(ctx, authInserirEvento,
 		arg.EmpresaID,
 		arg.UsuarioID,
+		arg.UsuarioNome,
 		arg.Acao,
+		arg.Resultado,
 		arg.IdentidadeID,
 		arg.Depois,
 		arg.CamposAlterados,
 		arg.DispositivoID,
+		arg.Tela,
 	)
 	return err
 }
@@ -692,15 +703,16 @@ func (q *Queries) AuthLigarSessaoAoCodigo(ctx context.Context, arg AuthLigarSess
 
 const authListarAcessos = `-- name: AuthListarAcessos :many
 
-SELECT empresa_id, usuario_id
+SELECT empresa_id, usuario_id, usuario_nome
 FROM plataforma.acesso_empresa
 WHERE identidade_id = $1 AND habilitado
 ORDER BY empresa_id
 `
 
 type AuthListarAcessosRow struct {
-	EmpresaID uuid.UUID `json:"empresa_id"`
-	UsuarioID uuid.UUID `json:"usuario_id"`
+	EmpresaID   uuid.UUID `json:"empresa_id"`
+	UsuarioID   uuid.UUID `json:"usuario_id"`
+	UsuarioNome string    `json:"usuario_nome"`
 }
 
 // ------------------------------------------------------------ acesso_empresa
@@ -713,7 +725,7 @@ func (q *Queries) AuthListarAcessos(ctx context.Context, identidadeID uuid.UUID)
 	items := []AuthListarAcessosRow{}
 	for rows.Next() {
 		var i AuthListarAcessosRow
-		if err := rows.Scan(&i.EmpresaID, &i.UsuarioID); err != nil {
+		if err := rows.Scan(&i.EmpresaID, &i.UsuarioID, &i.UsuarioNome); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -733,6 +745,26 @@ WHERE id = $1
 func (q *Queries) AuthMarcarEmailVerificado(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, authMarcarEmailVerificado, id)
 	return err
+}
+
+const authNomeDoAcesso = `-- name: AuthNomeDoAcesso :one
+SELECT usuario_nome
+FROM plataforma.acesso_empresa
+WHERE identidade_id = $1 AND empresa_id = $2
+`
+
+type AuthNomeDoAcessoParams struct {
+	IdentidadeID uuid.UUID `json:"identidade_id"`
+	EmpresaID    uuid.UUID `json:"empresa_id"`
+}
+
+// Nome do usuário naquela empresa, para o evento da trilha (evento_auditoria.
+// usuario_nome). Filtro (identidade_id, empresa_id), a chave primária.
+func (q *Queries) AuthNomeDoAcesso(ctx context.Context, arg AuthNomeDoAcessoParams) (string, error) {
+	row := q.db.QueryRow(ctx, authNomeDoAcesso, arg.IdentidadeID, arg.EmpresaID)
+	var usuario_nome string
+	err := row.Scan(&usuario_nome)
+	return usuario_nome, err
 }
 
 const authRegistrarLoginCerto = `-- name: AuthRegistrarLoginCerto :exec

@@ -6,7 +6,7 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { chaves } from '../../lib/consultas';
-import { formatarDataHora } from '../../lib/formatacao';
+import { formatarNoFusoDoAparelho, usePaisDaEmpresa } from '../../modulos/adm/formatos';
 import {
   COMMIT_DESCONHECIDO,
   mesmaVersao,
@@ -34,6 +34,7 @@ export interface InformacoesVersao {
 
 export function useInformacoesVersao(web: VersaoDaWeb = versaoDaWeb): InformacoesVersao {
   const { t } = useTranslation();
+  const pais = usePaisDaEmpresa();
   // A consulta roda a cada abertura do diálogo; sem nova tentativa, para dizer
   // logo que a API não respondeu. O último valor visto fica no cache.
   const consulta = useQuery({ queryKey: chaves.versaoDaAPI, queryFn: versaoDaAPI, retry: false });
@@ -59,7 +60,7 @@ export function useInformacoesVersao(web: VersaoDaWeb = versaoDaWeb): Informacoe
     {
       chave: 'dataBuild',
       rotulo: t('sobre.dataBuild'),
-      valor: formatarDataHora(web.dataBuild) ?? t('sobre.dataBuildAusente'),
+      valor: formatarNoFusoDoAparelho(web.dataBuild, pais) ?? t('sobre.dataBuildAusente'),
     },
     {
       chave: 'commit',

@@ -215,7 +215,7 @@ func ptr[T any](v T) *T { return &v }
 // ativou (RN-ADM-027). A sessão web existe, mas só serve para ativá-lo; o app
 // e as demais rotas respondem como não autenticado.
 func ErrMFAPendente() *erros.Erro {
-	return erros.NaoAutenticado.Com("Esta empresa exige o segundo fator. Ative o MFA pela web para continuar.").
+	return erros.NaoAutenticado.ComChave("detalhe.mfa_empresa_ativar", nil).
 		ComDado("mfa_pendente", true)
 }
 
@@ -288,7 +288,8 @@ func (s *Servico) acessos(ctx context.Context, identidadeID uuid.UUID) ([]gerado
 // eventoAuth é um evento de autenticação: ator "usuario", entidade
 // "identidade" (seção 6.9 do documento 5).
 type eventoAuth struct {
-	Acao         string // login, login_falho, logout, alteracao
+	Acao         string // login, logout, alteracao
+	Falha        bool   // resultado = falha: só em login
 	IdentidadeID uuid.UUID
 	Depois       any
 	Campos       []string
@@ -296,10 +297,16 @@ type eventoAuth struct {
 
 // Ações aceitas pela política restritiva do tenaz_autenticacao na trilha.
 const (
-	acaoLogin      = "login"
-	acaoLoginFalho = "login_falho"
-	acaoLogout     = "logout"
-	acaoAlteracao  = "alteracao"
+	acaoLogin     = "login"
+	acaoLogout    = "logout"
+	acaoAlteracao = "alteracao"
+)
+
+// Resultados do evento (evento_auditoria.resultado): a falha de login é um
+// login com resultado falha, e o motivo vai em depois.
+const (
+	resultadoSucesso = "sucesso"
+	resultadoFalha   = "falha"
 )
 
 // gravarEvento grava o evento na transação NaTrilha de q. usuarioID é o
@@ -314,9 +321,23 @@ func gravarEvento(ctx context.Context, q *gerado.Queries, empresaID, usuarioID u
 		}
 		depois = b
 	}
-	err := q.AuthInserirEvento(ctx, gerado.AuthInserirEventoParams{
-		EmpresaID: empresaID, UsuarioID: &usuarioID, Acao: ev.Acao, IdentidadeID: &ev.IdentidadeID,
-		Depois: depois, CamposAlterados: ev.Campos, DispositivoID: db.RequisicaoDe(ctx).DispositivoID,
+	resultado := resultadoSucesso
+	if ev.Falha {
+		resultado = resultadoFalha
+	}
+	nome, err := q.AuthNomeDoAcesso(ctx, gerado.AuthNomeDoAcessoParams{IdentidadeID: ev.IdentidadeID, EmpresaID: empresaID})
+	if err != nil {
+		return fmt.Errorf("ler o nome do usuário para o evento %s: %w", ev.Acao, err)
+	}
+	req := db.RequisicaoDe(ctx).Saneada()
+	var tela *string
+	if req.Tela != "" {
+		tela = &req.Tela
+	}
+	err = q.AuthInserirEvento(ctx, gerado.AuthInserirEventoParams{
+		EmpresaID: empresaID, UsuarioID: &usuarioID, UsuarioNome: &nome, Acao: ev.Acao, Resultado: resultado,
+		IdentidadeID: &ev.IdentidadeID, Depois: depois, CamposAlterados: ev.Campos,
+		DispositivoID: req.DispositivoID, Tela: tela,
 	})
 	if err != nil {
 		return fmt.Errorf("gravar evento %s na trilha: %w", ev.Acao, err)

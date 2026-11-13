@@ -200,7 +200,7 @@ func (s *Servico) AutenticarApp(ctx context.Context, bearer string) (autorizacao
 		return autorizacao.Ator{}, erros.CredencialInvalida
 	}
 	if !a.Pode(autorizacao.MobUsarApp) {
-		return autorizacao.Ator{}, erros.SemPermissao.Com("o perfil não usa o app")
+		return autorizacao.Ator{}, erros.SemPermissao.ComChave("detalhe.perfil_sem_app", nil)
 	}
 	// Empresa que passou a exigir MFA: o app para até a ativação pela web.
 	if err := s.marcarMFAPendente(ctx, &a); err != nil {
@@ -262,7 +262,7 @@ func (s *Servico) TrocarEmpresa(ctx context.Context, a autorizacao.Ator, empresa
 		return ResultadoTroca{}, erros.CredencialInvalida
 	}
 	if a.Canal == CanalApp && !novo.Pode(autorizacao.MobUsarApp) {
-		return ResultadoTroca{}, erros.SemPermissao.Com("o perfil nesta empresa não usa o app")
+		return ResultadoTroca{}, erros.SemPermissao.ComChave("detalhe.perfil_sem_app_empresa", nil)
 	}
 	// Empresa de destino que exige MFA: na web, a sessão nova nasce restrita à
 	// ativação; no app, a troca é recusada até a ativação (RN-ADM-027).

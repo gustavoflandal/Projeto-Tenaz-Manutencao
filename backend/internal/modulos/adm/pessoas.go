@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"tenaz/internal/plataforma/textos"
 	"time"
 
 	"github.com/google/uuid"
@@ -11,9 +12,7 @@ import (
 
 	"tenaz/internal/modulos/adm/internal/dominio"
 	"tenaz/internal/modulos/adm/internal/repo"
-	"tenaz/internal/plataforma/auditoria"
 	"tenaz/internal/plataforma/autorizacao"
-	"tenaz/internal/plataforma/db"
 	"tenaz/internal/plataforma/db/consultas"
 	"tenaz/internal/plataforma/erros"
 	"tenaz/internal/plataforma/paginacao"
@@ -22,11 +21,12 @@ import (
 // Pessoas: RF-ADM-015. A pessoa pode ter ou não usuário; nunca é excluída.
 
 type pessoaValida struct {
-	nome                                   string
-	cpf, nascimento, matricula, cargo, tel *string
-	email, registro                        *string
-	vinculo                                string
-	fornecedorID, unidadeID                *uuid.UUID
+	nome                              string
+	ident                             *dominio.Identificacao
+	nascimento, matricula, cargo, tel *string
+	email, registro                   *string
+	vinculo                           string
+	fornecedorID, unidadeID           *uuid.UUID
 }
 
 func validarPessoa(prefixo string, e EntradaPessoa) (pessoaValida, error) {
@@ -35,12 +35,8 @@ func validarPessoa(prefixo string, e EntradaPessoa) (pessoaValida, error) {
 	if p.nome, ee = dominio.Texto(prefixo+"nome", e.Nome, 200); ee != nil {
 		return p, ee
 	}
-	if e.CPF != nil && strings.TrimSpace(*e.CPF) != "" {
-		c, ee := dominio.NormalizarCPF(prefixo+"cpf", *e.CPF)
-		if ee != nil {
-			return p, ee
-		}
-		p.cpf = &c
+	if p.ident, ee = dominio.IdentificacaoDaPessoa(prefixo, e.IdentificacaoTipo, e.Identificacao); ee != nil {
+		return p, ee
 	}
 	if e.DataNascimento != nil && *e.DataNascimento != "" {
 		d, ee := dominio.Data(prefixo+"data_nascimento", *e.DataNascimento)
@@ -79,22 +75,36 @@ func validarPessoa(prefixo string, e EntradaPessoa) (pessoaValida, error) {
 	switch p.vinculo {
 	case VinculoEmpregado, VinculoTerceiro, VinculoAutonomo:
 	default:
-		return p, erros.EntradaInvalida.ComCampo(prefixo+"vinculo", erros.CampoValorInvalido, "Vínculo: empregado, terceiro ou autonomo.")
+		return p, erros.EntradaInvalida.ComCampoChave(prefixo+"vinculo", erros.CampoValorInvalido, "campo.vinculo", nil)
 	}
 	// Técnico de fornecedor é sempre terceiro (ck_pessoa_fornecedor). A
 	// existência do fornecedor é conferida quando a tabela existir (E06,
 	// pendência E01-1 do documento 2).
 	if e.FornecedorID != nil && p.vinculo != VinculoTerceiro {
-		return p, erros.EntradaInvalida.ComCampo(prefixo+"vinculo", erros.CampoValorInvalido,
-			"Pessoa de fornecedor tem o vínculo terceiro.")
+		return p, erros.EntradaInvalida.ComCampoChave(prefixo+"vinculo", erros.CampoValorInvalido, "campo.vinculo_fornecedor", nil)
 	}
 	p.fornecedorID, p.unidadeID = e.FornecedorID, e.UnidadeID
 	return p, nil
 }
 
+func (p pessoaValida) identTipo() *string {
+	if p.ident == nil {
+		return nil
+	}
+	return &p.ident.Tipo
+}
+
+func (p pessoaValida) identValor() *string {
+	if p.ident == nil {
+		return nil
+	}
+	return &p.ident.Valor
+}
+
 func criarPessoaTx(ctx context.Context, q *consultas.Queries, empresaID, id uuid.UUID, p pessoaValida) error {
 	return repo.Traduzir(q.AdmCriarPessoa(ctx, consultas.AdmCriarPessoaParams{
-		EmpresaID: empresaID, ID: id, Nome: p.nome, Cpf: p.cpf, DataNascimento: p.nascimento, Matricula: p.matricula,
+		EmpresaID: empresaID, ID: id, Nome: p.nome, IdentificacaoTipo: p.identTipo(), Identificacao: p.identValor(),
+		DataNascimento: p.nascimento, Matricula: p.matricula,
 		Cargo: p.cargo, Telefone: p.tel, Email: p.email, Vinculo: p.vinculo, FornecedorID: p.fornecedorID,
 		UnidadeID: p.unidadeID, RegistroProfissional: p.registro,
 	}))
@@ -110,16 +120,16 @@ func lerPessoa(ctx context.Context, empresaID, id uuid.UUID) (Pessoa, error) {
 		return Pessoa{}, naoEncontrado(err)
 	}
 	return Pessoa{
-		ID: r.ID, Nome: r.Nome, CPF: r.Cpf, DataNascimento: vazioParaNil(r.DataNascimento), Matricula: r.Matricula,
+		ID: r.ID, Nome: r.Nome, IdentificacaoTipo: r.IdentificacaoTipo, Identificacao: r.Identificacao, DataNascimento: vazioParaNil(r.DataNascimento), Matricula: r.Matricula,
 		Cargo: r.Cargo, Telefone: r.Telefone, Email: r.Email, Vinculo: r.Vinculo, FornecedorID: r.FornecedorID,
 		UnidadeID: r.UnidadeID, RegistroProfissional: r.RegistroProfissional, Situacao: r.Situacao,
 		UsuarioID: r.UsuarioID, Versao: r.Versao, CriadoEm: r.CriadoEm, AtualizadoEm: r.AtualizadoEm,
 	}, nil
 }
 
-// ObterPessoa: adm.ler_pessoas, ou o titular (documento 3, seção 6.1). O CPF
-// inteiro é dado pessoal: a leitura dele vai para a trilha como
-// visualizacao_sensivel (seção 9.1 do documento 2).
+// ObterPessoa: adm.ler_pessoas, ou o titular (documento 3, seção 6.1). A
+// identificação inteira (CPF, CUIL, DNI ou CI) é dado pessoal: a leitura dele vai para a trilha como visualizacao
+// com sensivel = true (seção 9.1 do documento 2).
 func (s *servico) ObterPessoa(ctx context.Context, a autorizacao.Ator, id uuid.UUID) (Pessoa, error) {
 	titular := a.PessoaID != nil && *a.PessoaID == id
 	if a.Externo() && !titular {
@@ -134,14 +144,16 @@ func (s *servico) ObterPessoa(ctx context.Context, a autorizacao.Ator, id uuid.U
 	err := s.naEmpresa(ctx, a, func(ctx context.Context) error {
 		var err error
 		p, err = lerPessoa(ctx, a.EmpresaID, id)
-		if err != nil || p.CPF == nil {
+		if err != nil {
 			return err
 		}
-		return auditoria.Registrar(ctx, auditoria.Evento{
-			EmpresaID: a.EmpresaID, AtorTipo: db.AtorUsuario, UsuarioID: ptr(a.UsuarioID),
-			Acao: auditoria.AcaoVisualizacaoSensivel, Entidade: "pessoa", EntidadeID: ptr(id),
-			Depois: map[string][]string{"campos": {"cpf"}},
-		})
+		// Identificação inteira: visualização sensível, sempre gravada, sem o
+		// número no evento (RF-ADM-011, critério 8). Sem identificação, vale a
+		// captura da tela.
+		if p.Identificacao != nil {
+			return s.visualizouComDetalhe(ctx, a, "pessoa", id, true, map[string][]string{"campos": {"identificacao"}})
+		}
+		return s.visualizou(ctx, a, "pessoa", id, false)
 	})
 	return p, err
 }
@@ -201,12 +213,12 @@ func (s *servico) EditarPessoa(ctx context.Context, a autorizacao.Ator, id uuid.
 		case !mesmoID(pv.fornecedorID, u.FornecedorID):
 			// Nos dois sentidos: a pessoa de um prestador mantém o fornecedor
 			// dele, e a de um usuário interno não ganha fornecedor (RN-ADM-020).
-			return erros.EntradaInvalida.ComCampo("fornecedor_id", erros.CampoValorInvalido,
-				"A pessoa está ligada a um usuário; o fornecedor dela tem de ser o do usuário (nenhum, se o usuário é interno).")
+			return erros.EntradaInvalida.ComCampoChave("fornecedor_id", erros.CampoValorInvalido, "campo.pessoa_fornecedor_usuario", nil)
 		}
 		err = q.AdmAtualizarPessoa(ctx, consultas.AdmAtualizarPessoaParams{
-			EmpresaID: a.EmpresaID, ID: id, Nome: pv.nome, Cpf: pv.cpf, DataNascimento: pv.nascimento,
-			Matricula: pv.matricula, Cargo: pv.cargo, Telefone: pv.tel, Email: pv.email, Vinculo: pv.vinculo,
+			EmpresaID: a.EmpresaID, ID: id, Nome: pv.nome, IdentificacaoTipo: pv.identTipo(), Identificacao: pv.identValor(),
+			DataNascimento: pv.nascimento,
+			Matricula:      pv.matricula, Cargo: pv.cargo, Telefone: pv.tel, Email: pv.email, Vinculo: pv.vinculo,
 			FornecedorID: pv.fornecedorID, UnidadeID: pv.unidadeID, RegistroProfissional: pv.registro,
 		})
 		if err != nil {
@@ -248,7 +260,7 @@ func (s *servico) situacaoPessoa(ctx context.Context, a autorizacao.Ator, id uui
 			return naoEncontrado(err)
 		}
 		if atual.Situacao == nova {
-			return erros.TransicaoInvalida.Com("a pessoa já está %s", nova).ComDado("estado_atual", atual.Situacao)
+			return erros.TransicaoInvalida.ComChave("detalhe.pessoa_ja_situacao", textos.Parametros{"situacao": textos.Chave("situacao." + nova)}).ComDado("estado_atual", atual.Situacao)
 		}
 		// Pessoa ligada a usuário ativo ou convidado não é inativada: o
 		// usuário é inativado antes, por quem gerencia usuários (RN-ADM-021).
@@ -259,7 +271,7 @@ func (s *servico) situacaoPessoa(ctx context.Context, a autorizacao.Ator, id uui
 			case err != nil:
 				return err
 			case u.Situacao != "inativo":
-				return erros.TransicaoInvalida.Com("a pessoa está ligada a um usuário %s; inative o usuário antes", u.Situacao).
+				return erros.TransicaoInvalida.ComChave("detalhe.pessoa_com_usuario", textos.Parametros{"situacao": textos.Chave("situacao.usuario." + u.Situacao)}).
 					ComDado("estado_atual", atual.Situacao)
 			}
 		}
@@ -332,11 +344,11 @@ func (s *servico) ListarPessoas(ctx context.Context, a autorizacao.Ator, f Filtr
 		res := make([]ResumoPessoa, 0, len(linhas))
 		for _, r := range linhas {
 			var mascara *string
-			if r.Cpf != nil {
-				mascara = ptr(dominio.MascararCPF(*r.Cpf))
+			if r.Identificacao != nil && r.IdentificacaoTipo != nil {
+				mascara = ptr(dominio.MascararIdentificacao(*r.IdentificacaoTipo, *r.Identificacao))
 			}
 			res = append(res, ResumoPessoa{
-				ID: r.ID, Nome: r.Nome, CPFMascarado: mascara, Matricula: r.Matricula, Cargo: r.Cargo,
+				ID: r.ID, Nome: r.Nome, IdentificacaoTipo: r.IdentificacaoTipo, IdentificacaoMascarada: mascara, Matricula: r.Matricula, Cargo: r.Cargo,
 				Vinculo: r.Vinculo, FornecedorID: r.FornecedorID, UnidadeID: r.UnidadeID, Situacao: r.Situacao,
 				UsuarioID: r.UsuarioID, Versao: r.Versao, CriadoEm: r.CriadoEm,
 			})

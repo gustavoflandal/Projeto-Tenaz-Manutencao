@@ -24,8 +24,9 @@ Element.prototype.releasePointerCapture ??= () => {};
 document.documentElement.lang = 'pt-BR';
 document.title = i18n.t('app.titulo');
 
-afterEach(() => {
+afterEach(async () => {
   cleanup();
+  await i18n.changeLanguage('pt-BR');
   vi.restoreAllMocks();
   globalThis.localStorage.clear();
   // Volta o tema a "igual ao sistema", como num navegador sem escolha salva.

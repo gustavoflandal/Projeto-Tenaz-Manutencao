@@ -1,21 +1,27 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
-import { renderizarRota } from '../testes/renderizar';
+import { simularAPI } from '../testes/api-simulada';
+import { sessao } from '../testes/dados';
+import { renderizarRota, rotaDaSessao } from '../testes/renderizar';
 
 const raiz = () => document.documentElement;
 
 async function escolherTema(usuario: ReturnType<typeof userEvent.setup>, atual: string, opcao: string) {
-  await usuario.click(screen.getByRole('button', { name: `Tema: ${atual}. Trocar tema` }));
+  await usuario.click(await screen.findByRole('button', { name: `Tema: ${atual}. Trocar tema` }));
   await usuario.click(await screen.findByRole('menuitemradio', { name: opcao }));
   await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
 }
 
 describe('troca de tema', () => {
-  it('começa igual ao sistema, sem atributo de tema', () => {
+  beforeEach(() => {
+    simularAPI(rotaDaSessao(sessao()));
+  });
+
+  it('começa igual ao sistema, sem atributo de tema', async () => {
     renderizarRota('/');
-    expect(screen.getByRole('button', { name: 'Tema: Igual ao sistema. Trocar tema' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Tema: Igual ao sistema. Trocar tema' })).toBeInTheDocument();
     expect(raiz()).not.toHaveAttribute('data-tema');
   });
 
@@ -47,7 +53,7 @@ describe('troca de tema', () => {
     renderizarRota('/');
 
     await escolherTema(usuario, 'Igual ao sistema', 'Claro');
-    await usuario.click(screen.getByRole('button', { name: 'Tema: Claro. Trocar tema' }));
+    await usuario.click(await screen.findByRole('button', { name: 'Tema: Claro. Trocar tema' }));
 
     expect(await screen.findByRole('menuitemradio', { name: 'Claro' })).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByRole('menuitemradio', { name: 'Escuro' })).toHaveAttribute('aria-checked', 'false');

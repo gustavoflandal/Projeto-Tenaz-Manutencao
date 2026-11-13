@@ -56,6 +56,8 @@ export default defineConfig({
       // A web consome os mesmos endpoints da API pública. Não existe API
       // interna paralela (princípio 4 da arquitetura).
       '/v1': { target: 'http://127.0.0.1:8080', changeOrigin: true },
+      // Fluxo OAuth do app de campo: /oauth/authorize redireciona para /autorizar-app.
+      '/oauth': { target: 'http://127.0.0.1:8080', changeOrigin: true },
     },
   },
   test: {

@@ -3,9 +3,9 @@ package api
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strconv"
 	"strings"
+	"tenaz/internal/plataforma/textos"
 	"time"
 
 	"tenaz/internal/plataforma/erros"
@@ -44,11 +44,11 @@ func lerETag(s string) (int64, bool) {
 // estado: ausente, 428 pre_condicao_obrigatoria; malformado, 400.
 func VersaoEsperada(ifMatch string) (int64, error) {
 	if strings.TrimSpace(ifMatch) == "" {
-		return 0, erros.PreCondicaoObrigatoria.Com("Envie o cabeçalho If-Match com o ETag lido do recurso.")
+		return 0, erros.PreCondicaoObrigatoria.ComChave("detalhe.if_match_obrigatorio", nil)
 	}
 	v, ok := lerETag(ifMatch)
 	if !ok {
-		return 0, erros.RequisicaoInvalida.Com(`If-Match deve ser o ETag lido do recurso, como "12".`)
+		return 0, erros.RequisicaoInvalida.ComChave("detalhe.if_match_formato", nil)
 	}
 	return v, nil
 }
@@ -56,7 +56,7 @@ func VersaoEsperada(ifMatch string) (int64, error) {
 // Desatualizado monta o 412 com o recurso atual (seção 2.11).
 func Desatualizado(versaoAtual int64, recursoAtual any) error {
 	return erros.VersaoDesatualizada.
-		Com("O registro mudou desde a leitura (versão atual %d); leia de novo e refaça a alteração.", versaoAtual).
+		ComChave("detalhe.versao_desatualizada", textos.Parametros{"versao": versaoAtual}).
 		ComDado("versao_atual", versaoAtual).ComDado("recurso_atual", recursoAtual)
 }
 
@@ -120,7 +120,7 @@ func ListaCompleta[A, B any](itens []A, conv func(A) B) Lista[B] {
 func MesclarPatch(atual any, corpo []byte, destino any) (mudou bool, err error) {
 	var patch map[string]any
 	if err := json.Unmarshal(corpo, &patch); err != nil || patch == nil {
-		return false, erros.RequisicaoInvalida.Com("O corpo do PATCH deve ser um objeto JSON.")
+		return false, erros.RequisicaoInvalida.ComChave("detalhe.patch_objeto", nil)
 	}
 	b, err := json.Marshal(atual)
 	if err != nil {
@@ -136,7 +136,7 @@ func MesclarPatch(atual any, corpo []byte, destino any) (mudou bool, err error) 
 		return false, err
 	}
 	if err := json.Unmarshal(b, destino); err != nil {
-		return false, erros.EntradaInvalida.Com("O PATCH tem valor de tipo errado.")
+		return false, erros.EntradaInvalida.ComChave("detalhe.patch_tipo", nil)
 	}
 	return len(patch) > 0, nil
 }
@@ -179,47 +179,7 @@ func mesclar(alvo any, patch map[string]any) map[string]any {
 	return base
 }
 
-// ---------------------------------------------------- dinheiro e instantes
-
-// Dinheiro converte centavos em texto decimal com duas casas (seção 2.5).
-func Dinheiro(centavos *int64) *string {
-	if centavos == nil {
-		return nil
-	}
-	c := *centavos
-	sinal := ""
-	if c < 0 {
-		sinal, c = "-", -c
-	}
-	s := fmt.Sprintf("%s%d.%02d", sinal, c/100, c%100)
-	return &s
-}
-
-// Centavos lê texto decimal com até duas casas ("125.5", "125.50").
-func Centavos(campo string, texto *string) (*int64, error) {
-	if texto == nil {
-		return nil, nil
-	}
-	t := strings.TrimSpace(*texto)
-	inteira, frac, temPonto := strings.Cut(t, ".")
-	invalido := erros.EntradaInvalida.ComCampo(campo, erros.CampoFormatoInvalido, `Use valor decimal com ponto e até duas casas, como "125.50".`)
-	if inteira == "" || len(inteira) > 10 || (temPonto && (frac == "" || len(frac) > 2)) {
-		return nil, invalido
-	}
-	for _, r := range inteira + frac {
-		if r < '0' || r > '9' {
-			return nil, invalido
-		}
-	}
-	for len(frac) < 2 {
-		frac += "0"
-	}
-	n, err := strconv.ParseInt(inteira+frac, 10, 64)
-	if err != nil {
-		return nil, invalido
-	}
-	return &n, nil
-}
+// --------------------------------------------------------------- instantes
 
 // Instante normaliza para UTC com precisão de segundos (seção 2.4).
 func Instante(t time.Time) time.Time { return t.UTC().Truncate(time.Second) }

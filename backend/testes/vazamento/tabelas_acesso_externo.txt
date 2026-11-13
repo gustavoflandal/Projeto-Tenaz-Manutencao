@@ -18,5 +18,5 @@
 app.empresa           SELECT         # cadastro da contratante (nome, fuso) para os quatro escopos; não altera nem apaga
 app.unidade           SELECT         # leitura para os quatro escopos (seção 2.9.4); não grava nem apaga
 app.pessoa            SELECT         # prestador: pessoas do seu fornecedor; prestador e locatário: pessoas dos usuários que enxergam
-app.usuario           SELECT,UPDATE  # vê a si e aos colegas do mesmo fornecedor ou locatário; altera só a própria linha, sem trocar o vínculo e só nome e telefone (trg_usuario_colunas_externo, ISO-E01-01); INSERT travado no interno (escopo_externo_insercao)
+app.usuario           SELECT,UPDATE  # vê a si e aos colegas do mesmo fornecedor ou locatário; altera só a própria linha, sem trocar o vínculo e só nome, telefone e idioma (trg_usuario_colunas_externo, ISO-E01-01; idioma desde a 00009; coluna a coluna em pais_test.go); INSERT travado no interno (escopo_externo_insercao)
 app.evento_auditoria  INSERT         # o trigger grava o evento na transação do externo; leitura só interna

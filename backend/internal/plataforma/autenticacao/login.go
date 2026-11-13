@@ -24,7 +24,8 @@ type EntradaLogin struct {
 	EmpresaID *uuid.UUID
 }
 
-// Motivos gravados em login_falho (campo depois.motivo).
+// Motivos gravados na falha de login (login com resultado falha; campo
+// depois.motivo).
 const (
 	motivoSenhaIncorreta = "senha_incorreta"
 	motivoContaBloqueada = "conta_bloqueada"
@@ -108,7 +109,7 @@ func (s *Servico) Login(ctx context.Context, e EntradaLogin) (ResultadoLogin, er
 }
 
 func eventoLoginFalho(identidadeID uuid.UUID, motivo string) eventoAuth {
-	return eventoAuth{Acao: acaoLoginFalho, IdentidadeID: identidadeID, Depois: map[string]string{"motivo": motivo}}
+	return eventoAuth{Acao: acaoLogin, Falha: true, IdentidadeID: identidadeID, Depois: map[string]string{"motivo": motivo}}
 }
 
 // registrarFalha incrementa as falhas e, a cada 5 seguidas, bloqueia por um
@@ -264,7 +265,7 @@ func (s *Servico) escolherEmpresa(ctx context.Context, identidadeID uuid.UUID, p
 		}
 	}
 	if pedida != nil {
-		return uuid.Nil, uuid.Nil, nil, erros.NaoEncontrado.Com("empresa fora do acesso da identidade")
+		return uuid.Nil, uuid.Nil, nil, erros.NaoEncontrado.Tecnico("empresa fora do acesso da identidade")
 	}
 	return lista[0].EmpresaID, lista[0].UsuarioID, lista, nil
 }

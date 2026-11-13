@@ -11,37 +11,47 @@
 -- ------------------------------------------------------------------- empresa
 
 -- name: AdmCriarEmpresa :exec
-INSERT INTO app.empresa (id, razao_social, nome_fantasia, cnpj, plano, srv_habilitado, fuso_horario)
-VALUES (sqlc.arg(id), sqlc.arg(razao_social), sqlc.narg(nome_fantasia), sqlc.arg(cnpj), sqlc.narg(plano),
+-- pais, moeda e idioma_padrao são gravados explicitamente a partir do perfil de
+-- país (os defaults do banco só dão valor às empresas anteriores à 00009).
+INSERT INTO app.empresa (id, razao_social, nome_fantasia, pais, moeda, idioma_padrao, identificacao_tipo,
+                         identificacao, plano, srv_habilitado, fuso_horario)
+VALUES (sqlc.arg(id), sqlc.arg(razao_social), sqlc.narg(nome_fantasia), sqlc.arg(pais), sqlc.arg(moeda),
+        sqlc.arg(idioma_padrao), sqlc.arg(identificacao_tipo), sqlc.arg(identificacao), sqlc.narg(plano),
         sqlc.arg(srv_habilitado), sqlc.arg(fuso_horario));
 
 -- name: AdmBuscarEmpresa :one
-SELECT id, razao_social, nome_fantasia, cnpj, plano, srv_habilitado, mfa_obrigatorio, situacao, fuso_horario,
+SELECT id, razao_social, nome_fantasia, pais, moeda, idioma_padrao, identificacao_tipo, identificacao,
+       plano, srv_habilitado, mfa_obrigatorio, situacao, fuso_horario,
        retencao_auditoria_anos, coalesce(to_char(teste_ate, 'YYYY-MM-DD'), '')::text AS teste_ate, versao, criado_em, atualizado_em
 FROM app.empresa
 WHERE id = sqlc.arg(id) AND excluido_em IS NULL;
 
 -- name: AdmTravarEmpresa :one
-SELECT id, plano, srv_habilitado, versao
+SELECT id, pais, moeda, idioma_padrao, plano, srv_habilitado, versao
 FROM app.empresa
 WHERE id = sqlc.arg(id) AND excluido_em IS NULL
 FOR UPDATE;
 
 -- name: AdmAtualizarEmpresa :exec
 UPDATE app.empresa
-SET razao_social = sqlc.arg(razao_social), nome_fantasia = sqlc.narg(nome_fantasia), cnpj = sqlc.arg(cnpj),
+-- pais e moeda não entram: não mudam pela API (o banco também recusa).
+SET razao_social = sqlc.arg(razao_social), nome_fantasia = sqlc.narg(nome_fantasia),
+    identificacao_tipo = sqlc.arg(identificacao_tipo), identificacao = sqlc.arg(identificacao),
+    idioma_padrao = sqlc.arg(idioma_padrao),
     fuso_horario = sqlc.arg(fuso_horario), mfa_obrigatorio = sqlc.arg(mfa_obrigatorio)
 WHERE id = sqlc.arg(id) AND excluido_em IS NULL;
 
 -- ------------------------------------------------------------------- unidade
 
 -- name: AdmCriarUnidade :exec
-INSERT INTO app.unidade (empresa_id, id, codigo, nome, cnpj, endereco, fuso_horario, latitude, longitude)
-VALUES (sqlc.arg(empresa_id), sqlc.arg(id), sqlc.arg(codigo), sqlc.arg(nome), sqlc.narg(cnpj), sqlc.narg(endereco),
+INSERT INTO app.unidade (empresa_id, id, codigo, nome, identificacao_tipo, identificacao, endereco, fuso_horario,
+                         latitude, longitude)
+VALUES (sqlc.arg(empresa_id), sqlc.arg(id), sqlc.arg(codigo), sqlc.arg(nome), sqlc.narg(identificacao_tipo),
+        sqlc.narg(identificacao), sqlc.narg(endereco),
         sqlc.narg(fuso_horario), sqlc.narg(latitude)::float8, sqlc.narg(longitude)::float8);
 
 -- name: AdmBuscarUnidade :one
-SELECT id, codigo, nome, cnpj, endereco, fuso_horario, latitude, longitude, situacao, versao, criado_em, atualizado_em
+SELECT id, codigo, nome, identificacao_tipo, identificacao, endereco, fuso_horario, latitude, longitude, situacao, versao, criado_em, atualizado_em
 FROM app.unidade
 WHERE empresa_id = sqlc.arg(empresa_id) AND id = sqlc.arg(id) AND excluido_em IS NULL;
 
@@ -52,7 +62,7 @@ WHERE empresa_id = sqlc.arg(empresa_id) AND id = sqlc.arg(id) AND excluido_em IS
 FOR UPDATE;
 
 -- name: AdmListarUnidades :many
-SELECT id, codigo, nome, cnpj, endereco, fuso_horario, latitude, longitude, situacao, versao, criado_em, atualizado_em
+SELECT id, codigo, nome, identificacao_tipo, identificacao, endereco, fuso_horario, latitude, longitude, situacao, versao, criado_em, atualizado_em
 FROM app.unidade
 WHERE empresa_id = sqlc.arg(empresa_id) AND excluido_em IS NULL
 ORDER BY nome, id;
@@ -71,7 +81,8 @@ WHERE empresa_id = sqlc.arg(empresa_id) AND excluido_em IS NULL AND situacao = '
 
 -- name: AdmAtualizarUnidade :exec
 UPDATE app.unidade
-SET codigo = sqlc.arg(codigo), nome = sqlc.arg(nome), cnpj = sqlc.narg(cnpj), endereco = sqlc.narg(endereco),
+SET codigo = sqlc.arg(codigo), nome = sqlc.arg(nome), identificacao_tipo = sqlc.narg(identificacao_tipo),
+    identificacao = sqlc.narg(identificacao), endereco = sqlc.narg(endereco),
     fuso_horario = sqlc.narg(fuso_horario), latitude = sqlc.narg(latitude)::float8,
     longitude = sqlc.narg(longitude)::float8
 WHERE empresa_id = sqlc.arg(empresa_id) AND id = sqlc.arg(id) AND excluido_em IS NULL;
@@ -221,14 +232,15 @@ ORDER BY permissao;
 -- -------------------------------------------------------------------- pessoa
 
 -- name: AdmCriarPessoa :exec
-INSERT INTO app.pessoa (empresa_id, id, nome, cpf, data_nascimento, matricula, cargo, telefone, email, vinculo,
+INSERT INTO app.pessoa (empresa_id, id, nome, identificacao_tipo, identificacao, data_nascimento, matricula, cargo, telefone, email, vinculo,
                         fornecedor_id, unidade_id, registro_profissional)
-VALUES (sqlc.arg(empresa_id), sqlc.arg(id), sqlc.arg(nome), sqlc.narg(cpf), sqlc.narg(data_nascimento)::text::date,
+VALUES (sqlc.arg(empresa_id), sqlc.arg(id), sqlc.arg(nome), sqlc.narg(identificacao_tipo), sqlc.narg(identificacao),
+        sqlc.narg(data_nascimento)::text::date,
         sqlc.narg(matricula), sqlc.narg(cargo), sqlc.narg(telefone), sqlc.narg(email), sqlc.arg(vinculo),
         sqlc.narg(fornecedor_id), sqlc.narg(unidade_id), sqlc.narg(registro_profissional));
 
 -- name: AdmBuscarPessoa :one
-SELECT p.id, p.nome, p.cpf, coalesce(to_char(p.data_nascimento, 'YYYY-MM-DD'), '')::text AS data_nascimento,
+SELECT p.id, p.nome, p.identificacao_tipo, p.identificacao, coalesce(to_char(p.data_nascimento, 'YYYY-MM-DD'), '')::text AS data_nascimento,
        p.matricula, p.cargo, p.telefone, p.email, p.vinculo, p.fornecedor_id, p.unidade_id,
        p.registro_profissional, p.situacao, p.versao, p.criado_em, p.atualizado_em,
        u.id AS usuario_id
@@ -244,7 +256,8 @@ FOR UPDATE;
 
 -- name: AdmAtualizarPessoa :exec
 UPDATE app.pessoa
-SET nome = sqlc.arg(nome), cpf = sqlc.narg(cpf), data_nascimento = sqlc.narg(data_nascimento)::text::date,
+SET nome = sqlc.arg(nome), identificacao_tipo = sqlc.narg(identificacao_tipo),
+    identificacao = sqlc.narg(identificacao), data_nascimento = sqlc.narg(data_nascimento)::text::date,
     matricula = sqlc.narg(matricula), cargo = sqlc.narg(cargo), telefone = sqlc.narg(telefone),
     email = sqlc.narg(email), vinculo = sqlc.arg(vinculo), fornecedor_id = sqlc.narg(fornecedor_id),
     unidade_id = sqlc.narg(unidade_id), registro_profissional = sqlc.narg(registro_profissional)
@@ -258,7 +271,7 @@ WHERE empresa_id = sqlc.arg(empresa_id) AND id = sqlc.arg(id) AND excluido_em IS
 -- Lista por cursor (criado_em, id), do mais novo para o mais antigo. A busca
 -- usa o índice GIN de trigramas; o padrão chega já escapado do Go.
 -- name: AdmListarPessoas :many
-SELECT p.id, p.nome, p.cpf, p.matricula, p.cargo, p.vinculo, p.fornecedor_id, p.unidade_id, p.situacao,
+SELECT p.id, p.nome, p.identificacao_tipo, p.identificacao, p.matricula, p.cargo, p.vinculo, p.fornecedor_id, p.unidade_id, p.situacao,
        p.versao, p.criado_em,
        u.id AS usuario_id
 FROM app.pessoa p
@@ -277,16 +290,19 @@ LIMIT sqlc.arg(limite);
 -- ------------------------------------------------------------------- usuario
 
 -- name: AdmCriarUsuario :exec
+-- idioma é o padrão da empresa no convite; moeda é a da empresa (a de custo_hora).
+-- custo_hora é preço unitário, numeric(18,6): entra e sai por pgtype.Numeric, convertido
+-- pelo pacote dinheiro, sem float, bigint nem divisão por 100.
 INSERT INTO app.usuario (empresa_id, id, pessoa_id, fornecedor_id, locatario_id, nome, email, telefone,
-                         custo_hora, unidade_padrao_id, situacao)
+                         custo_hora, moeda, idioma, unidade_padrao_id, situacao)
 VALUES (sqlc.arg(empresa_id), sqlc.arg(id), sqlc.narg(pessoa_id), sqlc.narg(fornecedor_id), sqlc.narg(locatario_id),
         sqlc.arg(nome), sqlc.arg(email), sqlc.narg(telefone),
-        (sqlc.narg(custo_hora_centavos)::bigint / 100.0)::numeric(12,2), sqlc.narg(unidade_padrao_id),
-        'convidado');
+        sqlc.narg(custo_hora), sqlc.arg(moeda), sqlc.arg(idioma),
+        sqlc.narg(unidade_padrao_id), 'convidado');
 
 -- name: AdmBuscarUsuario :one
 SELECT id, identidade_id, pessoa_id, fornecedor_id, locatario_id, nome, email, telefone,
-       custo_hora, unidade_padrao_id, situacao, versao, criado_em,
+       custo_hora, moeda, idioma, unidade_padrao_id, situacao, versao, criado_em,
        atualizado_em
 FROM app.usuario
 WHERE empresa_id = sqlc.arg(empresa_id) AND id = sqlc.arg(id) AND excluido_em IS NULL;
@@ -300,16 +316,18 @@ FOR UPDATE;
 -- name: AdmAtualizarUsuario :exec
 UPDATE app.usuario
 SET nome = sqlc.arg(nome), telefone = sqlc.narg(telefone),
-    custo_hora = (sqlc.narg(custo_hora_centavos)::bigint / 100.0)::numeric(12,2),
+    custo_hora = sqlc.narg(custo_hora),
     unidade_padrao_id = sqlc.narg(unidade_padrao_id), pessoa_id = sqlc.narg(pessoa_id)
 WHERE empresa_id = sqlc.arg(empresa_id) AND id = sqlc.arg(id) AND excluido_em IS NULL;
 
--- O próprio usuário (PATCH /v1/usuarios/eu) muda só nome e telefone, inclusive
--- o externo, que não pode tocar nas demais colunas da própria linha
--- (ISO-E01-01).
+-- O próprio usuário (PATCH /v1/usuarios/eu) muda só nome, telefone e idioma,
+-- inclusive o externo, que não pode tocar nas demais colunas da própria linha
+-- (ISO-E01-01; 00009). Idioma nulo mantém o atual. É a única escrita de
+-- usuario.idioma depois do convite: nenhum outro usuário altera o idioma de
+-- alguém.
 -- name: AdmAtualizarEu :exec
 UPDATE app.usuario
-SET nome = sqlc.arg(nome), telefone = sqlc.narg(telefone)
+SET nome = sqlc.arg(nome), telefone = sqlc.narg(telefone), idioma = coalesce(sqlc.narg(idioma)::text, idioma)
 WHERE empresa_id = sqlc.arg(empresa_id) AND id = sqlc.arg(id) AND excluido_em IS NULL;
 
 -- name: AdmDefinirSituacaoUsuario :exec
@@ -317,10 +335,11 @@ UPDATE app.usuario
 SET situacao = sqlc.arg(situacao)
 WHERE empresa_id = sqlc.arg(empresa_id) AND id = sqlc.arg(id) AND excluido_em IS NULL;
 
--- O convite aceito liga a identidade e ativa o usuário, numa única escrita.
+-- O convite aceito liga a identidade, ativa o usuário e grava o idioma em que a
+-- pessoa aceitou (nulo mantém o do convite), numa única escrita.
 -- name: AdmAceitarConviteUsuario :execrows
 UPDATE app.usuario
-SET identidade_id = sqlc.arg(identidade_id), situacao = 'ativo'
+SET identidade_id = sqlc.arg(identidade_id), situacao = 'ativo', idioma = coalesce(sqlc.narg(idioma)::text, idioma)
 WHERE empresa_id = sqlc.arg(empresa_id) AND id = sqlc.arg(id) AND situacao = 'convidado'
   AND identidade_id IS NULL AND excluido_em IS NULL;
 
@@ -357,15 +376,18 @@ LIMIT sqlc.arg(limite);
 -- chave primária; o intervalo de datas permite ao planejador descartar as
 -- partições fora do período.
 -- name: AdmListarEventosAuditoria :many
-SELECT id, ocorrido_em, ator_tipo, usuario_id, token_api_id, acao, entidade, entidade_id, entidade_chave,
-       campos_alterados, origem, coalesce(host(ip), '')::text AS ip, dispositivo_id, request_id, conexao_empresa_id,
-       ocorrido_no_dispositivo_em
+SELECT id, ocorrido_em, ator_tipo, usuario_id, usuario_nome, token_api_id, acao, resultado, entidade, entidade_id,
+       entidade_chave, campos_alterados, modulo, tela, sensivel, origem, coalesce(host(ip), '')::text AS ip,
+       dispositivo_id, request_id, conexao_empresa_id, ocorrido_no_dispositivo_em, hash
 FROM app.evento_auditoria
 WHERE empresa_id = sqlc.arg(empresa_id)
   AND (sqlc.narg(entidade)::text IS NULL OR entidade = sqlc.narg(entidade)::text)
   AND (sqlc.narg(entidade_id)::uuid IS NULL OR entidade_id = sqlc.narg(entidade_id)::uuid)
   AND (sqlc.narg(usuario_id)::uuid IS NULL OR usuario_id = sqlc.narg(usuario_id)::uuid)
   AND (sqlc.narg(acao)::text IS NULL OR acao = sqlc.narg(acao)::text)
+  AND (sqlc.narg(modulo)::text IS NULL OR modulo = sqlc.narg(modulo)::text)
+  AND (sqlc.narg(tela)::text IS NULL OR tela = sqlc.narg(tela)::text)
+  AND (sqlc.narg(ip)::text IS NULL OR host(ip) = sqlc.narg(ip)::text)
   AND (sqlc.narg(de)::timestamptz IS NULL OR ocorrido_em >= sqlc.narg(de)::timestamptz)
   AND (sqlc.narg(ate)::timestamptz IS NULL OR ocorrido_em < sqlc.narg(ate)::timestamptz)
   AND (sqlc.narg(cursor_ocorrido_em)::timestamptz IS NULL
@@ -374,8 +396,9 @@ ORDER BY ocorrido_em DESC, id DESC
 LIMIT sqlc.arg(limite);
 
 -- name: AdmBuscarEventoAuditoria :one
-SELECT id, ocorrido_em, ator_tipo, usuario_id, token_api_id, acao, entidade, entidade_id, entidade_chave,
-       antes, depois, campos_alterados, origem, coalesce(host(ip), '')::text AS ip, dispositivo_id, user_agent, request_id,
-       conexao_empresa_id, ocorrido_no_dispositivo_em
+SELECT id, ocorrido_em, ator_tipo, usuario_id, usuario_nome, token_api_id, acao, resultado, entidade, entidade_id,
+       entidade_chave, antes, depois, campos_alterados, modulo, tela, sensivel, detalhe, origem,
+       coalesce(host(ip), '')::text AS ip, dispositivo_id, user_agent, request_id, conexao_empresa_id,
+       ocorrido_no_dispositivo_em, hash
 FROM app.evento_auditoria
 WHERE empresa_id = sqlc.arg(empresa_id) AND id = sqlc.arg(id);

@@ -2,7 +2,7 @@
 name: tenaz-backend-go
 description: Use para implementar domínio e casos de uso em Go na Tenaz - regra de negócio, máquina de estados, cálculo, job agendado, evento interno, erro tipado, integração de saída com timeout e disjuntor. Chame depois de o modelo de dados e o comportamento esperado estarem definidos, e antes de qualquer trabalho de interface.
 tools: Read, Write, Edit, Glob, Grep, Bash
-model: opus
+model: sonnet
 ---
 
 # Backend Go da Tenaz

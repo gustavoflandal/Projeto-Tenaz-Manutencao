@@ -20,16 +20,16 @@ func Q(ctx context.Context) (*consultas.Queries, error) {
 
 // campoUnico liga cada índice único ao campo da entrada.
 var campoUnico = map[string]string{
-	"uq_empresa_cnpj":         "cnpj",
-	"uq_unidade_codigo":       "codigo",
-	"uq_turno_unidade_inicio": "hora_inicio",
-	"uq_feriado_unidade_data": "data",
-	"uq_pessoa_cpf":           "cpf",
-	"uq_usuario_email":        "email",
-	"uq_usuario_pessoa":       "pessoa_id",
-	"uq_usuario_identidade":   "email",
-	"uq_usuario_permissao":    "permissao",
-	"uq_perfil_codigo":        "codigo",
+	"uq_empresa_identificacao": "identificacao",
+	"uq_unidade_codigo":        "codigo",
+	"uq_turno_unidade_inicio":  "hora_inicio",
+	"uq_feriado_unidade_data":  "data",
+	"uq_pessoa_identificacao":  "identificacao",
+	"uq_usuario_email":         "email",
+	"uq_usuario_pessoa":        "pessoa_id",
+	"uq_usuario_identidade":    "email",
+	"uq_usuario_permissao":     "permissao",
+	"uq_perfil_codigo":         "codigo",
 }
 
 // campoChave liga cada chave estrangeira ao campo da entrada. Um id de outra
@@ -60,17 +60,17 @@ func Traduzir(err error) error {
 		if campo == "" {
 			campo = pg.ConstraintName
 		}
-		return erros.Duplicado.ComCampo(campo, erros.CampoDuplicado, "Já existe um registro com este valor.").Por(err)
+		return erros.Duplicado.ComCampoChave(campo, erros.CampoDuplicado, "campo.duplicado", nil).Por(err)
 	case "23503":
 		campo := campoChave[pg.ConstraintName]
 		if campo == "" {
 			campo = pg.ConstraintName
 		}
-		return erros.EntradaInvalida.ComCampo(campo, erros.CampoNaoEncontrado, "Registro referenciado não encontrado.").Por(err)
+		return erros.EntradaInvalida.ComCampoChave(campo, erros.CampoNaoEncontrado, "campo.referencia_nao_encontrada", nil).Por(err)
 	case "23514":
 		// CHECK ou gatilho de regra (perfil externo, permissão vedada): a
 		// mensagem do banco é técnica e não vai para o cliente.
-		return erros.EntradaInvalida.Com("a combinação de dados não é permitida").Por(err)
+		return erros.EntradaInvalida.ComChave("detalhe.combinacao_nao_permitida", nil).Por(err)
 	}
 	return err
 }

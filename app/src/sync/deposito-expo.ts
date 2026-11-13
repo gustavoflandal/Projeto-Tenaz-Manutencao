@@ -18,8 +18,11 @@ import type { Banco, Declaracao } from './deposito-sqlite';
  * Nome do arquivo de banco de uma conta.
  *
  * O nome carrega empresa e usuário de propósito: dois acessos do mesmo
- * aparelho nunca compartilham arquivo, e sair de uma conta apaga só o arquivo
- * dela.
+ * aparelho nunca compartilham arquivo. Sair da conta e sessão encerrada NÃO
+ * apagam este arquivo: só as credenciais saem, e a fila de comandos fica
+ * guardada até a mesma conta entrar de novo. Hoje não existe operação que
+ * apague o banco local; se ela vier, deve recusar enquanto houver comandos
+ * não sincronizados (FilaDeComandos.quantidadeNaoSincronizada() > 0).
  */
 export function arquivoDaConta(empresaID: string, usuarioID: string): string {
   return `tenaz-${empresaID}-${usuarioID}.db`;

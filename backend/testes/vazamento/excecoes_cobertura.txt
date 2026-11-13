@@ -15,4 +15,5 @@
 #
 # Formato: esquema.tabela  forma  # justificativa
 
+app.selo_auditoria    somente_insercao  # selo diário encadeado da trilha (seção 9.4, 00007): policies por comando, leitura interna e INSERT só do tenaz_job (conferido em auditoria_test.go); sem UPDATE nem DELETE, nem para o dono
 app.evento_auditoria  somente_insercao  # trilha de auditoria imutável (seções 9.2 e 9.4): policies por comando, sem UPDATE nem DELETE; o escopo externo grava pelo trigger e não lê

@@ -25,6 +25,7 @@ import (
 
 	"tenaz/internal/plataforma/autenticacao"
 	"tenaz/internal/plataforma/erros"
+	"tenaz/internal/plataforma/textos"
 	"tenaz/internal/plataforma/versao"
 )
 
@@ -183,7 +184,9 @@ func registrarRotaDesconhecida(mux *http.ServeMux) {
 
 // escreverProblema responde um erro fora do roteador do Huma.
 func escreverProblema(w http.ResponseWriter, r *http.Request, err error) {
-	p := erros.ParaProblema(err, r.URL.Path)
+	idioma := textos.DoContexto(r.Context())
+	p := erros.ParaProblemaIdioma(err, r.URL.Path, idioma)
+	textos.MarcarResposta(w.Header(), idioma)
 	p.IDRastreio = r.Header.Get(cabecalhoRequestID)
 	corpo, errJSON := json.Marshal(p)
 	if errJSON != nil {

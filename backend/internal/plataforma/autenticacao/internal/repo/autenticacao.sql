@@ -96,7 +96,7 @@ WHERE id = sqlc.arg(id);
 -- ------------------------------------------------------------ acesso_empresa
 
 -- name: AuthListarAcessos :many
-SELECT empresa_id, usuario_id
+SELECT empresa_id, usuario_id, usuario_nome
 FROM plataforma.acesso_empresa
 WHERE identidade_id = sqlc.arg(identidade_id) AND habilitado
 ORDER BY empresa_id;
@@ -107,6 +107,13 @@ ORDER BY empresa_id;
 SELECT identidade_id
 FROM plataforma.acesso_empresa
 WHERE empresa_id = sqlc.arg(empresa_id) AND usuario_id = sqlc.arg(usuario_id);
+
+-- Nome do usuário naquela empresa, para o evento da trilha (evento_auditoria.
+-- usuario_nome). Filtro (identidade_id, empresa_id), a chave primária.
+-- name: AuthNomeDoAcesso :one
+SELECT usuario_nome
+FROM plataforma.acesso_empresa
+WHERE identidade_id = sqlc.arg(identidade_id) AND empresa_id = sqlc.arg(empresa_id);
 
 -- name: AuthBuscarAcesso :one
 SELECT usuario_id
@@ -297,15 +304,20 @@ RETURNING id, email, identidade_id, empresa_id, usuario_id;
 
 -- Evento de autenticação na trilha da empresa (seção 6.9 do documento 5),
 -- gravado na transação NaTrilha, que fixou app.empresa_id e os dados da
--- requisição. Só estas 13 colunas têm INSERT para tenaz_autenticacao, e não há
+-- requisição. Só estas 16 colunas têm INSERT (as 13 da 00005, mais nome, resultado e tela da 00007) para tenaz_autenticacao, e não há
 -- SELECT: sem RETURNING. ator_tipo e entidade são fixos; a política restritiva
 -- do papel confere a ação e que usuario_id é o da identidade naquela empresa.
+-- O nome do usuário no evento é o de acesso_empresa naquela empresa
+-- (AuthNomeDoAcesso): a policy autenticacao_identidade confere que o nome
+-- gravado é o desta linha.
 -- name: AuthInserirEvento :exec
 INSERT INTO app.evento_auditoria
-  (empresa_id, ator_tipo, usuario_id, acao, entidade, entidade_id, depois, campos_alterados, origem, ip,
-   dispositivo_id, user_agent, request_id)
+  (empresa_id, ator_tipo, usuario_id, usuario_nome, acao, resultado, entidade, entidade_id, depois,
+   campos_alterados, origem, ip, dispositivo_id, user_agent, request_id, tela)
 VALUES
-  (sqlc.arg(empresa_id), 'usuario', sqlc.arg(usuario_id), sqlc.arg(acao), 'identidade', sqlc.arg(identidade_id),
+  (sqlc.arg(empresa_id), 'usuario', sqlc.arg(usuario_id), sqlc.arg(usuario_nome), sqlc.arg(acao),
+   sqlc.arg(resultado), 'identidade', sqlc.arg(identidade_id),
    sqlc.narg(depois), sqlc.narg(campos_alterados)::text[], nullif(current_setting('app.origem', true), ''),
    nullif(current_setting('app.ip', true), '')::inet, sqlc.narg(dispositivo_id),
-   nullif(current_setting('app.user_agent', true), ''), nullif(current_setting('app.request_id', true), ''));
+   nullif(current_setting('app.user_agent', true), ''), nullif(current_setting('app.request_id', true), ''),
+   sqlc.narg(tela));

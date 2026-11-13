@@ -21,6 +21,7 @@ import (
 	"github.com/google/uuid"
 
 	"tenaz/internal/plataforma/autorizacao"
+	"tenaz/internal/plataforma/dinheiro"
 	"tenaz/internal/plataforma/paginacao"
 )
 
@@ -35,15 +36,17 @@ type Servico interface {
 	// CriarConta cria a empresa com a unidade inicial (e seus turnos), os 12
 	// perfis padrão com a matriz de RF-ADM-005 e o usuário administrador
 	// `convidado`, e envia o convite (que confirma o e-mail do responsável
-	// antes do primeiro acesso). Público. conflito em cnpj já cadastrado.
+	// antes do primeiro acesso). Público. O país (BR, AR, PY) define a moeda e o
+	// idioma padrão; conflito em identificação já cadastrada.
 	CriarConta(ctx context.Context, e EntradaCriarConta) (ContaCriada, error)
 
 	// AceitarConvite liga o login ao usuário convidado e o ativa. Senha só é
 	// exigida quando o e-mail ainda não tem login (ConviteValido.
-	// IdentidadeExiste, de autenticacao.LocalizarConvite). Público.
+	// IdentidadeExiste, de autenticacao.LocalizarConvite). Público. idioma, se
+	// informado, é o idioma em que a pessoa aceitou e passa a ser o dela.
 	// link_email_invalido, senha_fraca, conflito (o e-mail já tem usuário na
 	// empresa).
-	AceitarConvite(ctx context.Context, token, senha string) (ConviteAceito, error)
+	AceitarConvite(ctx context.Context, token, senha string, idioma *string) (ConviteAceito, error)
 
 	// Empresa: adm.ler para ler, adm.gerenciar_empresa para alterar.
 	ObterEmpresa(ctx context.Context, a autorizacao.Ator) (Empresa, error)
@@ -98,7 +101,7 @@ type Servico interface {
 	RetirarPermissao(ctx context.Context, a autorizacao.Ator, id uuid.UUID, permissao string) (Usuario, error)
 
 	// Próprio usuário (GET e PATCH /v1/usuarios/eu): qualquer autenticado,
-	// inclusive externo. Só nome e telefone mudam (ISO-E01-01).
+	// inclusive externo. Só nome, telefone e idioma mudam (ISO-E01-01; ADR-013).
 	ObterEu(ctx context.Context, a autorizacao.Ator) (Usuario, error)
 	EditarEu(ctx context.Context, a autorizacao.Ator, e EntradaEu) (Usuario, error)
 
@@ -106,23 +109,39 @@ type Servico interface {
 	ListarPerfis(ctx context.Context, a autorizacao.Ator) ([]Perfil, error)
 	ListarPermissoes(ctx context.Context, a autorizacao.Ator) ([]autorizacao.Permissao, error)
 
-	// Trilha de auditoria (adm.ler_auditoria), com filtros e cursor.
+	// Trilha de auditoria (RF-ADM-011). adm.ler_auditoria: consulta com
+	// filtros (usuário, tela ou módulo, tipo, período, IP, entidade) e
+	// cursor; detalhe com antes, depois, detalhe e hash; exportação CSV com os
+	// mesmos filtros, que é uma extracao (segue a captura da tela de origem);
+	// verificação de integridade por período, com o resultado de cada dia
+	// (o banco recalcula e o Go compara o selo com a cópia imutável).
+	// adm.gerenciar_parametros: lista e altera a captura por tela.
+	// Nenhum perfil altera evento ou selo. tela fora do catálogo:
+	// validacao_falhou; armazenamento do selo indisponível: servico_indisponivel.
 	ListarEventosAuditoria(ctx context.Context, a autorizacao.Ator, f FiltroAuditoria) (paginacao.Pagina[ResumoEvento], error)
 	ObterEventoAuditoria(ctx context.Context, a autorizacao.Ator, id uuid.UUID) (Evento, error)
+	ExportarEventosAuditoria(ctx context.Context, a autorizacao.Ator, f FiltroAuditoria) (ExportacaoAuditoria, error)
+	VerificarIntegridadeAuditoria(ctx context.Context, a autorizacao.Ator, de, ate time.Time) ([]DiaVerificado, error)
+	ListarCapturasAuditoria(ctx context.Context, a autorizacao.Ator) ([]CapturaAuditoria, error)
+	AlterarCapturaAuditoria(ctx context.Context, a autorizacao.Ator, tela string, c EntradaCaptura) (CapturaAuditoria, error)
 }
 
 // ------------------------------------------------------------------ conta
 
 // EntradaCriarConta é o cadastro pelo site (RF-ADM-001, RF-SRV-001).
 type EntradaCriarConta struct {
-	CNPJ          string // com ou sem máscara
-	RazaoSocial   string
-	NomeFantasia  *string
-	FusoHorario   string  // IANA; vazio: America/Sao_Paulo
-	Plano         *string // essencial, profissional, enterprise; nulo só com SrvHabilitado
-	SrvHabilitado bool    // módulo SRV, plano Serviços
-	Responsavel   EntradaResponsavel
-	Unidade       EntradaUnidade // unidade inicial; sem turnos, segunda a sexta 08:00 às 17:00
+	Pais              string  // BR, AR ou PY; define a moeda e o idioma padrão sugerido
+	IdentificacaoTipo string  // cnpj, cuit ou ruc, o do país
+	Identificacao     string  // com ou sem máscara
+	IdiomaPadrao      *string // pt-BR ou es-419; ausente: o do país
+	IdiomaResponsavel string  // idioma da tela de cadastro (Accept-Language); vazio: o padrão da empresa
+	RazaoSocial       string
+	NomeFantasia      *string
+	FusoHorario       string  // IANA; vazio: America/Sao_Paulo
+	Plano             *string // essencial, profissional, enterprise; nulo só com SrvHabilitado
+	SrvHabilitado     bool    // módulo SRV, plano Serviços
+	Responsavel       EntradaResponsavel
+	Unidade           EntradaUnidade // unidade inicial; sem turnos, segunda a sexta 08:00 às 17:00
 }
 
 // EntradaResponsavel é o responsável, que nasce administrador convidado.
@@ -154,7 +173,11 @@ type Empresa struct {
 	ID                    uuid.UUID
 	RazaoSocial           string
 	NomeFantasia          *string
-	CNPJ                  *string
+	Pais                  string // BR, AR ou PY; só leitura depois da criação
+	Moeda                 string // BRL, ARS ou PYG; só leitura
+	IdiomaPadrao          string // pt-BR ou es-419
+	IdentificacaoTipo     *string
+	Identificacao         *string
 	Plano                 *string
 	SrvHabilitado         bool
 	MFAObrigatorio        bool   // segundo fator exigido de todos os usuários (RN-ADM-027)
@@ -170,56 +193,60 @@ type Empresa struct {
 // EntradaEmpresa são os dados cadastrais editáveis. Plano e SRV mudam pela
 // cobrança (RF-ADM-009, E10), não aqui.
 type EntradaEmpresa struct {
-	RazaoSocial    string
-	NomeFantasia   *string
-	CNPJ           string
-	FusoHorario    string
-	MFAObrigatorio bool // RN-ADM-027; a troca vai para a trilha (RN-ADM-030)
-	VersaoEsperada *int64
+	RazaoSocial       string
+	NomeFantasia      *string
+	IdentificacaoTipo string
+	Identificacao     string
+	IdiomaPadrao      string
+	FusoHorario       string
+	MFAObrigatorio    bool // RN-ADM-027; a troca vai para a trilha (RN-ADM-030)
+	VersaoEsperada    *int64
 }
 
 // ----------------------------------------------------------------- unidade
 
 // Endereco da unidade (jsonb).
 type Endereco struct {
-	Logradouro  string `json:"logradouro,omitempty"`
-	Numero      string `json:"numero,omitempty"`
-	Complemento string `json:"complemento,omitempty"`
-	Bairro      string `json:"bairro,omitempty"`
-	Municipio   string `json:"municipio,omitempty"`
-	UF          string `json:"uf,omitempty"`
-	CEP         string `json:"cep,omitempty"`
+	Logradouro   string `json:"logradouro,omitempty"`
+	Numero       string `json:"numero,omitempty"`
+	Complemento  string `json:"complemento,omitempty"`
+	Bairro       string `json:"bairro,omitempty"`
+	Municipio    string `json:"municipio,omitempty"`
+	Subdivisao   string `json:"subdivisao,omitempty"`
+	CodigoPostal string `json:"codigo_postal,omitempty"`
 }
 
 // EntradaUnidade cria ou edita a unidade. Turnos só na criação; depois, pelas
 // operações de turno.
 type EntradaUnidade struct {
-	Codigo         string
-	Nome           string
-	CNPJ           *string
-	Endereco       *Endereco
-	FusoHorario    *string // nulo herda o da empresa
-	Latitude       *float64
-	Longitude      *float64
-	Turnos         []EntradaTurno
-	VersaoEsperada *int64
+	Codigo            string
+	Nome              string
+	IdentificacaoTipo *string
+	Identificacao     *string
+	Endereco          *Endereco
+	FusoHorario       *string // nulo herda o da empresa
+	Latitude          *float64
+	Longitude         *float64
+	Turnos            []EntradaTurno
+	VersaoEsperada    *int64
 }
 
 // Unidade com o calendário.
 type Unidade struct {
-	ID           uuid.UUID
-	Codigo       string
-	Nome         string
-	CNPJ         *string
-	Endereco     *Endereco
-	FusoHorario  *string
-	Latitude     *float64
-	Longitude    *float64
-	Situacao     string // ativa, inativa
-	Versao       int64
-	CriadoEm     time.Time
-	AtualizadoEm time.Time
-	Turnos       []Turno // no detalhe
+	ID                uuid.UUID
+	Codigo            string
+	Nome              string
+	IdentificacaoTipo *string
+	Identificacao     *string
+	Endereco          *Endereco
+	FusoHorario       *string
+	Latitude          *float64
+	Longitude         *float64
+	Situacao          string // ativa, inativa
+	Versao            int64
+	CriadoEm          time.Time
+	AtualizadoEm      time.Time
+	Turnos            []Turno // no detalhe
 }
 
 // EntradaTurno é um turno por dia da semana.
@@ -268,7 +295,8 @@ const (
 // EntradaPessoa cria ou edita a pessoa (RF-ADM-015).
 type EntradaPessoa struct {
 	Nome                 string
-	CPF                  *string // com ou sem máscara
+	IdentificacaoTipo    *string // cpf, cuil, dni ou ci
+	Identificacao        *string // com ou sem máscara
 	DataNascimento       *string // AAAA-MM-DD
 	Matricula            *string
 	Cargo                *string
@@ -281,11 +309,12 @@ type EntradaPessoa struct {
 	VersaoEsperada       *int64
 }
 
-// Pessoa no detalhe, com o CPF inteiro.
+// Pessoa no detalhe, com a identificação inteira (dado sensível).
 type Pessoa struct {
 	ID                   uuid.UUID
 	Nome                 string
-	CPF                  *string
+	IdentificacaoTipo    *string
+	Identificacao        *string
 	DataNascimento       *string
 	Matricula            *string
 	Cargo                *string
@@ -302,20 +331,21 @@ type Pessoa struct {
 	AtualizadoEm         time.Time
 }
 
-// ResumoPessoa é a linha da lista, com o CPF mascarado.
+// ResumoPessoa é a linha da lista, com a identificação mascarada.
 type ResumoPessoa struct {
-	ID           uuid.UUID
-	Nome         string
-	CPFMascarado *string
-	Matricula    *string
-	Cargo        *string
-	Vinculo      string
-	FornecedorID *uuid.UUID
-	UnidadeID    *uuid.UUID
-	Situacao     string
-	UsuarioID    *uuid.UUID
-	Versao       int64
-	CriadoEm     time.Time
+	ID                     uuid.UUID
+	Nome                   string
+	IdentificacaoTipo      *string
+	IdentificacaoMascarada *string
+	Matricula              *string
+	Cargo                  *string
+	Vinculo                string
+	FornecedorID           *uuid.UUID
+	UnidadeID              *uuid.UUID
+	Situacao               string
+	UsuarioID              *uuid.UUID
+	Versao                 int64
+	CriadoEm               time.Time
 }
 
 // FiltroPessoas são os filtros de GET /v1/pessoas.
@@ -333,33 +363,34 @@ type FiltroPessoas struct {
 
 // EntradaUsuario cria o usuário e envia o convite (RF-ADM-004).
 type EntradaUsuario struct {
-	Nome              string
-	Email             string
-	Telefone          *string
-	Perfis            []string       // códigos: administrador, gestor, tecnico...
-	FornecedorID      *uuid.UUID     // obrigatório no perfil prestador
-	LocatarioID       *uuid.UUID     // obrigatório no perfil locatario
-	PessoaID          *uuid.UUID     // liga a uma pessoa existente...
-	NovaPessoa        *EntradaPessoa // ...ou cria a pessoa junto (nunca os dois)
-	CustoHoraCentavos *int64
-	UnidadePadraoID   *uuid.UUID
+	Nome            string
+	Email           string
+	Telefone        *string
+	Perfis          []string       // códigos: administrador, gestor, tecnico...
+	FornecedorID    *uuid.UUID     // obrigatório no perfil prestador
+	LocatarioID     *uuid.UUID     // obrigatório no perfil locatario
+	PessoaID        *uuid.UUID     // liga a uma pessoa existente...
+	NovaPessoa      *EntradaPessoa // ...ou cria a pessoa junto (nunca os dois)
+	CustoHora       *string        // preço unitário em texto decimal, até 6 casas, sem sinal; lido com a moeda da empresa
+	UnidadePadraoID *uuid.UUID
 }
 
 // EntradaEditarUsuario são os dados editáveis por quem administra. E-mail e
 // vínculo externo não mudam: para trocar, inativa-se e cria-se outro.
 type EntradaEditarUsuario struct {
-	Nome              string
-	Telefone          *string
-	CustoHoraCentavos *int64
-	UnidadePadraoID   *uuid.UUID
-	PessoaID          *uuid.UUID
-	VersaoEsperada    *int64
+	Nome            string
+	Telefone        *string
+	CustoHora       *string // como em EntradaUsuario; nulo apaga
+	UnidadePadraoID *uuid.UUID
+	PessoaID        *uuid.UUID
+	VersaoEsperada  *int64
 }
 
 // EntradaEu é o que o próprio usuário altera.
 type EntradaEu struct {
 	Nome     string
 	Telefone *string
+	Idioma   *string // pt-BR ou es-419; nulo mantém o atual
 }
 
 // PerfilAtribuido é um perfil do usuário.
@@ -382,7 +413,10 @@ type Usuario struct {
 	Nome              string
 	Email             *string
 	Telefone          *string
-	CustoHoraCentavos *int64
+	CustoHora         *dinheiro.PrecoUnitario // preço unitário, na moeda da empresa
+	Pais              string                  // país da empresa (BR, AR, PY); só leitura
+	Moeda             string                  // moeda de custo_hora: a da empresa
+	Idioma            string                  // pt-BR ou es-419; só o próprio usuário altera
 	UnidadePadraoID   *uuid.UUID
 	Situacao          string // convidado, ativo, inativo
 	Perfis            []PerfilAtribuido
@@ -440,7 +474,10 @@ type FiltroAuditoria struct {
 	Entidade   *string
 	EntidadeID *uuid.UUID
 	UsuarioID  *uuid.UUID
-	Acao       *string
+	Acao       *string    // um dos nove tipos de operação
+	Modulo     *string    // código do módulo, minúsculas
+	Tela       *string    // '<modulo>.<tela>' do catálogo fechado
+	IP         *string    // endereço exato
 	De         *time.Time // inclusive
 	Ate        *time.Time // exclusive
 	Cursor     string
@@ -453,12 +490,17 @@ type ResumoEvento struct {
 	OcorridoEm              time.Time
 	AtorTipo                string
 	UsuarioID               *uuid.UUID
+	UsuarioNome             *string // nome no instante do evento
 	TokenAPIID              *uuid.UUID
 	Acao                    string
+	Resultado               string // sucesso ou falha (só em login)
 	Entidade                string
 	EntidadeID              *uuid.UUID
 	EntidadeChave           *string
 	CamposAlterados         []string
+	Modulo                  *string
+	Tela                    *string
+	Sensivel                bool
 	Origem                  *string
 	IP                      *string
 	DispositivoID           *uuid.UUID
@@ -472,5 +514,39 @@ type Evento struct {
 	ResumoEvento
 	Antes     []byte
 	Depois    []byte
+	Detalhe   []byte // filtros, formato e quantidade de impressão e extração
+	Hash      []byte // sha256 do conteúdo do evento (formato 1, documento 2, seção 9.2.1)
 	UserAgent *string
+}
+
+// ExportacaoAuditoria é a exportação CSV da trilha.
+type ExportacaoAuditoria struct {
+	CSV        []byte
+	Quantidade int
+}
+
+// DiaVerificado é o resultado da verificação de integridade de um dia UTC.
+type DiaVerificado struct {
+	Dia      time.Time
+	Estado   string // integro, violado ou nao_selado
+	Motivo   *string
+	EventoID *uuid.UUID
+}
+
+// CapturaAuditoria é a configuração de uma tela do catálogo.
+type CapturaAuditoria struct {
+	Tela         string
+	Modulo       string
+	Nome         string
+	Visualizacao bool
+	Impressao    bool
+	Extracao     bool
+	Configurada  bool // a empresa já mudou alguma chave; senão vale o padrão
+}
+
+// EntradaCaptura são as três chaves de uma tela: sempre as três.
+type EntradaCaptura struct {
+	Visualizacao bool
+	Impressao    bool
+	Extracao     bool
 }

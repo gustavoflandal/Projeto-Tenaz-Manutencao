@@ -52,10 +52,27 @@ type empresaFixture struct {
 	DesafioMFA       string
 	TokenEmail       string
 	TokenRenovacao   string
+	CapturaAuditoria string // app.captura_auditoria (00007)
+	SeloDia          string // dia do primeiro app.selo_auditoria (00007)
+
+	// País (00009, ADR-013): país, moeda, idioma e os tipos de identificação da
+	// empresa (pessoa jurídica) e das pessoas (pessoa física) daquele país.
+	Pais, Moeda, Idioma     string
+	TipoEmpresa, TipoPessoa string
 }
+
+// Os três países suportados (ADR-013). A é brasileira, B argentina e C
+// paraguaia: toda verificação A contra B gerada do catálogo prova também o
+// isolamento entre países, e C entra no teste entre os três.
+var (
+	paisBR = empresaFixture{Pais: "BR", Moeda: "BRL", Idioma: "pt-BR", TipoEmpresa: "cnpj", TipoPessoa: "cpf"}
+	paisAR = empresaFixture{Pais: "AR", Moeda: "ARS", Idioma: "es-419", TipoEmpresa: "cuit", TipoPessoa: "dni"}
+	paisPY = empresaFixture{Pais: "PY", Moeda: "PYG", Idioma: "es-419", TipoEmpresa: "ruc", TipoPessoa: "ci"}
+)
 
 type fixturesE01 struct {
 	A, B empresaFixture
+	C    empresaFixture // paraguaia: o terceiro país
 
 	// Escopo externo, todos na empresa A.
 	F1, F2, L1, L2 string
@@ -114,11 +131,20 @@ func cpfAleatorio() string {
 	return string(b)
 }
 
+// documentoAleatorio gera um valor na forma de app.identificacao_valida.
+func documentoAleatorio(tipo string) string {
+	n := map[string]int{"cnpj": 14, "cpf": 11, "cuit": 11, "cuil": 11, "dni": 8, "ruc": 8, "ci": 7}[tipo]
+	if n == 0 {
+		panic("tipo de identificação sem gerador: " + tipo)
+	}
+	return cpfAleatorio()[:min(n, 11)] + cpfAleatorio()[:max(n-11, 0)]
+}
+
 func povoar(ctx context.Context) (*fixturesE01, error) {
-	f := &fixturesE01{F1: novoID(), F2: novoID(), L1: novoID(), L2: novoID()}
+	f := &fixturesE01{F1: novoID(), F2: novoID(), L1: novoID(), L2: novoID(), A: paisBR, B: paisAR, C: paisPY}
 	f.LinkHash = fmt.Sprintf("%x", hashAleatorio())
 
-	for _, e := range []*empresaFixture{&f.A, &f.B} {
+	for _, e := range []*empresaFixture{&f.A, &f.B, &f.C} {
 		if err := povoarEmpresa(ctx, e); err != nil {
 			return nil, err
 		}
@@ -126,7 +152,42 @@ func povoar(ctx context.Context) (*fixturesE01, error) {
 	if err := povoarExternos(ctx, f); err != nil {
 		return nil, err
 	}
+	for _, e := range []*empresaFixture{&f.A, &f.B, &f.C} {
+		if err := povoarAuditoria(ctx, e); err != nil {
+			return nil, err
+		}
+	}
 	return f, nil
+}
+
+// povoarAuditoria grava a configuração de captura (pelo tenaz_app, como a
+// tela de auditoria) e o selo diário (pelo tenaz_job, por
+// app.selar_dias_pendentes(), como o job do selo). O selo só existe para dia
+// vencido, a partir do dia do primeiro evento da empresa: o migrador grava um
+// evento de dois dias atrás, só para dar ao selo um dia passado. É o único
+// dado das fixtures que não vem do papel da aplicação, porque o relógio do
+// teste não volta (seção 9.4 do documento 2).
+func povoarAuditoria(ctx context.Context, e *empresaFixture) error {
+	c := contexto{Empresa: e.ID, Escopo: "interno"}
+	if err := confirmarComoPapel(ctx, papelApp, c, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `INSERT INTO app.captura_auditoria (empresa_id, tela, visualizacao)
+		                         VALUES ($1, 'adm.pessoas', true) RETURNING id`, e.ID).Scan(&e.CapturaAuditoria)
+	}); err != nil {
+		return fmt.Errorf("empresa %s, captura_auditoria: %w", e.ID, err)
+	}
+	if err := confirmarComoPapel(ctx, "", contexto{}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `INSERT INTO app.evento_auditoria (empresa_id, ator_tipo, acao, entidade, ocorrido_em)
+		                        VALUES ($1, 'sistema', 'inclusao', 'unidade', now() - interval '2 days')`, e.ID)
+		return err
+	}); err != nil {
+		return fmt.Errorf("empresa %s, evento de dia passado: %w", e.ID, err)
+	}
+	return confirmarComoPapel(ctx, papelJob, c, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx, `SELECT min(d)::text FROM app.selar_dias_pendentes() d`).Scan(&e.SeloDia); err != nil {
+			return fmt.Errorf("empresa %s, selo_auditoria: %w", e.ID, err)
+		}
+		return nil
+	})
 }
 
 // povoarEmpresa repete a criação de conta (RF-ADM-001): transação com o id
@@ -142,27 +203,29 @@ func povoarEmpresa(ctx context.Context, e *empresaFixture) error {
 			args   []any
 			saida  *string
 		}{
-			{"empresa", `INSERT INTO app.empresa (id, razao_social) VALUES ($1, 'Empresa de teste')`,
-				[]any{e.ID}, nil},
-			{"unidade", `INSERT INTO app.unidade (empresa_id, codigo, nome) VALUES ($1, 'U1', 'Unidade') RETURNING id`,
-				[]any{e.ID}, &e.Unidade},
+			{"empresa", `INSERT INTO app.empresa (id, razao_social, pais, moeda, idioma_padrao, identificacao_tipo, identificacao)
+			             VALUES ($1, 'Empresa de teste', $2, $3, $4, $5, $6)`,
+				[]any{e.ID, e.Pais, e.Moeda, e.Idioma, e.TipoEmpresa, documentoAleatorio(e.TipoEmpresa)}, nil},
+			{"unidade", `INSERT INTO app.unidade (empresa_id, codigo, nome, identificacao_tipo, identificacao)
+			             VALUES ($1, 'U1', 'Unidade', $2, $3) RETURNING id`,
+				[]any{e.ID, e.TipoEmpresa, documentoAleatorio(e.TipoEmpresa)}, &e.Unidade},
 			{"turno", `INSERT INTO app.turno_unidade (empresa_id, unidade_id, dia_semana, hora_inicio, hora_fim)
 			           VALUES ($1, $2, 1, '08:00', '17:00') RETURNING id`, nil, &e.Turno},
 			{"feriado", `INSERT INTO app.feriado_unidade (empresa_id, unidade_id, data_feriado, descricao)
 			             VALUES ($1, $2, '2026-12-25', 'Natal') RETURNING id`, nil, &e.Feriado},
-			{"pessoa interna", `INSERT INTO app.pessoa (empresa_id, nome, cpf, data_nascimento)
-			                    VALUES ($1, 'Pessoa interna', $2, '1980-01-01') RETURNING id`,
-				[]any{e.ID, cpfAleatorio()}, &e.PessoaInterna},
+			{"pessoa interna", `INSERT INTO app.pessoa (empresa_id, nome, identificacao_tipo, identificacao, data_nascimento)
+			                    VALUES ($1, 'Pessoa interna', $2, $3, '1980-01-01') RETURNING id`,
+				[]any{e.ID, e.TipoPessoa, documentoAleatorio(e.TipoPessoa)}, &e.PessoaInterna},
 			{"identidade", `INSERT INTO plataforma.identidade (email, senha_hash) VALUES ($1, 'argon2id-falso') RETURNING id`,
 				[]any{"interno-" + e.ID + "@teste.tenaz"}, &e.Identidade},
-			{"pessoa do interno", `INSERT INTO app.pessoa (empresa_id, nome, cpf, data_nascimento)
-			                       VALUES ($1, 'Pessoa do usuário interno', $2, '1975-05-05') RETURNING id`,
-				[]any{e.ID, cpfAleatorio()}, &e.PessoaDoInterno},
-			{"usuário interno", `INSERT INTO app.usuario (empresa_id, nome, identidade_id, pessoa_id)
-			                     VALUES ($1, 'Interno', $2, $3) RETURNING id`,
+			{"pessoa do interno", `INSERT INTO app.pessoa (empresa_id, nome, identificacao_tipo, identificacao, data_nascimento)
+			                       VALUES ($1, 'Pessoa do usuário interno', $2, $3, '1975-05-05') RETURNING id`,
+				[]any{e.ID, e.TipoPessoa, documentoAleatorio(e.TipoPessoa)}, &e.PessoaDoInterno},
+			{"usuário interno", `INSERT INTO app.usuario (empresa_id, nome, identidade_id, pessoa_id, moeda)
+			                     VALUES ($1, 'Interno', $2, $3, $4) RETURNING id`,
 				nil, &e.UsuarioInterno},
-			{"usuário inativo", `INSERT INTO app.usuario (empresa_id, nome, situacao) VALUES ($1, 'Inativo', 'inativo') RETURNING id`,
-				[]any{e.ID}, &e.UsuarioInativo},
+			{"usuário inativo", `INSERT INTO app.usuario (empresa_id, nome, situacao, moeda) VALUES ($1, 'Inativo', 'inativo', $2) RETURNING id`,
+				[]any{e.ID, e.Moeda}, &e.UsuarioInativo},
 			{"perfil gestor", `INSERT INTO app.perfil (empresa_id, codigo, nome, padrao, perfil_origem, permissoes)
 			                   VALUES ($1, 'gestor', 'Gestor', true, 'gestor', '{os.encerrar,os.executar}') RETURNING id`,
 				[]any{e.ID}, &e.PerfilGestor},
@@ -184,7 +247,7 @@ func povoarEmpresa(ctx context.Context, e *empresaFixture) error {
 			case "turno", "feriado":
 				args = []any{e.ID, e.Unidade}
 			case "usuário interno":
-				args = []any{e.ID, e.Identidade, e.PessoaDoInterno}
+				args = []any{e.ID, e.Identidade, e.PessoaDoInterno, e.Moeda}
 			case "usuario_perfil":
 				args = []any{e.ID, e.UsuarioInterno, e.PerfilGestor}
 			case "usuario_permissao":
@@ -274,14 +337,17 @@ func povoarExternos(ctx context.Context, f *fixturesE01) error {
 			}
 			return nil
 		}
-		const pessoaTerceiro = `INSERT INTO app.pessoa (empresa_id, nome, cpf, vinculo, fornecedor_id)
-		                        VALUES ($1, $2, $3, 'terceiro', $4) RETURNING id`
-		const pessoaSemFornecedor = `INSERT INTO app.pessoa (empresa_id, nome, cpf, vinculo)
-		                             VALUES ($1, $2, $3, 'autonomo') RETURNING id`
-		const usuarioPrestador = `INSERT INTO app.usuario (empresa_id, nome, fornecedor_id, pessoa_id, identidade_id)
+		const pessoaTerceiro = `INSERT INTO app.pessoa (empresa_id, nome, identificacao_tipo, identificacao, vinculo, fornecedor_id)
+		                        VALUES ($1, $2, 'cpf', $3, 'terceiro', $4) RETURNING id`
+		// O locatário L2 é paraguaio: a empresa brasileira aceita a CI (ADR-013).
+		const pessoaSemFornecedor = `INSERT INTO app.pessoa (empresa_id, nome, identificacao_tipo, identificacao, vinculo)
+		                             VALUES ($1, $2, $3, $4, 'autonomo') RETURNING id`
+		// A moeda do usuário é a da empresa (00010: sem DEFAULT); o literal só
+		// existe em paisBR, paisAR e paisPY.
+		const usuarioPrestador = `INSERT INTO app.usuario (empresa_id, nome, fornecedor_id, pessoa_id, identidade_id, moeda)
+		                          VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`
+		const usuarioLocatario = `INSERT INTO app.usuario (empresa_id, nome, locatario_id, pessoa_id, moeda)
 		                          VALUES ($1, $2, $3, $4, $5) RETURNING id`
-		const usuarioLocatario = `INSERT INTO app.usuario (empresa_id, nome, locatario_id, pessoa_id)
-		                          VALUES ($1, $2, $3, $4) RETURNING id`
 
 		if err := comoAutenticacao(ctx, tx, func() error {
 			return inserir("identidade F1", `INSERT INTO plataforma.identidade (email) VALUES ($1) RETURNING id`,
@@ -299,8 +365,8 @@ func povoarExternos(ctx context.Context, f *fixturesE01) error {
 			{"pessoa F1 sem login", pessoaTerceiro, &f.PessoaF1SemLogin, []any{a, "Ajudante F1", cpfAleatorio(), f.F1}},
 			{"pessoa do usuário F2", pessoaTerceiro, &f.PessoaUsuarioF2, []any{a, "Técnico F2", cpfAleatorio(), f.F2}},
 			{"pessoa F2 sem login", pessoaTerceiro, &f.PessoaF2SemLogin, []any{a, "Ajudante F2", cpfAleatorio(), f.F2}},
-			{"pessoa do usuário L1", pessoaSemFornecedor, &f.PessoaUsuarioL1, []any{a, "Locatário L1", cpfAleatorio()}},
-			{"pessoa do usuário L2", pessoaSemFornecedor, &f.PessoaUsuarioL2, []any{a, "Locatário L2", cpfAleatorio()}},
+			{"pessoa do usuário L1", pessoaSemFornecedor, &f.PessoaUsuarioL1, []any{a, "Locatário L1", "cpf", cpfAleatorio()}},
+			{"pessoa do usuário L2", pessoaSemFornecedor, &f.PessoaUsuarioL2, []any{a, "Locatário L2", "ci", documentoAleatorio("ci")}},
 		} {
 			if err := inserir(p.rotulo, p.sql, p.saida, p.args...); err != nil {
 				return err
@@ -312,12 +378,12 @@ func povoarExternos(ctx context.Context, f *fixturesE01) error {
 			saida  *string
 			args   []any
 		}{
-			{"usuário F1", usuarioPrestador, &f.UsuarioF1, []any{a, "Prestador F1", f.F1, f.PessoaUsuarioF1, f.IdentidadeF1}},
-			{"colega F1", usuarioPrestador, &f.UsuarioF1Colega, []any{a, "Colega F1", f.F1, nil, nil}},
-			{"usuário F2", usuarioPrestador, &f.UsuarioF2, []any{a, "Prestador F2", f.F2, f.PessoaUsuarioF2, nil}},
-			{"usuário L1", usuarioLocatario, &f.UsuarioL1, []any{a, "Locatário L1", f.L1, f.PessoaUsuarioL1}},
-			{"colega L1", usuarioLocatario, &f.UsuarioL1Colega, []any{a, "Colega L1", f.L1, nil}},
-			{"usuário L2", usuarioLocatario, &f.UsuarioL2, []any{a, "Locatário L2", f.L2, f.PessoaUsuarioL2}},
+			{"usuário F1", usuarioPrestador, &f.UsuarioF1, []any{a, "Prestador F1", f.F1, f.PessoaUsuarioF1, f.IdentidadeF1, f.A.Moeda}},
+			{"colega F1", usuarioPrestador, &f.UsuarioF1Colega, []any{a, "Colega F1", f.F1, nil, nil, f.A.Moeda}},
+			{"usuário F2", usuarioPrestador, &f.UsuarioF2, []any{a, "Prestador F2", f.F2, f.PessoaUsuarioF2, nil, f.A.Moeda}},
+			{"usuário L1", usuarioLocatario, &f.UsuarioL1, []any{a, "Locatário L1", f.L1, f.PessoaUsuarioL1, f.A.Moeda}},
+			{"colega L1", usuarioLocatario, &f.UsuarioL1Colega, []any{a, "Colega L1", f.L1, nil, f.A.Moeda}},
+			{"usuário L2", usuarioLocatario, &f.UsuarioL2, []any{a, "Locatário L2", f.L2, f.PessoaUsuarioL2, f.A.Moeda}},
 		} {
 			if err := inserir(p.rotulo, p.sql, p.saida, p.args...); err != nil {
 				return err
@@ -333,8 +399,8 @@ func povoarExternos(ctx context.Context, f *fixturesE01) error {
 
 	return confirmarComoPapel(ctx, papelApp, contexto{Empresa: f.B.ID, Escopo: "interno"}, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
-			`INSERT INTO app.usuario (empresa_id, nome, fornecedor_id) VALUES ($1, 'Prestador de B', $2) RETURNING id`,
-			f.B.ID, f.F1).Scan(&f.UsuarioBMesmoFornecedor)
+			`INSERT INTO app.usuario (empresa_id, nome, fornecedor_id, moeda) VALUES ($1, 'Prestador de B', $2, $3) RETURNING id`,
+			f.B.ID, f.F1, f.B.Moeda).Scan(&f.UsuarioBMesmoFornecedor)
 	})
 }
 

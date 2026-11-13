@@ -94,7 +94,13 @@ func TestEscopoExternoForaDaListaNaoVeNemGrava(t *testing.T) {
 					}
 					_, err := executar("INSERT INTO "+tb.Nome+
 						" SELECT * FROM jsonb_populate_record(NULL::"+tb.Nome+", $1::jsonb)", string(linha))
-					exigirRLS(t, e.nome+": INSERT em "+tb.Nome, err)
+					if temInsert(t, ctx, papelApp, tb.Nome) {
+						exigirRLS(t, e.nome+": INSERT em "+tb.Nome, err)
+					} else {
+						// O tenaz_app não grava a tabela (selo_auditoria: só o
+						// tenaz_job): quem barra é o privilégio, antes da policy.
+						exigirErro(t, e.nome+": INSERT em "+tb.Nome+" sem privilégio", err, erroPrivilegio)
+					}
 				}
 				if !permitido["UPDATE"] {
 					n, err := executar("UPDATE " + tb.Nome + " SET " + col + " = " + col)
@@ -234,24 +240,25 @@ func TestPrestadorEscreveSoAPropriaLinhaSemTrocarVinculo(t *testing.T) {
 	n, err = exec(`DELETE FROM app.usuario WHERE id = $1`, f.UsuarioF1)
 	naoMudouNada(t, "prestador apaga a si mesmo", n, err)
 
-	_, err = exec(`INSERT INTO app.usuario (empresa_id, nome, fornecedor_id) VALUES ($1, 'Novo', $2)`, f.A.ID, f.F1)
+	_, err = exec(`INSERT INTO app.usuario (empresa_id, nome, fornecedor_id, moeda) VALUES ($1, 'Novo', $2, $3)`, f.A.ID, f.F1, f.A.Moeda)
 	exigirRLS(t, "prestador cria usuário no próprio fornecedor", err)
 
 	// Achado ISO-E01-01: as colunas que não são vínculo também não são do
-	// prestador. Com pessoa_id, ele passa a enxergar a pessoa interna (CPF).
+	// prestador. Com pessoa_id, ele passa a enxergar a pessoa interna (a
+	// identificação, CPF desde a 00009 no par identificacao_tipo + identificacao).
 	t.Run("pessoa_id", func(t *testing.T) {
 		var leu string
 		err := comoPapel(ctx, papelApp, f.prestadorF1(), func(tx pgx.Tx) error {
 			if _, err := tx.Exec(ctx, `UPDATE app.usuario SET pessoa_id = $2 WHERE id = $1`, f.UsuarioF1, f.A.PessoaInterna); err != nil {
 				return err
 			}
-			return tx.QueryRow(ctx, `SELECT coalesce(max(cpf), '') FROM app.pessoa WHERE id = $1`, f.A.PessoaInterna).Scan(&leu)
+			return tx.QueryRow(ctx, `SELECT coalesce(max(identificacao), '') FROM app.pessoa WHERE id = $1`, f.A.PessoaInterna).Scan(&leu)
 		})
 		if err != nil && sqlstate(err) != erroPrivilegio {
 			t.Fatalf("erro inesperado: %v", err)
 		}
 		confirmarAchado(t, "ISO-E01-01", err == nil,
-			fmt.Sprintf("o prestador ligou a si a pessoa interna e leu o CPF %q", leu))
+			fmt.Sprintf("o prestador ligou a si a pessoa interna e leu a identificação %q", leu))
 	})
 	t.Run("custo_hora", func(t *testing.T) {
 		n, err := exec(`UPDATE app.usuario SET custo_hora = 999 WHERE id = $1`, f.UsuarioF1)

@@ -15,6 +15,7 @@ import (
 	"tenaz/internal/plataforma/db"
 	"tenaz/internal/plataforma/erros"
 	"tenaz/internal/plataforma/obs"
+	"tenaz/internal/plataforma/textos"
 )
 
 // Etiquetas do contrato.
@@ -79,6 +80,12 @@ type Rota struct {
 	// sessão, sair, trocar de empresa e ativar o MFA. As demais respondem 401
 	// nao_autenticado com mfa_pendente.
 	AceitaMFAPendente bool
+
+	// TipoSaida: media type da resposta de sucesso quando não é JSON (por
+	// exemplo text/csv). A operação declara a resposta com ele, no lugar de
+	// application/json; o handler devolve o corpo em []byte e o cabeçalho
+	// Content-Type.
+	TipoSaida string
 }
 
 type chaveRota struct{}
@@ -127,6 +134,18 @@ func Registrar[I, O any](s *Servidor, r Rota, h func(context.Context, *I) (*O, e
 		op.Security = []map[string][]string{{esquemaSessao: {}}, {esquemaBearer: {}}}
 	}
 	op.Errors = errosDaRota(r)
+	if r.TipoSaida != "" {
+		status := r.Status
+		if status == 0 {
+			status = http.StatusOK
+		}
+		op.Responses = map[string]*huma.Response{
+			fmt.Sprint(status): {
+				Description: "Arquivo " + r.TipoSaida,
+				Content:     map[string]*huma.MediaType{r.TipoSaida: {Schema: &huma.Schema{Type: "string"}}},
+			},
+		}
+	}
 	huma.Register(s.huma, op, h)
 }
 
@@ -199,17 +218,24 @@ func init() {
 // biblioteca) para o corpo RFC 9457.
 func montarProblema(ctx huma.Context, status int, _ string, errs ...error) *erros.Problema {
 	var p erros.Problema
+	idioma := textos.PtBR
+	if ctx != nil {
+		idioma = textos.DoContexto(ctx.Context())
+	}
 	if dominio := erroDeDominio(errs); dominio != nil {
-		p = erros.ParaProblema(dominio, "")
+		p = erros.ParaProblemaIdioma(dominio, "", idioma)
 		if dominio.Status >= http.StatusInternalServerError && ctx != nil {
 			obs.Logger(ctx.Context()).Error("erro na requisição", "codigo", dominio.Codigo, "erro", errors.Unwrap(dominio))
 		}
 	} else if pr := problemaPronto(errs); pr != nil {
 		p = *pr
 	} else {
-		p = problemaDaBiblioteca(ctx, status, errs)
+		p = problemaDaBiblioteca(ctx, status, errs, idioma)
 	}
 	if ctx != nil {
+		// Resposta com texto para pessoa: Content-Language e Vary (ADR-013).
+		ctx.SetHeader("Content-Language", string(idioma))
+		ctx.AppendHeader("Vary", textos.CabecalhoVary)
 		u := ctx.URL()
 		if p.Instance == "" {
 			p.Instance = u.Path
@@ -260,6 +286,7 @@ var somenteLeitura = map[string]bool{
 	"criado_em": true, "atualizado_em": true, "criado_por_id": true, "plano": true,
 	"srv_habilitado": true, "escopo_acesso": true, "email": true, "usuario_id": true,
 	"permissoes_avulsas": true, "teste_ate": true, "retencao_auditoria_anos": true,
+	"pais": true, "moeda": true, "idioma": true,
 }
 
 var (
@@ -280,11 +307,17 @@ var (
 
 // problemaDaBiblioteca monta o problema de um erro gerado pela própria
 // biblioteca: validação do contrato, corpo malformado, tipo de conteúdo,
-// limite do corpo, rota sem método.
-func problemaDaBiblioteca(_ huma.Context, status int, errs []error) erros.Problema {
+// limite do corpo, rota sem método. Os textos saem do catálogo do servidor
+// (chaves validacao.* e detalhe.*), no idioma da requisição.
+func problemaDaBiblioteca(_ huma.Context, status int, errs []error, idioma textos.Idioma) erros.Problema {
 	base := erros.PorStatus(status)
+	type achado struct {
+		campo, codigo, chave string
+		params               textos.Parametros
+		valores              []string
+	}
 	var (
-		campos                      []erros.ErroCampo
+		campos                      []achado
 		naoPermitido, desconhecido  bool
 		filtro, tipoErrado, leitura bool
 		malformado                  bool
@@ -295,123 +328,110 @@ func problemaDaBiblioteca(_ huma.Context, status int, errs []error) erros.Proble
 			continue
 		}
 		local, msg := d.Location, d.Message
-		campo := campoDoLocal(local)
-		c := erros.ErroCampo{Campo: campo, Codigo: erros.CampoValorInvalido, Mensagem: "Valor inválido."}
+		c := achado{campo: campoDoLocal(local), codigo: erros.CampoValorInvalido, chave: "validacao.valor_invalido"}
 		switch {
 		case msg == "unknown query parameter":
 			filtro = true
-			c.Mensagem = "Parâmetro de consulta não aceito nesta rota."
+			c.chave = "validacao.consulta_desconhecida"
 		case msg == "unexpected property":
-			ultimo := campo
-			if i := strings.LastIndexAny(campo, ".]"); i >= 0 {
-				ultimo = campo[i+1:]
+			ultimo := c.campo
+			if i := strings.LastIndexAny(c.campo, ".]"); i >= 0 {
+				ultimo = c.campo[i+1:]
 			}
 			switch {
 			case ultimo == "empresa_id":
 				naoPermitido = true
-				c.Mensagem = "A empresa vem da credencial; não envie empresa_id."
+				c.chave = "validacao.empresa_id"
 			case somenteLeitura[ultimo]:
 				leitura = true
-				c.Mensagem = "Campo somente leitura."
+				c.chave = "validacao.somente_leitura"
 			default:
 				desconhecido = true
-				c.Mensagem = "Campo desconhecido nesta rota."
+				c.chave = "validacao.campo_desconhecido"
 			}
 		case reObrigatorio.MatchString(msg):
 			m := reObrigatorio.FindStringSubmatch(msg)
-			c.Campo = juntarCampo(campo, m[1])
-			c.Codigo, c.Mensagem = erros.CampoObrigatorio, "Campo obrigatório."
+			c.campo = juntarCampo(c.campo, m[1])
+			c.codigo, c.chave = erros.CampoObrigatorio, "validacao.obrigatorio"
 		case reTamanhoMin.MatchString(msg):
-			c.Codigo, c.Mensagem = erros.CampoTamanhoMinimo, fmt.Sprintf("Use pelo menos %s caracteres.", reTamanhoMin.FindStringSubmatch(msg)[1])
+			c.codigo, c.chave, c.params = erros.CampoTamanhoMinimo, "validacao.tamanho_minimo", textos.Parametros{"min": reTamanhoMin.FindStringSubmatch(msg)[1]}
 		case reTamanhoMax.MatchString(msg):
-			c.Codigo, c.Mensagem = erros.CampoTamanhoMaximo, fmt.Sprintf("Use no máximo %s caracteres.", reTamanhoMax.FindStringSubmatch(msg)[1])
+			c.codigo, c.chave, c.params = erros.CampoTamanhoMaximo, "campo.tamanho_maximo", textos.Parametros{"max": reTamanhoMax.FindStringSubmatch(msg)[1]}
 		case reItensMin.MatchString(msg):
-			c.Codigo, c.Mensagem = erros.CampoTamanhoMinimo, fmt.Sprintf("Informe pelo menos %s itens.", reItensMin.FindStringSubmatch(msg)[1])
+			c.codigo, c.chave, c.params = erros.CampoTamanhoMinimo, "validacao.itens_minimo", textos.Parametros{"min": reItensMin.FindStringSubmatch(msg)[1]}
 		case reItensMax.MatchString(msg):
-			c.Codigo, c.Mensagem = erros.CampoTamanhoMaximo, fmt.Sprintf("Informe no máximo %s itens.", reItensMax.FindStringSubmatch(msg)[1])
+			c.codigo, c.chave, c.params = erros.CampoTamanhoMaximo, "validacao.itens_maximo", textos.Parametros{"max": reItensMax.FindStringSubmatch(msg)[1]}
 		case reNumeroMin.MatchString(msg):
-			c.Codigo, c.Mensagem = erros.CampoForaDaFaixa, fmt.Sprintf("O valor mínimo é %s.", reNumeroMin.FindStringSubmatch(msg)[1])
+			c.codigo, c.chave, c.params = erros.CampoForaDaFaixa, "validacao.numero_minimo", textos.Parametros{"min": reNumeroMin.FindStringSubmatch(msg)[1]}
 		case reNumeroMax.MatchString(msg):
-			c.Codigo, c.Mensagem = erros.CampoForaDaFaixa, fmt.Sprintf("O valor máximo é %s.", reNumeroMax.FindStringSubmatch(msg)[1])
+			c.codigo, c.chave, c.params = erros.CampoForaDaFaixa, "validacao.numero_maximo", textos.Parametros{"max": reNumeroMax.FindStringSubmatch(msg)[1]}
 		case reUmDe.MatchString(msg):
-			c.Mensagem = "Valor não aceito."
+			c.chave = "validacao.valor_nao_aceito"
 			if vs := reUmDe.FindStringSubmatch(msg)[1]; vs != "" {
-				c.Mensagem = "Valor não aceito. Use um destes: " + vs + "."
+				c.chave, c.params = "validacao.valor_nao_aceito_use", textos.Parametros{"valores": vs}
+				c.valores = strings.Split(vs, ", ")
 			}
 		case reTipo.MatchString(msg):
 			tipoErrado = true
-			c.Mensagem = "Tipo de valor errado: esperado " + nomeTipo(reTipo.FindStringSubmatch(msg)[1]) + "."
+			c.chave, c.params = "validacao.tipo_errado", textos.Parametros{
+				"tipo": textos.T(idioma, "validacao.tipo."+reTipo.FindStringSubmatch(msg)[1], nil)}
 		case reFormatoData.MatchString(msg):
-			c.Codigo, c.Mensagem = erros.CampoFormatoInvalido, "Use data e hora ISO 8601 em UTC, com Z: 2026-11-12T13:45:00Z."
+			c.codigo, c.chave = erros.CampoFormatoInvalido, "validacao.data_hora"
 		case reFormatoDia.MatchString(msg):
-			c.Codigo, c.Mensagem = erros.CampoFormatoInvalido, "Use a data no formato AAAA-MM-DD."
+			c.codigo, c.chave = erros.CampoFormatoInvalido, "campo.data_formato"
 		case reFormatoUUID.MatchString(msg):
-			c.Codigo, c.Mensagem = erros.CampoFormatoInvalido, "Use um identificador UUID."
+			c.codigo, c.chave = erros.CampoFormatoInvalido, "validacao.uuid"
 		case reFormatoEmail.MatchString(msg):
-			c.Codigo, c.Mensagem = erros.CampoFormatoInvalido, "Informe um e-mail válido."
+			c.codigo, c.chave = erros.CampoFormatoInvalido, "validacao.email"
 		case strings.HasPrefix(msg, "expected string to match pattern"):
-			c.Codigo, c.Mensagem = erros.CampoFormatoInvalido, "Formato inválido."
+			c.codigo, c.chave = erros.CampoFormatoInvalido, "validacao.formato"
 		case local == "body" && status == http.StatusBadRequest:
 			// Corpo que não é JSON (ou formulário) válido. A mensagem da
 			// biblioteca e o valor recebido não voltam: o corpo pode ter senha.
 			malformado = true
-			c.Campo, c.Mensagem = "", "O corpo da requisição não é um JSON válido."
+			c.campo, c.chave = "", "validacao.corpo_json"
 		}
 		campos = append(campos, c)
 	}
 
-	detalhe := ""
+	chaveDetalhe := ""
+	var paramsDetalhe textos.Parametros
 	switch {
 	case naoPermitido:
-		base, detalhe = erros.CampoNaoPermitido, "A empresa vem sempre da credencial; remova empresa_id da requisição."
+		base, chaveDetalhe = erros.CampoNaoPermitido, "detalhe.empresa_id_requisicao"
 	case filtro:
-		base, detalhe = erros.FiltroNaoSuportado, "A rota não aceita um dos parâmetros de consulta; confira o contrato."
+		base, chaveDetalhe = erros.FiltroNaoSuportado, "detalhe.filtro"
 	case malformado:
-		base, detalhe = erros.RequisicaoInvalida, "O corpo da requisição não é um JSON válido."
+		base, chaveDetalhe = erros.RequisicaoInvalida, "detalhe.corpo_json"
 		campos = nil
 	case desconhecido || tipoErrado:
-		base, detalhe = erros.RequisicaoInvalida, "A requisição tem campo desconhecido ou valor de tipo errado; confira o contrato."
+		base, chaveDetalhe = erros.RequisicaoInvalida, "detalhe.campo_ou_tipo"
 	case leitura:
-		base, detalhe = erros.CampoSomenteLeitura, "A requisição tenta alterar campo somente leitura."
+		base, chaveDetalhe = erros.CampoSomenteLeitura, "detalhe.somente_leitura"
 	case status == http.StatusUnprocessableEntity:
 		base = erros.EntradaInvalida
+		// Plural pela regra CLDR do idioma: a chave tem _one e _other.
+		chaveDetalhe, paramsDetalhe = "detalhe.campos_problema_other", textos.Parametros{"n": len(campos)}
 		if len(campos) == 1 {
-			detalhe = "1 campo com problema."
-		} else {
-			detalhe = fmt.Sprintf("%d campos com problema.", len(campos))
+			chaveDetalhe = "detalhe.campos_problema_one"
 		}
 	case status == http.StatusRequestEntityTooLarge:
-		detalhe = "O corpo passa do limite aceito pela rota."
+		chaveDetalhe = "detalhe.corpo_grande"
 	case status == http.StatusUnsupportedMediaType:
-		detalhe = "Envie o corpo como application/json."
+		chaveDetalhe = "detalhe.tipo_midia"
 	case status == http.StatusBadRequest:
-		detalhe = "A requisição não pôde ser lida; confira o contrato."
+		chaveDetalhe = "detalhe.requisicao_ilegivel"
 	case status == http.StatusNotFound || status == http.StatusMethodNotAllowed:
-		detalhe = "A rota não existe."
+		chaveDetalhe = "detalhe.rota_inexistente"
 	}
-	e := base.Com("%s", detalhe)
+	e := base
+	if chaveDetalhe != "" {
+		e = base.ComChave(chaveDetalhe, paramsDetalhe)
+	}
 	for _, c := range campos {
-		e = e.ComCampo(c.Campo, c.Codigo, c.Mensagem)
+		e = e.ComCampoChave(c.campo, c.codigo, c.chave, c.params, c.valores...)
 	}
-	return erros.ParaProblema(e, "")
-}
-
-func nomeTipo(t string) string {
-	switch t {
-	case "string":
-		return "texto"
-	case "integer":
-		return "número inteiro"
-	case "number":
-		return "número"
-	case "boolean":
-		return "verdadeiro ou falso"
-	case "array":
-		return "lista"
-	case "object":
-		return "objeto"
-	}
-	return t
+	return erros.ParaProblemaIdioma(e, "", idioma)
 }
 
 // campoDoLocal tira o prefixo do local (body., query., path., header.).

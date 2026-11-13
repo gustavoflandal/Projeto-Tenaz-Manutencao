@@ -46,10 +46,10 @@ type EntradaAutorizacao struct {
 // confiável (OAuth 2.1, seção 4.1.2.1).
 func (s *Servico) ValidarCliente(clienteID, uriRetorno string) error {
 	if clienteID != s.cfg.ClienteOAuthApp {
-		return erros.EntradaInvalida.ComCampo("client_id", erros.CampoValorInvalido, "Cliente OAuth desconhecido.")
+		return erros.EntradaInvalida.ComCampoChave("client_id", erros.CampoValorInvalido, "campo.oauth_cliente", nil)
 	}
 	if !slices.Contains(s.cfg.URIsRetornoApp, uriRetorno) {
-		return erros.EntradaInvalida.ComCampo("redirect_uri", erros.CampoValorInvalido, "URI de retorno não registrada.")
+		return erros.EntradaInvalida.ComCampoChave("redirect_uri", erros.CampoValorInvalido, "campo.oauth_redirect", nil)
 	}
 	return nil
 }
@@ -63,11 +63,10 @@ func (s *Servico) EmitirCodigoAutorizacao(ctx context.Context, sessaoWeb autoriz
 		return "", err
 	}
 	if e.MetodoPKCE != "S256" {
-		return "", erros.EntradaInvalida.ComCampo("code_challenge_method", erros.CampoValorInvalido, "Só S256 é aceito.")
+		return "", erros.EntradaInvalida.ComCampoChave("code_challenge_method", erros.CampoValorInvalido, "campo.oauth_s256", nil)
 	}
 	if !reDesafioPKCE.MatchString(e.DesafioPKCE) {
-		return "", erros.EntradaInvalida.ComCampo("code_challenge", erros.CampoFormatoInvalido,
-			"code_challenge deve ser o sha256 do verificador em base64url, com 43 caracteres.")
+		return "", erros.EntradaInvalida.ComCampoChave("code_challenge", erros.CampoFormatoInvalido, "campo.oauth_challenge", nil)
 	}
 
 	var usuarioID uuid.UUID
@@ -84,7 +83,7 @@ func (s *Servico) EmitirCodigoAutorizacao(ctx context.Context, sessaoWeb autoriz
 		return "", err
 	}
 	if !a.Pode(autorizacao.MobUsarApp) {
-		return "", erros.SemPermissao.Com("o perfil não usa o app (mob.usar_app)")
+		return "", erros.SemPermissao.ComChave("detalhe.perfil_sem_app", nil)
 	}
 	if err := s.marcarMFAPendente(ctx, &a); err != nil {
 		return "", err

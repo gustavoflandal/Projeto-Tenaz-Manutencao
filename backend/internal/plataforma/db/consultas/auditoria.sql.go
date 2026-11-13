@@ -7,16 +7,194 @@ package consultas
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const audGravarCaptura = `-- name: AudGravarCaptura :exec
+INSERT INTO app.captura_auditoria (empresa_id, tela, visualizacao, impressao, extracao, criado_por, atualizado_por)
+VALUES ($1, $2, $3, $4, $5,
+        $6, $6)
+ON CONFLICT (empresa_id, tela) DO UPDATE
+SET visualizacao   = EXCLUDED.visualizacao,
+    impressao      = EXCLUDED.impressao,
+    extracao       = EXCLUDED.extracao,
+    atualizado_por = EXCLUDED.atualizado_por,
+    excluido_em    = NULL
+`
+
+type AudGravarCapturaParams struct {
+	EmpresaID    uuid.UUID  `json:"empresa_id"`
+	Tela         string     `json:"tela"`
+	Visualizacao bool       `json:"visualizacao"`
+	Impressao    bool       `json:"impressao"`
+	Extracao     bool       `json:"extracao"`
+	UsuarioID    *uuid.UUID `json:"usuario_id"`
+}
+
+// As três chaves em cada gravação: o UPDATE do upsert não pode devolver a
+// outra chave ao padrão.
+func (q *Queries) AudGravarCaptura(ctx context.Context, arg AudGravarCapturaParams) error {
+	_, err := q.db.Exec(ctx, audGravarCaptura,
+		arg.EmpresaID,
+		arg.Tela,
+		arg.Visualizacao,
+		arg.Impressao,
+		arg.Extracao,
+		arg.UsuarioID,
+	)
+	return err
+}
+
+const audListarCapturas = `-- name: AudListarCapturas :many
+
+SELECT tela, visualizacao, impressao, extracao
+FROM app.captura_auditoria
+WHERE empresa_id = $1 AND excluido_em IS NULL
+ORDER BY tela
+`
+
+type AudListarCapturasRow struct {
+	Tela         string `json:"tela"`
+	Visualizacao bool   `json:"visualizacao"`
+	Impressao    bool   `json:"impressao"`
+	Extracao     bool   `json:"extracao"`
+}
+
+// ------------------------------------------------------------------ captura
+// Sem linha vale o padrão: impressão e extração ligadas, visualização
+// desligada (documento 2, seção 9.2.2). Só o escopo interno lê.
+func (q *Queries) AudListarCapturas(ctx context.Context, empresaID uuid.UUID) ([]AudListarCapturasRow, error) {
+	rows, err := q.db.Query(ctx, audListarCapturas, empresaID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AudListarCapturasRow{}
+	for rows.Next() {
+		var i AudListarCapturasRow
+		if err := rows.Scan(
+			&i.Tela,
+			&i.Visualizacao,
+			&i.Impressao,
+			&i.Extracao,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const audListarSelos = `-- name: AudListarSelos :many
+SELECT dia, quantidade, hash_dia, hash_anterior, hash_encadeado, calculado_em, chave_objeto
+FROM app.selo_auditoria
+WHERE empresa_id = $1 AND dia >= $2::date AND dia <= $3::date
+ORDER BY dia
+`
+
+type AudListarSelosParams struct {
+	EmpresaID uuid.UUID   `json:"empresa_id"`
+	De        pgtype.Date `json:"de"`
+	Ate       pgtype.Date `json:"ate"`
+}
+
+type AudListarSelosRow struct {
+	Dia           pgtype.Date `json:"dia"`
+	Quantidade    int64       `json:"quantidade"`
+	HashDia       []byte      `json:"hash_dia"`
+	HashAnterior  []byte      `json:"hash_anterior"`
+	HashEncadeado []byte      `json:"hash_encadeado"`
+	CalculadoEm   time.Time   `json:"calculado_em"`
+	ChaveObjeto   string      `json:"chave_objeto"`
+}
+
+// Selos de um período, para enviar ao armazenamento e para a verificação.
+func (q *Queries) AudListarSelos(ctx context.Context, arg AudListarSelosParams) ([]AudListarSelosRow, error) {
+	rows, err := q.db.Query(ctx, audListarSelos, arg.EmpresaID, arg.De, arg.Ate)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AudListarSelosRow{}
+	for rows.Next() {
+		var i AudListarSelosRow
+		if err := rows.Scan(
+			&i.Dia,
+			&i.Quantidade,
+			&i.HashDia,
+			&i.HashAnterior,
+			&i.HashEncadeado,
+			&i.CalculadoEm,
+			&i.ChaveObjeto,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const audRetencaoEmpresa = `-- name: AudRetencaoEmpresa :one
+
+SELECT retencao_auditoria_anos::int AS anos
+FROM app.empresa
+WHERE id = $1
+`
+
+// app.verificar_integridade_auditoria(de, ate) devolve TABLE: o sqlc não
+// resolve as colunas de função que retorna tabela, e a chamada fica em
+// verificacao.go, com pgx e parâmetros.
+// Retenção da empresa, para o retain-until do selo.
+func (q *Queries) AudRetencaoEmpresa(ctx context.Context, empresaID uuid.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, audRetencaoEmpresa, empresaID)
+	var anos int32
+	err := row.Scan(&anos)
+	return anos, err
+}
+
+const audSelarDiasPendentes = `-- name: AudSelarDiasPendentes :many
+
+SELECT app.selar_dias_pendentes()::date AS dia
+`
+
+// ---------------------------------------------------------------------- selo
+// Job do selo, como tenaz_job, na transação da empresa: sela os dias pendentes
+// e devolve os dias selados.
+func (q *Queries) AudSelarDiasPendentes(ctx context.Context) ([]pgtype.Date, error) {
+	rows, err := q.db.Query(ctx, audSelarDiasPendentes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []pgtype.Date{}
+	for rows.Next() {
+		var dia pgtype.Date
+		if err := rows.Scan(&dia); err != nil {
+			return nil, err
+		}
+		items = append(items, dia)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
 
 const inserirEventoAuditoria = `-- name: InserirEventoAuditoria :exec
 
 INSERT INTO app.evento_auditoria
   (empresa_id, ator_tipo, usuario_id, token_api_id, acao, entidade, entidade_id, entidade_chave,
    antes, depois, campos_alterados, origem, ip, dispositivo_id, user_agent, request_id,
-   ocorrido_no_dispositivo_em)
+   ocorrido_no_dispositivo_em, sensivel, detalhe, escopo)
 VALUES
   ($1,
    $2,
@@ -34,7 +212,10 @@ VALUES
    nullif(current_setting('app.dispositivo_id', true), '')::uuid,
    nullif(current_setting('app.user_agent', true), ''),
    nullif(current_setting('app.request_id', true), ''),
-   nullif(current_setting('app.ocorrido_no_dispositivo_em', true), '')::timestamptz)
+   nullif(current_setting('app.ocorrido_no_dispositivo_em', true), '')::timestamptz,
+   $11::boolean,
+   $12,
+   app.escopo_atual())
 `
 
 type InserirEventoAuditoriaParams struct {
@@ -48,18 +229,22 @@ type InserirEventoAuditoriaParams struct {
 	Antes           []byte     `json:"antes"`
 	Depois          []byte     `json:"depois"`
 	CamposAlterados []string   `json:"campos_alterados"`
+	Sensivel        bool       `json:"sensivel"`
+	Detalhe         []byte     `json:"detalhe"`
 }
 
 // Eventos de auditoria gravados pelo serviço (seção 9.1 do documento 2), e
-// não pelo trg_auditoria: login, falha de login, logout, troca de senha,
-// ativação de MFA, visualização de dado sensível.
+// não pelo trg_auditoria: visualização, impressão, extração, alteração no
+// nível do fato. Login, logout e falha de login são do papel da autenticação
+// (ADR-011), com consulta própria.
 //
 // O contexto técnico (origem, IP, dispositivo, user agent, request_id,
 // token de API, instante do aparelho) vem das mesmas variáveis da transação
 // que app.tg_auditar() lê, fixadas por NaEmpresa: um evento gravado pelo
 // serviço e um gravado pelo trigger na mesma requisição ficam iguais nesses
-// campos. A empresa é a da transação; a policy auditoria_insercao recusa
-// qualquer outra.
+// campos. O módulo, a tela e o nome do usuário também vêm de lá, pelo trigger
+// app.tg_evento_auditoria_preparar(), que ainda calcula o hash. A empresa é a
+// da transação; a policy auditoria_insercao recusa qualquer outra.
 func (q *Queries) InserirEventoAuditoria(ctx context.Context, arg InserirEventoAuditoriaParams) error {
 	_, err := q.db.Exec(ctx, inserirEventoAuditoria,
 		arg.EmpresaID,
@@ -72,6 +257,8 @@ func (q *Queries) InserirEventoAuditoria(ctx context.Context, arg InserirEventoA
 		arg.Antes,
 		arg.Depois,
 		arg.CamposAlterados,
+		arg.Sensivel,
+		arg.Detalhe,
 	)
 	return err
 }

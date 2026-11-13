@@ -1,10 +1,16 @@
 // Package auditoria grava os eventos da trilha que não nascem de uma escrita
-// em tabela, e por isso não passam pelo trg_auditoria: login, falha de login,
-// logout, troca de senha, ativação de MFA, visualização de dado sensível
-// (seção 9.1 de docs/2_ARQUITETURA_BANCO_DADOS.md; RF-ADM-006, RF-ADM-011).
+// em tabela, e por isso não passam pelo trg_auditoria: visualização,
+// impressão, extração e a alteração no nível do fato (seção 9.1 de
+// docs/2_ARQUITETURA_BANCO_DADOS.md; RF-ADM-011). Login, logout e a falha de
+// login são gravados pelo papel da autenticação (ADR-011).
+//
+// Também é dono da captura por tela (captura.go), do catálogo fechado de
+// telas (catalogo.go), do selo diário e da verificação de integridade
+// (selo.go, verificacao.go).
 //
 // O evento é gravado na transação do contexto, aberta por NaEmpresa: se o fato
-// for desfeito, o evento também é. Nunca leva senha, hash, token nem segredo.
+// for desfeito, o evento também é. Nunca leva senha, hash, token nem segredo,
+// nem o conteúdo que foi mostrado, impresso ou extraído.
 package auditoria
 
 import (
@@ -18,19 +24,18 @@ import (
 	"tenaz/internal/plataforma/db/consultas"
 )
 
-// Ações aceitas por ck_evento_auditoria_acao.
+// Tipos de operação aceitos por ck_evento_auditoria_acao (lista fechada,
+// sumário 3.6).
 const (
-	AcaoInclusao             = "inclusao"
-	AcaoAlteracao            = "alteracao"
-	AcaoExclusao             = "exclusao"
-	AcaoLogin                = "login"
-	AcaoLoginFalho           = "login_falho"
-	AcaoLogout               = "logout"
-	AcaoExportacao           = "exportacao"
-	AcaoVisualizacaoSensivel = "visualizacao_sensivel"
-	AcaoAcessoSuporte        = "acesso_suporte"
-	AcaoRevisao              = "revisao"
-	AcaoSincronizacao        = "sincronizacao"
+	AcaoLogin        = "login"
+	AcaoLogout       = "logout"
+	AcaoInclusao     = "inclusao"
+	AcaoAlteracao    = "alteracao"
+	AcaoExclusao     = "exclusao"
+	AcaoDelecao      = "delecao"
+	AcaoVisualizacao = "visualizacao"
+	AcaoImpressao    = "impressao"
+	AcaoExtracao     = "extracao"
 )
 
 // Evento é um evento gravado pelo serviço.
@@ -45,6 +50,12 @@ type Evento struct {
 	Antes           any // serializado em JSON; nil grava nulo
 	Depois          any
 	CamposAlterados []string
+	// Sensivel: o registro mostrado, impresso ou extraído tem dado sensível
+	// (CPF completo etc.). Só vale em visualizacao, impressao e extracao.
+	Sensivel bool
+	// Detalhe: filtros, formato e quantidade de uma impressão ou extração.
+	// Nunca o conteúdo.
+	Detalhe any
 }
 
 // Registrar grava o evento na transação do contexto.
@@ -58,6 +69,10 @@ func Registrar(ctx context.Context, e Evento) error {
 		return err
 	}
 	depois, err := jsonOuNulo(e.Depois)
+	if err != nil {
+		return err
+	}
+	detalhe, err := jsonOuNulo(e.Detalhe)
 	if err != nil {
 		return err
 	}
@@ -79,6 +94,8 @@ func Registrar(ctx context.Context, e Evento) error {
 		Antes:           antes,
 		Depois:          depois,
 		CamposAlterados: e.CamposAlterados,
+		Sensivel:        e.Sensivel,
+		Detalhe:         detalhe,
 	})
 	if err != nil {
 		return fmt.Errorf("gravar evento de auditoria %s/%s: %w", e.Entidade, e.Acao, err)

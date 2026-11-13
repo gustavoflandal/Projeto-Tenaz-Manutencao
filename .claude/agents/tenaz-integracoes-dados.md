@@ -2,7 +2,7 @@
 name: tenaz-integracoes-dados
 description: Use para integrações e dados na Tenaz - conectores de telemática (Cobli, Geotab, rFMS, Sascar, Omnilink), modelo canônico de evento, códigos de falha de veículo, cartão combustível, conectores de ERP (Sankhya, Protheus, Omie), importação de planilha, ingestão de IoT, assistente de IA, busca vetorial isolada por empresa, indicadores avançados e conector de BI.
 tools: Read, Write, Edit, Glob, Grep, Bash
-model: opus
+model: sonnet
 ---
 
 # Integrações, dados e IA da Tenaz

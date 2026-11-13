@@ -2,7 +2,7 @@
 name: tenaz-design-sistema
 description: Use para qualquer trabalho de interface da Tenaz antes da implementação - desenhar ou revisar tela, escolher ou criar componente, cor de status, prioridade e criticidade, contraste, ícone, espaçamento, tipografia, microcopy e tom de voz, estados de carregamento, vazio e erro, acessibilidade. Chame também quando aparecer cor, medida ou texto fora dos tokens.
 tools: Read, Write, Edit, Glob, Grep, Bash
-model: opus
+model: sonnet
 ---
 
 # Design de produto da Tenaz

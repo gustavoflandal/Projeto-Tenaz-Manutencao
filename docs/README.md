@@ -34,7 +34,7 @@ Como o projeto sai da concepção e vira software: o modelo de trabalho, a equip
 
 | Documento | Conteúdo |
 |---|---|
-| [execucao/](execucao/README.md) | Plano de execução: modelo de trabalho, equipe de 16 agentes, 12 skills, etapas E00 a E12 do MVP |
+| [execucao/](execucao/README.md) | Plano de execução: modelo de trabalho, equipe de 18 agentes, 12 skills, etapas E00 a E12 do MVP |
 | [prompts/](prompts/README.md) | O prompt de cada etapa, escrito antes do trabalho e versionado |
 | [screenshots/](screenshots/README.md) | Evidência visual de cada tela entregue, usada no aceite e na documentação |
 

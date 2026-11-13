@@ -30,3 +30,7 @@ dist/
 
 # Expo
 .expo/
+
+# Playwright
+web/test-results/
+web/playwright-report/

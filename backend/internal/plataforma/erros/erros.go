@@ -13,6 +13,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"tenaz/internal/plataforma/textos"
 )
 
 // BaseTipo é o prefixo da URI que documenta cada código de erro (seção 3.1
@@ -24,7 +26,14 @@ type Erro struct {
 	Codigo  string // estável, em snake_case (seção 3.2 do documento 3)
 	Titulo  string // curto, em português, fixo por código
 	Status  int    // status HTTP
-	Detalhe string // o que aconteceu e o que fazer
+	Detalhe string // o que aconteceu e o que fazer, em pt-BR (idioma de origem)
+
+	// ChaveDetalhe e ParamsDetalhe, quando preenchidos, são o detalhe no
+	// catálogo de textos do servidor (plataforma/textos): a camada HTTP o
+	// renderiza no idioma da requisição (ADR-013). Detalhe livre, sem chave,
+	// sai como foi escrito, em pt-BR, e é dívida de tradução.
+	ChaveDetalhe  string
+	ParamsDetalhe textos.Parametros
 
 	// Campos lista os erros por campo da entrada (membro `erros` da seção
 	// 3.1 do documento 3: `campo`, `codigo` do vocabulário curto e
@@ -37,14 +46,23 @@ type Erro struct {
 	// problema, no nível de cima.
 	Dados map[string]any
 
-	causa error
+	causa   error
+	tecnico bool // Detalhe só para o log (Tecnico)
 }
 
 // ErroCampo é um erro ligado a um campo da entrada.
 type ErroCampo struct {
 	Campo    string // notação de ponto: "turnos[0].hora_inicio"
 	Codigo   string // obrigatorio, valor_invalido, tamanho_minimo, formato_invalido, duplicado, nao_encontrado, inativo...
-	Mensagem string
+	Mensagem string // em pt-BR (idioma de origem)
+
+	// Chave e Params: a mensagem no catálogo de textos, renderizada no idioma
+	// da requisição. Sem chave, vale Mensagem como foi escrita.
+	Chave  string
+	Params textos.Parametros
+
+	// ValoresAceitos lista os valores válidos quando o campo é uma enumeração.
+	ValoresAceitos []string
 }
 
 // Vocabulário curto e estável dos erros por campo (seção 3.2 do documento 3).
@@ -60,10 +78,32 @@ const (
 	CampoInativo         = "inativo"
 )
 
-// ComCampo devolve uma cópia do erro com mais um erro de campo.
+// ComCampo devolve uma cópia do erro com mais um erro de campo, com a mensagem
+// já escrita (pt-BR). Prefira ComCampoChave, que traduz.
 func (e *Erro) ComCampo(campo, codigo, mensagem string) *Erro {
 	copia := *e
 	copia.Campos = append(append([]ErroCampo(nil), e.Campos...), ErroCampo{Campo: campo, Codigo: codigo, Mensagem: mensagem})
+	return &copia
+}
+
+// ComCampoChave devolve uma cópia do erro com mais um erro de campo cuja
+// mensagem vem do catálogo de textos pela chave (ADR-013). Os valores aceitos,
+// quando o campo é uma enumeração, saem em erros[].valores_aceitos.
+func (e *Erro) ComCampoChave(campo, codigo, chave string, params textos.Parametros, valoresAceitos ...string) *Erro {
+	copia := *e
+	copia.Campos = append(append([]ErroCampo(nil), e.Campos...), ErroCampo{
+		Campo: campo, Codigo: codigo, Mensagem: textos.T(textos.PtBR, chave, params),
+		Chave: chave, Params: params, ValoresAceitos: valoresAceitos,
+	})
+	return &copia
+}
+
+// ComChave devolve uma cópia do erro com o detalhe vindo do catálogo de textos
+// pela chave (ADR-013).
+func (e *Erro) ComChave(chave string, params textos.Parametros) *Erro {
+	copia := *e
+	copia.Detalhe = textos.T(textos.PtBR, chave, params)
+	copia.ChaveDetalhe, copia.ParamsDetalhe = chave, params
 	return &copia
 }
 
@@ -87,6 +127,10 @@ func (e *Erro) Is(alvo error) bool {
 }
 
 func (e *Erro) Error() string {
+	// Logs registram o código e a chave, nunca o texto traduzido.
+	if e.ChaveDetalhe != "" {
+		return fmt.Sprintf("%s: %s", e.Codigo, e.ChaveDetalhe)
+	}
 	if e.Detalhe != "" {
 		return fmt.Sprintf("%s: %s", e.Codigo, e.Detalhe)
 	}
@@ -102,12 +146,56 @@ func (e *Erro) Com(detalhe string, args ...any) *Erro {
 	return &copia
 }
 
+// Tecnico devolve uma cópia do erro com um texto só para o log e para o
+// desenvolvedor: ele aparece em Error() e nunca na resposta. É para o que
+// ninguém precisa ler (falha de programação, detalhe que o middleware troca).
+// Texto que uma pessoa lê vai pelo catálogo: ComChave e ComCampoChave.
+func (e *Erro) Tecnico(detalhe string, args ...any) *Erro {
+	copia := *e
+	copia.Detalhe = fmt.Sprintf(detalhe, args...)
+	copia.tecnico = true
+	return &copia
+}
+
 // Por devolve uma cópia do erro embrulhando a causa técnica. A causa não vai
 // para a resposta HTTP: fica no log.
 func (e *Erro) Por(causa error) *Erro {
 	copia := *e
 	copia.causa = causa
 	return &copia
+}
+
+// ChaveTitulo é a chave do título do código no catálogo de textos.
+func ChaveTitulo(codigo string) string { return "erro." + codigo + ".titulo" }
+
+// TituloEm devolve o título no idioma, pelo catálogo; sem texto no catálogo,
+// vale o título escrito no código (pt-BR).
+func (e *Erro) TituloEm(idioma textos.Idioma) string {
+	if t := textos.T(idioma, ChaveTitulo(e.Codigo), nil); t != ChaveTitulo(e.Codigo) {
+		return t
+	}
+	return e.Titulo
+}
+
+// DetalheEm devolve o detalhe no idioma, quando tem chave; senão, como foi
+// escrito.
+func (e *Erro) DetalheEm(idioma textos.Idioma) string {
+	if e.tecnico {
+		return ""
+	}
+	if e.ChaveDetalhe != "" {
+		return textos.T(idioma, e.ChaveDetalhe, e.ParamsDetalhe)
+	}
+	return e.Detalhe
+}
+
+// MensagemEm devolve a mensagem do campo no idioma, quando tem chave; senão,
+// como foi escrita.
+func (c ErroCampo) MensagemEm(idioma textos.Idioma) string {
+	if c.Chave != "" {
+		return textos.T(idioma, c.Chave, c.Params)
+	}
+	return c.Mensagem
 }
 
 // Tipo é a URI de documentação do código.
@@ -218,6 +306,19 @@ var (
 	ServicoIndisponivel = Novo("servico_indisponivel", "Serviço indisponível", http.StatusServiceUnavailable)
 )
 
+// Todos lista os erros transversais, para a conferência dos catálogos de
+// texto: cada código precisa de título nos dois idiomas (ADR-013).
+func Todos() []*Erro {
+	return []*Erro{
+		RequisicaoInvalida, CampoNaoPermitido, FiltroNaoSuportado, CursorInvalido, NaoAutenticado,
+		CredencialInvalida, MFAObrigatorio, MFACodigoInvalido, CSRFInvalido, SemPermissao,
+		PlanoNaoIncluiRecurso, NaoEncontrado, Conflito, TransicaoInvalida, IdempotenciaEmProcessamento,
+		LinkEmailInvalido, VersaoDesatualizada, PayloadMuitoGrande, TipoMidiaNaoSuportado, EntradaInvalida,
+		CampoSomenteLeitura, IdempotenciaConflito, SenhaFraca, PreCondicaoObrigatoria, LimiteExcedido,
+		Interno, SemContextoEmpresa, ServicoIndisponivel,
+	}
+}
+
 // Problema é o corpo de resposta no formato RFC 9457 (seção 3.1 do
 // documento 3).
 //
@@ -315,6 +416,13 @@ func (p *Problema) Add(err error) {
 // de domínio com status 500 também sai como erro_interno: 5xx nunca expõe
 // detalhe interno (seção 3.2 do documento 3). O código original fica no log.
 func ParaProblema(err error, instancia string) Problema {
+	return ParaProblemaIdioma(err, instancia, textos.PtBR)
+}
+
+// ParaProblemaIdioma é ParaProblema com `title`, `detail` e `erros[].mensagem`
+// no idioma negociado da requisição (ADR-013). `codigo`, `type`, `status` e os
+// membros adicionais nunca mudam com o idioma.
+func ParaProblemaIdioma(err error, instancia string, idioma textos.Idioma) Problema {
 	var e *Erro
 	if !errors.As(err, &e) {
 		e = Interno
@@ -324,14 +432,14 @@ func ParaProblema(err error, instancia string) Problema {
 	}
 	p := Problema{
 		Type:     e.Tipo(),
-		Title:    e.Titulo,
+		Title:    e.TituloEm(idioma),
 		Status:   int64(e.Status),
 		Codigo:   e.Codigo,
-		Detail:   e.Detalhe,
+		Detail:   e.DetalheEm(idioma),
 		Instance: instancia,
 	}
 	for _, c := range e.Campos {
-		p.Erros = append(p.Erros, CampoErro{Campo: c.Campo, Codigo: c.Codigo, Mensagem: c.Mensagem})
+		p.Erros = append(p.Erros, CampoErro{Campo: c.Campo, Codigo: c.Codigo, Mensagem: c.MensagemEm(idioma), ValoresAceitos: c.ValoresAceitos})
 	}
 	for k, v := range e.Dados {
 		p.definirMembro(k, v)

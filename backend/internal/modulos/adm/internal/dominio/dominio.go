@@ -1,9 +1,10 @@
-// Package dominio tem as regras puras do módulo ADM: documentos (CPF e CNPJ),
+// Package dominio tem as regras puras do módulo ADM: identificação por país,
 // calendário da unidade, plano e as regras de perfis e permissões de usuário
 // (RF-ADM-001, 002, 004, 005, 015). Sem IO: tudo aqui é testável sem banco.
 package dominio
 
 import (
+	"errors"
 	"fmt"
 	"net/mail"
 	"regexp"
@@ -15,91 +16,137 @@ import (
 
 	"tenaz/internal/plataforma/autorizacao"
 	"tenaz/internal/plataforma/erros"
+	"tenaz/internal/plataforma/pais"
+	"tenaz/internal/plataforma/textos"
 )
 
-// --------------------------------------------------------------- documentos
+// ------------------------------------------------------------ identificação
 
-// SoDigitos tira pontos, traços, barras e espaços.
-func SoDigitos(s string) string {
-	var b strings.Builder
-	for _, r := range s {
-		if r >= '0' && r <= '9' {
-			b.WriteRune(r)
-		}
-	}
-	return b.String()
+// Identificacao é o par tipo e valor já validado e normalizado (ADR-013): o
+// valor em maiúsculas, só letras e dígitos.
+type Identificacao struct {
+	Tipo  string
+	Valor string
 }
 
-func repetido(d string) bool {
-	return strings.Count(d, d[:1]) == len(d)
+// IdentificacaoDaEmpresa valida a identificação da empresa: obrigatória, e só
+// do tipo de pessoa jurídica do país (cnpj, cuit ou ruc). prefixo é o do campo
+// no corpo ("" na empresa, "unidade." na unidade inicial).
+func IdentificacaoDaEmpresa(prefixo string, perfil pais.PerfilPais, tipo, valor string) (Identificacao, *erros.Erro) {
+	id, ee := validarPar(prefixo, &tipo, &valor, []string{perfil.TipoEmpresa}, "identificacao.tipo_da_empresa",
+		textos.Parametros{"tipo": strings.ToUpper(perfil.TipoEmpresa)}, true)
+	if ee != nil {
+		return Identificacao{}, ee
+	}
+	return *id, nil
 }
 
-// CPFValido confere os dois dígitos verificadores (11 dígitos, sem máscara).
-func CPFValido(cpf string) bool {
-	if len(cpf) != 11 || SoDigitos(cpf) != cpf || repetido(cpf) {
-		return false
-	}
-	dv := func(n int) int {
-		soma := 0
-		for i := 0; i < n; i++ {
-			soma += int(cpf[i]-'0') * (n + 1 - i)
-		}
-		r := soma * 10 % 11
-		if r == 10 {
-			r = 0
-		}
-		return r
-	}
-	return dv(9) == int(cpf[9]-'0') && dv(10) == int(cpf[10]-'0')
+// IdentificacaoDaUnidade valida o par da unidade, opcional: os dois ausentes
+// ou os dois presentes, de um tipo de pessoa jurídica. A coerência com o país
+// da empresa é de ConferirTipoDaUnidade, que precisa do país.
+func IdentificacaoDaUnidade(prefixo string, tipo, valor *string) (*Identificacao, *erros.Erro) {
+	return validarPar(prefixo, tipo, valor, pais.TiposEmpresa(), "identificacao.tipo_da_pessoa", nil, false)
 }
 
-// CNPJValido confere os dois dígitos verificadores (14 dígitos, sem máscara).
-func CNPJValido(cnpj string) bool {
-	if len(cnpj) != 14 || SoDigitos(cnpj) != cnpj || repetido(cnpj) {
-		return false
+// ConferirTipoDaUnidade confere que o tipo da unidade é o de pessoa jurídica
+// do país da empresa: a unidade não tem país próprio (Q1).
+func ConferirTipoDaUnidade(prefixo string, perfil pais.PerfilPais, id *Identificacao) *erros.Erro {
+	if id == nil || id.Tipo == perfil.TipoEmpresa {
+		return nil
 	}
-	pesos1 := []int{5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2}
-	pesos2 := []int{6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2}
-	dv := func(pesos []int) int {
-		soma := 0
-		for i, p := range pesos {
-			soma += int(cnpj[i]-'0') * p
-		}
-		r := soma % 11
-		if r < 2 {
-			return 0
-		}
-		return 11 - r
-	}
-	return dv(pesos1) == int(cnpj[12]-'0') && dv(pesos2) == int(cnpj[13]-'0')
+	return erros.EntradaInvalida.ComCampoChave(prefixo+"identificacao_tipo", erros.CampoValorInvalido,
+		"identificacao.tipo_da_empresa", textos.Parametros{"tipo": strings.ToUpper(perfil.TipoEmpresa)}, perfil.TipoEmpresa)
 }
 
-// MascararCPF esconde o começo e o fim: ***.456.789-**. A lista de pessoas
-// mostra só isto; o CPF inteiro sai no detalhe, com registro na trilha
-// (seção 9.1 do documento 2, visualização de dado sensível).
-func MascararCPF(cpf string) string {
-	if len(cpf) != 11 {
+// IdentificacaoDaPessoa valida o par da pessoa, opcional: aceita os tipos de
+// pessoa física de qualquer país suportado (cpf, cuil, dni, ci), porque uma
+// transportadora brasileira pode ter motorista paraguaio.
+func IdentificacaoDaPessoa(prefixo string, tipo, valor *string) (*Identificacao, *erros.Erro) {
+	return validarPar(prefixo, tipo, valor, pais.TiposPessoaDeTodos(), "identificacao.tipo_da_pessoa", nil, false)
+}
+
+// validarPar é a regra comum: tipo e valor andam juntos; o tipo é um dos
+// aceitos; o valor passa pela forma e, onde há, pelo dígito verificador.
+func validarPar(prefixo string, tipo, valor *string, aceitos []string, chaveTipo string, paramsTipo textos.Parametros,
+	obrigatorio bool) (*Identificacao, *erros.Erro) {
+	campoTipo, campoValor := prefixo+"identificacao_tipo", prefixo+"identificacao"
+	t, v := textoOuVazio(tipo), textoOuVazio(valor)
+	switch {
+	case t == "" && v == "":
+		if obrigatorio {
+			return nil, erros.EntradaInvalida.
+				ComCampoChave(campoTipo, erros.CampoObrigatorio, "identificacao.tipo_obrigatorio", nil).
+				ComCampoChave(campoValor, erros.CampoObrigatorio, "identificacao.valor_obrigatorio", nil)
+		}
+		return nil, nil
+	case t == "":
+		return nil, erros.EntradaInvalida.ComCampoChave(campoTipo, erros.CampoObrigatorio, "identificacao.tipo_obrigatorio", nil)
+	case v == "":
+		return nil, erros.EntradaInvalida.ComCampoChave(campoValor, erros.CampoObrigatorio, "identificacao.valor_obrigatorio", nil)
+	}
+	if !slices.Contains(aceitos, t) {
+		chave := chaveTipo
+		if !slices.Contains(tiposConhecidos(), t) {
+			chave, paramsTipo = "identificacao.tipo_desconhecido", nil
+		}
+		return nil, erros.EntradaInvalida.ComCampoChave(campoTipo, erros.CampoValorInvalido, chave, paramsTipo, aceitos...)
+	}
+	n, err := pais.ValidarIdentificacao(t, v)
+	switch {
+	case errors.Is(err, pais.ErrFormato):
+		return nil, erros.EntradaInvalida.ComCampoChave(campoValor, erros.CampoFormatoInvalido, "identificacao.formato",
+			textos.Parametros{"tipo": strings.ToUpper(t)})
+	case errors.Is(err, pais.ErrDigitoVerificador):
+		return nil, erros.EntradaInvalida.ComCampoChave(campoValor, erros.CampoFormatoInvalido, "identificacao.digito",
+			textos.Parametros{"tipo": strings.ToUpper(t)})
+	case err != nil:
+		return nil, erros.EntradaInvalida.ComCampoChave(campoTipo, erros.CampoValorInvalido, "identificacao.tipo_desconhecido", nil, aceitos...)
+	}
+	return &Identificacao{Tipo: t, Valor: n}, nil
+}
+
+func tiposConhecidos() []string {
+	return append(pais.TiposEmpresa(), pais.TiposPessoaDeTodos()...)
+}
+
+func textoOuVazio(s *string) string {
+	if s == nil {
 		return ""
 	}
-	return "***." + cpf[3:6] + "." + cpf[6:9] + "-**"
+	return strings.TrimSpace(*s)
 }
 
-// NormalizarCPF devolve o CPF só com dígitos ou o erro de campo.
-func NormalizarCPF(campo, cpf string) (string, *erros.Erro) {
-	d := SoDigitos(cpf)
-	if !CPFValido(d) {
-		return "", erros.EntradaInvalida.ComCampo(campo, erros.CampoFormatoInvalido, "CPF inválido.")
-	}
-	return d, nil
+// MascararIdentificacao esconde a identificação pessoal na lista de pessoas; a
+// completa sai só no detalhe, com a visualização gravada na trilha como
+// sensível (seção 9.1 do documento 2).
+func MascararIdentificacao(tipo, valor string) string {
+	return pais.Mascarar(tipo, valor)
 }
 
-// NormalizarCNPJ devolve o CNPJ só com dígitos ou o erro de campo.
-func NormalizarCNPJ(campo, cnpj string) (string, *erros.Erro) {
-	d := SoDigitos(cnpj)
-	if !CNPJValido(d) {
-		return "", erros.EntradaInvalida.ComCampo(campo, erros.CampoFormatoInvalido, "CNPJ inválido.")
+// ------------------------------------------------------------- país e idioma
+
+// PerfilDoPais confere o país da criação da conta e devolve o perfil, de onde
+// saem a moeda e o idioma padrão sugerido.
+func PerfilDoPais(campo, codigo string) (pais.PerfilPais, *erros.Erro) {
+	c := strings.TrimSpace(codigo)
+	if c == "" {
+		return pais.PerfilPais{}, erros.EntradaInvalida.ComCampoChave(campo, erros.CampoObrigatorio, "pais.obrigatorio", nil, pais.Codigos()...)
 	}
-	return d, nil
+	p, ok := pais.Perfil(c)
+	if !ok {
+		return pais.PerfilPais{}, erros.EntradaInvalida.ComCampoChave(campo, erros.CampoValorInvalido, "pais.desconhecido", nil, pais.Codigos()...)
+	}
+	return p, nil
+}
+
+// Idioma confere a etiqueta de idioma (pt-BR ou es-419).
+func Idioma(campo, valor string) (string, *erros.Erro) {
+	v := strings.TrimSpace(valor)
+	if !pais.IdiomaValido(v) {
+		return "", erros.EntradaInvalida.ComCampoChave(campo, erros.CampoValorInvalido, "pais.idioma_invalido", nil,
+			pais.IdiomaPtBR, pais.IdiomaEs419)
+	}
+	return v, nil
 }
 
 // ------------------------------------------------------------ textos simples
@@ -109,9 +156,9 @@ func Texto(campo, valor string, max int) (string, *erros.Erro) {
 	v := strings.TrimSpace(valor)
 	switch {
 	case v == "":
-		return "", erros.EntradaInvalida.ComCampo(campo, erros.CampoObrigatorio, "Informe "+campo+".")
+		return "", erros.EntradaInvalida.ComCampoChave(campo, erros.CampoObrigatorio, "campo.informe", textos.Parametros{"campo": campo})
 	case utf8.RuneCountInString(v) > max:
-		return "", erros.EntradaInvalida.ComCampo(campo, erros.CampoTamanhoMaximo, fmt.Sprintf("Use no máximo %d caracteres.", max))
+		return "", erros.EntradaInvalida.ComCampoChave(campo, erros.CampoTamanhoMaximo, "campo.tamanho_maximo", textos.Parametros{"max": max})
 	}
 	return v, nil
 }
@@ -132,11 +179,11 @@ func TextoOpcional(campo string, valor *string, max int) (*string, *erros.Erro) 
 func Email(campo, valor string) (string, *erros.Erro) {
 	v := strings.ToLower(strings.TrimSpace(valor))
 	if v == "" {
-		return "", erros.EntradaInvalida.ComCampo(campo, erros.CampoObrigatorio, "Informe o e-mail.")
+		return "", erros.EntradaInvalida.ComCampoChave(campo, erros.CampoObrigatorio, "campo.email_obrigatorio", nil)
 	}
 	a, err := mail.ParseAddress(v)
 	if err != nil || a.Address != v || len(v) > 254 {
-		return "", erros.EntradaInvalida.ComCampo(campo, erros.CampoFormatoInvalido, "E-mail inválido.")
+		return "", erros.EntradaInvalida.ComCampoChave(campo, erros.CampoFormatoInvalido, "campo.email_invalido", nil)
 	}
 	return v, nil
 }
@@ -145,19 +192,60 @@ func Email(campo, valor string) (string, *erros.Erro) {
 func FusoHorario(campo, valor string) (string, *erros.Erro) {
 	v := strings.TrimSpace(valor)
 	if v == "" || v == "Local" {
-		return "", erros.EntradaInvalida.ComCampo(campo, erros.CampoValorInvalido, "Informe um fuso horário IANA, como America/Sao_Paulo.")
+		return "", erros.EntradaInvalida.ComCampoChave(campo, erros.CampoValorInvalido, "campo.fuso_obrigatorio", nil)
 	}
 	if _, err := time.LoadLocation(v); err != nil {
-		return "", erros.EntradaInvalida.ComCampo(campo, erros.CampoValorInvalido, "Fuso horário desconhecido.")
+		return "", erros.EntradaInvalida.ComCampoChave(campo, erros.CampoValorInvalido, "campo.fuso_desconhecido", nil)
 	}
 	return v, nil
+}
+
+// FusoDoPais confere o fuso contra a lista de fusos do país da empresa (perfil
+// de país): nome IANA válido E aceito pelo país. Erro valor_invalido com
+// valores_aceitos.
+func FusoDoPais(campo string, perfil pais.PerfilPais, valor string) (string, *erros.Erro) {
+	v, ee := FusoHorario(campo, valor)
+	if ee != nil {
+		return "", ee
+	}
+	if !pais.FusoValido(perfil, v) {
+		return "", erros.EntradaInvalida.ComCampoChave(campo, erros.CampoValorInvalido, "campo.fuso_fora_do_pais",
+			textos.Parametros{"pais": perfil.Codigo}, perfil.Fusos...)
+	}
+	return v, nil
+}
+
+// SubdivisaoECodigoPostal confere o par do endereço contra o perfil do país da
+// empresa (documento 3, 2.18). Cada um é opcional (vazio = não informado) e
+// devolve o código postal normalizado. Erros em prefixo+"subdivisao" e
+// prefixo+"codigo_postal": valor_invalido (com valores_aceitos, no primeiro),
+// formato_invalido, e valor_invalido quando o CPA argentino de 8 caracteres não
+// começa com a letra da subdivisão (regra da Tenaz).
+func SubdivisaoECodigoPostal(prefixo string, perfil pais.PerfilPais, subdivisao, codigoPostal string) (string, *erros.Erro) {
+	if subdivisao != "" && !pais.SubdivisaoValida(perfil, subdivisao) {
+		return "", erros.EntradaInvalida.ComCampoChave(prefixo+"subdivisao", erros.CampoValorInvalido, "campo.subdivisao_fora_do_pais",
+			textos.Parametros{"pais": perfil.Codigo}, perfil.Subdivisoes...)
+	}
+	if strings.TrimSpace(codigoPostal) == "" {
+		return "", nil
+	}
+	n, err := pais.ValidarCodigoPostal(perfil, codigoPostal)
+	if err != nil {
+		return "", erros.EntradaInvalida.ComCampoChave(prefixo+"codigo_postal", erros.CampoFormatoInvalido, "campo.codigo_postal_formato",
+			textos.Parametros{"pais": perfil.Codigo})
+	}
+	if !pais.CPAConfereComSubdivisao(subdivisao, n) {
+		return "", erros.EntradaInvalida.ComCampoChave(prefixo+"codigo_postal", erros.CampoValorInvalido, "campo.codigo_postal_cpa_subdivisao",
+			textos.Parametros{"subdivisao": subdivisao})
+	}
+	return n, nil
 }
 
 // Data confere AAAA-MM-DD.
 func Data(campo, valor string) (string, *erros.Erro) {
 	v := strings.TrimSpace(valor)
 	if _, err := time.Parse(time.DateOnly, v); err != nil {
-		return "", erros.EntradaInvalida.ComCampo(campo, erros.CampoFormatoInvalido, "Use a data no formato AAAA-MM-DD.")
+		return "", erros.EntradaInvalida.ComCampoChave(campo, erros.CampoFormatoInvalido, "campo.data_formato", nil)
 	}
 	return v, nil
 }
@@ -176,8 +264,7 @@ const (
 func PlanoValido(plano *string, srv bool) *erros.Erro {
 	if plano == nil {
 		if !srv {
-			return erros.EntradaInvalida.ComCampo("plano", erros.CampoObrigatorio,
-				"Escolha um plano ou habilite o módulo SRV (plano Serviços).")
+			return erros.EntradaInvalida.ComCampoChave("plano", erros.CampoObrigatorio, "campo.plano_obrigatorio", nil)
 		}
 		return nil
 	}
@@ -185,7 +272,7 @@ func PlanoValido(plano *string, srv bool) *erros.Erro {
 	case PlanoEssencial, PlanoProfissional, PlanoEnterprise:
 		return nil
 	}
-	return erros.EntradaInvalida.ComCampo("plano", erros.CampoValorInvalido, "Plano desconhecido.")
+	return erros.EntradaInvalida.ComCampoChave("plano", erros.CampoValorInvalido, "campo.plano_desconhecido", nil)
 }
 
 // PodeCriarUnidade aplica "o Essencial tem uma unidade; a segunda exige o
@@ -200,7 +287,7 @@ func PodeCriarUnidade(plano *string, unidadesExistentes int64) *erros.Erro {
 	if plano != nil && (*plano == PlanoProfissional || *plano == PlanoEnterprise) {
 		return nil
 	}
-	return erros.PlanoNaoIncluiRecurso.Com("o plano tem uma unidade; a segunda exige o Profissional").
+	return erros.PlanoNaoIncluiRecurso.ComChave("detalhe.plano_segunda_unidade", nil).
 		ComDado("plano_necessario", PlanoProfissional)
 }
 
@@ -226,13 +313,13 @@ func ValidarTurno(prefixo string, t Turno) *erros.Erro {
 	}
 	switch {
 	case t.DiaSemana < 1 || t.DiaSemana > 7:
-		return erros.EntradaInvalida.ComCampo(campo("dia_semana"), erros.CampoForaDaFaixa, "Dia da semana de 1 (segunda) a 7 (domingo).")
+		return erros.EntradaInvalida.ComCampoChave(campo("dia_semana"), erros.CampoForaDaFaixa, "campo.dia_semana", nil)
 	case !reHora.MatchString(t.HoraInicio):
-		return erros.EntradaInvalida.ComCampo(campo("hora_inicio"), erros.CampoFormatoInvalido, "Use HH:MM, de 00:00 a 23:59.")
+		return erros.EntradaInvalida.ComCampoChave(campo("hora_inicio"), erros.CampoFormatoInvalido, "campo.hora_inicio", nil)
 	case !reHora.MatchString(t.HoraFim) && t.HoraFim != "24:00":
-		return erros.EntradaInvalida.ComCampo(campo("hora_fim"), erros.CampoFormatoInvalido, "Use HH:MM, de 00:00 a 24:00.")
+		return erros.EntradaInvalida.ComCampoChave(campo("hora_fim"), erros.CampoFormatoInvalido, "campo.hora_fim", nil)
 	case t.HoraFim == t.HoraInicio:
-		return erros.EntradaInvalida.ComCampo(campo("hora_fim"), erros.CampoValorInvalido, "O fim do turno tem de ser diferente do início.")
+		return erros.EntradaInvalida.ComCampoChave(campo("hora_fim"), erros.CampoValorInvalido, "campo.hora_fim_igual", nil)
 	}
 	return nil
 }
@@ -242,8 +329,7 @@ func ValidarTurno(prefixo string, t Turno) *erros.Erro {
 // (RN-ADM-019). O sistema não impõe calendário: os modelos "comercial" e
 // "contínuo" são da web e só preenchem o formulário.
 func ErrUltimoTurno() *erros.Erro {
-	return erros.EntradaInvalida.ComCampo("turnos", erros.CampoTamanhoMinimo,
-		"A unidade precisa de pelo menos um turno de trabalho (RN-ADM-019).")
+	return erros.EntradaInvalida.ComCampoChave("turnos", erros.CampoTamanhoMinimo, "campo.ultimo_turno", nil)
 }
 
 // minutosSemana é a linha da semana: segunda 00:00 é 0, domingo 24:00 é 10080.
@@ -307,8 +393,8 @@ var nomesDia = [...]string{"segunda", "terça", "quarta", "quinta", "sexta", "s�
 
 // ErrSobreposicao descreve o turno existente que conflita (RN-ADM-019).
 func ErrSobreposicao(campo string, existente Turno) *erros.Erro {
-	return erros.EntradaInvalida.ComCampo(campo, erros.CampoValorInvalido, fmt.Sprintf(
-		"O turno se sobrepõe ao de %s, das %s às %s.", nomesDia[existente.DiaSemana-1], existente.HoraInicio, existente.HoraFim))
+	return erros.EntradaInvalida.ComCampoChave(campo, erros.CampoValorInvalido, "campo.turno_sobrepoe", textos.Parametros{
+		"dia": textos.Chave(fmt.Sprintf("dia.%d", existente.DiaSemana)), "inicio": existente.HoraInicio, "fim": existente.HoraFim})
 }
 
 // --------------------------------------------------- usuários e perfis
@@ -332,29 +418,26 @@ type Vinculo struct {
 // perfil externo.
 func ValidarPerfisDoUsuario(perfis []string, v Vinculo) *erros.Erro {
 	if v.Fornecedor && v.Locatario {
-		return erros.EntradaInvalida.ComCampo("locatario_id", erros.CampoValorInvalido,
-			"O usuário é de um fornecedor ou de um locatário, não dos dois.")
+		return erros.EntradaInvalida.ComCampoChave("locatario_id", erros.CampoValorInvalido, "campo.fornecedor_ou_locatario", nil)
 	}
 	if len(perfis) == 0 {
-		return erros.EntradaInvalida.ComCampo("perfis", erros.CampoTamanhoMinimo, "O usuário precisa de pelo menos um perfil.")
+		return erros.EntradaInvalida.ComCampoChave("perfis", erros.CampoTamanhoMinimo, "campo.perfil_obrigatorio", nil)
 	}
 	vistos := map[string]bool{}
 	for i, p := range perfis {
 		if vistos[p] {
-			return erros.EntradaInvalida.ComCampo(fmt.Sprintf("perfis[%d]", i), erros.CampoDuplicado, "Perfil repetido.")
+			return erros.EntradaInvalida.ComCampoChave(fmt.Sprintf("perfis[%d]", i), erros.CampoDuplicado, "campo.perfil_repetido", nil)
 		}
 		vistos[p] = true
 	}
 	switch {
 	case v.Fornecedor:
 		if !slices.Equal(perfis, []string{autorizacao.PerfilPrestador}) {
-			return erros.EntradaInvalida.ComCampo("perfis", erros.CampoValorInvalido,
-				"Usuário de fornecedor tem só o perfil prestador.")
+			return erros.EntradaInvalida.ComCampoChave("perfis", erros.CampoValorInvalido, "campo.perfil_fornecedor", nil)
 		}
 	case v.Locatario:
 		if !slices.Equal(perfis, []string{autorizacao.PerfilLocatario}) {
-			return erros.EntradaInvalida.ComCampo("perfis", erros.CampoValorInvalido,
-				"Usuário de locatário tem só o perfil locatario.")
+			return erros.EntradaInvalida.ComCampoChave("perfis", erros.CampoValorInvalido, "campo.perfil_locatario", nil)
 		}
 	default:
 		for i, p := range perfis {
@@ -363,8 +446,8 @@ func ValidarPerfisDoUsuario(perfis []string, v Vinculo) *erros.Erro {
 				if p == autorizacao.PerfilLocatario {
 					campo = "locatario_id"
 				}
-				return erros.EntradaInvalida.ComCampo(campo, erros.CampoObrigatorio,
-					fmt.Sprintf("O perfil %s (perfis[%d]) exige o vínculo com %s.", p, i, strings.TrimSuffix(campo, "_id")))
+				return erros.EntradaInvalida.ComCampoChave(campo, erros.CampoObrigatorio, "campo.perfil_exige_vinculo", textos.Parametros{
+					"perfil": p, "indice": i, "alvo": textos.Chave("alvo." + strings.TrimSuffix(campo, "_id"))})
 			}
 		}
 	}
@@ -377,11 +460,11 @@ func ValidarPerfisDoUsuario(perfis []string, v Vinculo) *erros.Erro {
 // perfis que atribui (com as isenções do administrador).
 func ConferirAtribuicao(ator autorizacao.Ator, alvoID fmt.Stringer, alvoEhAdministrador bool, perfisNovos map[string][]string) *erros.Erro {
 	if alvoID.String() == ator.UsuarioID.String() {
-		return erros.SemPermissao.Com("ninguém altera os próprios perfis")
+		return erros.SemPermissao.ComChave("detalhe.ninguem_altera_proprios_perfis", nil)
 	}
 	_, ganhaAdm := perfisNovos[autorizacao.PerfilAdministrador]
 	if (alvoEhAdministrador || ganhaAdm) && !ator.TemPerfil(autorizacao.PerfilAdministrador) {
-		return erros.SemPermissao.Com("só administrador altera administrador")
+		return erros.SemPermissao.ComChave("detalhe.so_administrador_altera", nil)
 	}
 	codigos := make([]string, 0, len(perfisNovos))
 	for c := range perfisNovos {
@@ -390,7 +473,7 @@ func ConferirAtribuicao(ator autorizacao.Ator, alvoID fmt.Stringer, alvoEhAdmini
 	slices.Sort(codigos)
 	for _, c := range codigos {
 		if ok, falta := ator.PodeAtribuirPerfil(perfisNovos[c]); !ok {
-			return erros.SemPermissao.Com("o perfil %s dá a permissão %s, que você não tem", c, falta)
+			return erros.SemPermissao.ComChave("detalhe.perfil_da_permissao", textos.Parametros{"perfil": c, "permissao": falta})
 		}
 	}
 	return nil
@@ -405,25 +488,24 @@ func ConferirAtribuicao(ator autorizacao.Ator, alvoID fmt.Stringer, alvoEhAdmini
 // (RN-ADM-026), e nunca uma permissão vedada a externo.
 func ConferirConcessao(ator autorizacao.Ator, alvoID fmt.Stringer, permissao string, perfilExterno string) *erros.Erro {
 	if !autorizacao.Existe(permissao) {
-		return erros.EntradaInvalida.ComCampo("permissao", erros.CampoValorInvalido, "Permissão fora do catálogo de RF-ADM-005.")
+		return erros.EntradaInvalida.ComCampoChave("permissao", erros.CampoValorInvalido, "campo.permissao_fora_catalogo", nil)
 	}
 	if alvoID.String() == ator.UsuarioID.String() {
-		return erros.SemPermissao.Com("ninguém concede permissão a si mesmo")
+		return erros.SemPermissao.ComChave("detalhe.ninguem_concede_a_si", nil)
 	}
 	if autorizacao.IsencaoAdministrador(permissao) && !ator.TemPerfil(autorizacao.PerfilAdministrador) {
-		return erros.SemPermissao.Com("só o administrador concede %s", permissao)
+		return erros.SemPermissao.ComChave("detalhe.so_admin_concede", textos.Parametros{"permissao": permissao})
 	}
 	if !ator.PodeConceder(permissao) {
-		return erros.SemPermissao.Com("você não tem a permissão %s", permissao)
+		return erros.SemPermissao.ComChave("detalhe.sem_a_permissao", textos.Parametros{"permissao": permissao})
 	}
 	if perfilExterno != "" {
 		if autorizacao.VedadaExterno(permissao) {
-			return erros.EntradaInvalida.ComCampo("permissao", erros.CampoValorInvalido,
-				"Esta permissão nunca é concedida a usuário prestador ou locatário.")
+			return erros.EntradaInvalida.ComCampoChave("permissao", erros.CampoValorInvalido, "campo.permissao_externo", nil)
 		}
 		if !slices.Contains(autorizacao.PermissoesDoPerfil(perfilExterno), permissao) {
-			return erros.EntradaInvalida.ComCampo("permissao", erros.CampoValorInvalido,
-				"Usuário "+perfilExterno+" só recebe permissões do conjunto padrão do seu perfil.")
+			return erros.EntradaInvalida.ComCampoChave("permissao", erros.CampoValorInvalido, "campo.permissao_do_perfil",
+				textos.Parametros{"perfil": perfilExterno})
 		}
 	}
 	return nil

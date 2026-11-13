@@ -1,10 +1,14 @@
 # Padrões de Design — Tenaz
 
-**Versão:** 0.4 · **Data:** 12/11/2026 · **Status:** Em elaboração
+**Versão:** 0.6 · **Data:** 13/11/2026 · **Status:** Em elaboração
 **Produto:** Tenaz · Gestão de Manutenção e Frota
-Alinhado ao sumário executivo 0.5
+Alinhado ao sumário executivo 0.8
 **Base:** identidade visual aprovada em [marca/README.md](../marca/README.md) e [marca/brandbook.html](../marca/brandbook.html); vocabulário e estados em [0_SUMARIO_EXECUTIVO.md](0_SUMARIO_EXECUTIVO.md)
 **Plataformas:** web (React + TypeScript) e app de campo (React Native + Expo, offline)
+
+**Mudanças da versão 0.6:** segunda revisão das telas da E01, agora multipaís e bilíngue (ADR-013): campos de identificação com máscara, normalização e exemplo, código postal normalizado e custo por hora em qualquer moeda (6.2); endereço por país com o seletor de subdivisão (6.2.1); cadastro da conta com o país primeiro (5.7); idioma guardado no servidor e formatação por `formatos.ts` pelo país da empresa (3.11, 10.7); termos novos do glossário (10.7); pendências 13.44 a 13.48 e atualização da 13.40; formatos do país da empresa por `formatos.ts`, sem `Intl` (3.11).
+
+**Mudanças da versão 0.5:** revisão de desenho das telas da etapa E01 (conta e acesso) e do app, com cada item que as telas trouxeram e o documento não tinha decidido: chips de situação do cadastro (7.7); interruptor (6.3), tabela simples e busca aplicada ao enviar (6.4), confirmação em alerta em linha enquanto não há toast (6.12), esqueleto sem a regra de 300 ms (6.15), paginação por cursor (6.16), editor de turnos por dia (6.24), QR code do TOTP (6.25) e aviso de dado de saúde (6.26); grupo Administração, itens "Em breve" recusados e tooltip do menu recolhido (5.2), menu do usuário (5.3), telas sem sessão (5.7), telas de administração da conta (8.35), casca do app (9.11); conflito de versão (10.3); a Tenaz é bilíngue pt-BR e es-419 desde a E01 (10.1 e 10.7, com o glossário de `pacotes/i18n/src/glossario.ts`); pendências 13.35 a 13.43.
 
 **Mudanças da versão 0.4:** configuração por segmento (sumário 0.5, seção 3.7). Fase de ciclo de vida do ativo com o chip neutro tracejado "Em implantação" e a ação "Colocar em operação" (RF-ATV-013); tipo de OS Implantação; origens de OS `cliente_conectado`, `projeto` e `regra`; causa externa da parada; estados de projeto, etapa, contrato com cliente, medição e regra (7.5); quatro componentes novos: frase de regra, cronograma, régua de faixas de desconto e marcador de mapa (6.20 a 6.23); telas de regras configuráveis (RF-ADM-016), campos extras da OS no web e no app com validação offline (RF-OS-021), pacote de segmento nos primeiros passos (RF-ADM-017), projeto de implantação (RF-PRJ-001 a RF-PRJ-007), painel e medição do contrato com cliente (RF-CTR-001 a RF-CTR-005) (8.29 a 8.34, 9.10); visão Mapa de ativos (8.2); contrastes novos (4.4); microcopy das ações novas (10); ícones (12.2); regra 4.3.8 sobre `borda-controle` em Névoa; pendências 13.24 a 13.34.
 
@@ -657,13 +661,13 @@ Grade do web: 12 colunas fluidas, gutter de 16 px abaixo de 1280 px e de 24 px a
 
 | Tipo | Formato | Exemplo |
 |---|---|---|
-| Inteiro | Ponto como separador de milhar | 248.315 km |
-| Decimal | Vírgula, casas fixas por grandeza | 3,2 h · 97,4 % · 0,41 R$/km |
-| Moeda | `R$` + espaço inseparável | R$ 3.418,90 |
-| Percentual | Espaço inseparável antes de `%` | 97,4 % |
+| Inteiro | Ponto como separador de milhar, a partir de 4 dígitos | 1.000 · 248.315 km |
+| Decimal | Vírgula; as casas são as do texto canônico que a API entrega (o formatador não completa nem corta) | 3,2 h · 97,4 % · R$ 0,41/km |
+| Moeda | Símbolo do **país da empresa** + espaço inseparável, por `formatos.ts` de `pacotes/dominio` (não o código ISO) | R$ 3.418,90 · $ 3.418,90 · Gs. 3.419 |
+| Percentual | Espaço inseparável antes de `%`; vírgula decimal e ponto de milhar | 97,4 % · 1.250 % |
 | Medidor | Valor + espaço inseparável + unidade | 12.480 h · 248.315 km · 1.204 ciclos |
 | Data | dd/mm/aaaa | 12/11/2026 |
-| Data e hora | dd/mm/aaaa hh:mm (24 h) | 12/11/2026 14:32 |
+| Data e hora | dd/mm/aaaa hh:mm (24 h, sem segundos, um espaço comum entre data e hora), num fuso explícito | 13/11/2026 14:05 |
 | Hora relativa | Até 24 h; depois, data | há 4 min · há 3 h · ontem às 16:05 |
 | Duração | h e min | 3 h 20 min |
 | Prazo futuro | Unidade do gatilho e, se possível, estimativa em dias | em 2.300 km (cerca de 9 dias) |
@@ -673,7 +677,17 @@ Grade do web: 12 colunas fluidas, gutter de 16 px abaixo de 1280 px e de 24 px a
 
 - Unidades em minúsculas conforme o SI (km, h, min, kg, L, °C, bar). "un." para unidades de estoque.
 - Em tabela, coluna homogênea traz a unidade no cabeçalho ("Hodômetro (km)") e a célula só o número. Coluna mista (medidores de tipos diferentes) traz a unidade em cada célula.
-- Formatação sempre com `Intl.NumberFormat('pt-BR')` e `Intl.DateTimeFormat('pt-BR')`, nunca concatenação manual.
+- Formatação sempre pelas funções de `pacotes/dominio/src/formatos.ts` (ADR-013, Parte G, documento 5), nunca por `Intl.NumberFormat`, `Intl.DateTimeFormat` como gerador de texto nem `toLocaleString`. O formato segue o **país da empresa** (vírgula decimal, ponto de milhar, dd/mm/aaaa, 24 h nos três países); o idioma do usuário só escolhe as palavras. Dinheiro e decimais são formatados a partir do texto canônico da API, sem passar por `number`. O guarani (PYG) não tem casas decimais. Preço unitário e custo por hora mostram de 2 a 6 casas (0 a 6 no guarani). Data e hora sempre num fuso explícito (da unidade ou, sem unidade, da empresa). Espaço inseparável é U+00A0. Os casos de cada formato estão em `backend/testes/casos/formatos.json`.
+- **Decisões de formato (versão 0.6, para os casos compartilhados):**
+  - **Símbolo:** Brasil `R$`, Argentina `$`, Paraguai `Gs.` (com o ponto). Vale o do país da empresa; o código ISO (BRL, ARS, PYG) só aparece em cadastro e exportação. O `₲` (U+20B2) fica descartado: o Banco Central del Paraguay e o comércio paraguaio escrevem "Gs.", e a fonte de dado da interface pode não ter o glifo.
+  - **Posição:** o símbolo vai **antes** do número, separado por um U+00A0 ("R$ 3.418,90", "$ 3.418,90", "Gs. 3.419").
+  - **Negativo:** hífen-menos U+002D **antes do símbolo**, sem espaço: "-R$ 10,00", "-$ 10,00", "-Gs. 10". Nunca parênteses nem U+2212, para o valor ser copiado e lido por leitor de tela sem ambiguidade. Número sem moeda: "-1.234,5"; percentual: "-2,5 %".
+  - **Pontos fechados com os casos compartilhados** (coordenador, 13/11/2026, ambiguidades levantadas pelo `tenaz-qa-automacao` ao escrever `formatos.json`): segundos são **cortados**, nunca arredondados ("14:05:59" vira "14:05"); as casas decimais são as do texto canônico da API, o formatador não completa nem corta; custo por unidade leva o símbolo antes, como toda moeda ("R$ 0,41/km"); moeda diferente da do país da empresa aparece com o código ISO no lugar do símbolo, também com U+00A0 ("BRL 10,00"; ADR-013, Parte A, item 7), caso que não ocorre na E01, com uma moeda por empresa; tela sem empresa (login, convite, "Sobre" do app) formata datas com o fuso do aparelho e o formato comum aos três países; percentual chega em pontos percentuais ("97.4" vira "97,4 %"), como no documento 3; entrada fora do texto canônico, "-0" ou data inexistente é defeito do chamador, e o formatador lança erro em vez de mostrar algo.
+  - **Milhar:** ponto, **a partir de 4 dígitos** ("1.000"), em inteiro, em dinheiro, em medidor e em percentual ("1.250 %"); a parte decimal nunca é agrupada ("0,123456").
+  - **Decimal:** vírgula. Casas: a da moeda no dinheiro (2 em BRL e ARS, 0 em PYG); de 2 a 6 no preço unitário e no custo por hora (0 a 6 em PYG), sem arredondar o que veio do servidor; fixas por grandeza nos medidores.
+  - **Data:** dd/mm/aaaa, com zero à esquerda ("03/11/2026"). **Data e hora:** "13/11/2026 14:05", 24 h, hh:mm com zero à esquerda, sem segundos, **um espaço comum** (U+0020) entre data e hora; meia-noite é "00:00".
+  - **Fonte e uso:** a posição e o negativo seguem o uso corrente dos três países e o CLDR de `pt-BR`, `es-AR` e `es-PY` (referência de conferência, não motor); o "Gs." segue o uso do Banco Central del Paraguay e da Subsecretaría de Estado de Tributación. Um falante nativo da Argentina e do Paraguai confirma antes da primeira tela em produção (pendência 13.48).
+- Lista de leitura de valores soltos (município e subdivisão, perfis) separa por vírgula, via `listar`; nunca por espaço.
 
 ---
 
@@ -857,6 +871,10 @@ O selo de versão ("v1.4.2", componente 6.19) fica fixo no canto inferior direit
 - **Configuração por segmento** fica em Administração, não no menu do dia a dia: Regras (8.29), Campos extras da OS (8.30) e Pacotes de segmento (8.31).
 - Grupos e itens aparecem conforme perfil e plano. Item sem permissão não aparece. Recurso de plano superior aparece só em Administração > Plano, nunca como item bloqueado no menu do dia a dia.
 - Contadores de pendência ao lado do item (ex.: "Solicitações 7") em pílula `superficie` com texto Aço, nunca vermelha.
+- **Grupo Administração (E01, aceito com ajuste).** Enquanto só a Administração existe, o menu mostra Painel e o grupo "Administração" com `sobrelinha`: Empresa, Unidades, Pessoas, Usuários, Perfis e Auditoria, cada um só para quem tem a permissão de leitura correspondente (`adm.ler`, `adm.ler_pessoas`, `adm.ler_usuarios`, `adm.ler_auditoria`). Grupo sem item visível some. Quando os demais módulos entrarem, a tabela acima define a ordem e Administração fica no fim da lista, acima de "recolher menu". Recolhido, o grupo perde o título e os itens ficam em lista contínua.
+- **Item "Em breve": recusado.** Tela prevista e ainda sem rota não aparece no menu, nem desabilitada. A regra acima ("item sem permissão não aparece" e "nunca como item bloqueado") vale também para o que ainda não existe: um item que não faz nada ensina o usuário a ignorar o menu. O item entra na mesma versão da tela. Aplicado no web: item sem permissão, bloqueado ou "em breve" não aparece.
+- **Tooltip do item recolhido** é obrigatório (hover após 400 ms e foco por teclado), além do `aria-label`: abre após 400 ms no hover e no foco por teclado, sem espera ao passar de um item a outro. Fundo Aço, texto Névoa (6.18). Aplicado no web.
+- **Larguras abaixo de 768 px:** a gaveta (menu em painel sobre a página, aberto por botão na barra superior) ainda não existe; até lá o menu fica recolhido (pendência 13.43).
 
 ### 5.3 Barra superior
 
@@ -871,6 +889,7 @@ O selo de versão ("v1.4.2", componente 6.19) fica fixo no canto inferior direit
   Cada resultado mostra ícone do tipo, identificador em `dado-forte`, descrição e status. Setas navegam, Enter abre, Esc fecha. Busca vazia mostra os últimos 5 itens abertos.
 - **Criar:** botão secundário com menu (Solicitação, OS, Ativo, Leitura de medidor). Não usa Sinal, para não competir com a ação primária da página.
 - Notificações (sino com contador), ajuda e menu do usuário (perfil, tema, densidade, sair).
+- **Menu do usuário (E01, aceito com ajuste).** Botão de ícone com as iniciais (avatar de 32 px sobre `borda`; nome acessível "Menu do usuário, <nome>"). Conteúdo, nesta ordem: nome, e-mail e empresa atual; "Minha conta"; "Trocar de empresa", com a lista das outras empresas, só quando o acesso vale para mais de uma; "Sair". O item chama-se **Minha conta** e não "Perfil", porque `perfil` é o papel de acesso (sumário, seção 3). O tema continua em botão próprio ao lado, fora do menu do usuário, para trocar o tema em um toque; densidade entra quando houver tabelas que a usem. O nome da empresa também aparece à esquerda da barra superior até o seletor de unidade existir. Trocar de empresa volta ao Painel. O idioma da interface é escolhido em Minha conta (10.7).
 
 ### 5.4 Cabeçalho da página
 
@@ -909,6 +928,29 @@ A densidade é preferência do usuário (atributo `data-densidade` no `<html>`).
 
 - Fundo `fundo`, cartão `superficie` de 400 px centralizado. Uma ação primária (Entrar).
 - O selo de versão (6.19) fica no canto inferior direito da página, fora do cartão. Em produção mostra só "v1.4.2"; fora da produção, a versão e o ambiente, como no exemplo.
+
+### 5.7 Telas sem sessão (E01)
+
+Todas as telas que não exigem sessão usam a mesma casca do login (5.6): fundo `fundo`, logo horizontal acima do cartão (positivo no tema claro, negativo no escuro), cartão `superficie` de 400 px com borda `borda`, `sombra-1`, raio `raio-lg` e padding de 20 px, título em `h1` com a aparência de `h2`, e o selo de versão (6.19) no canto inferior direito, fora do cartão. O cadastro da conta usa o cartão largo de 720 px. Cada passo da tela é um cartão novo e **o foco vai para o título dele** ao abrir. Uma única ação primária por cartão, em largura total.
+
+| Rota | Tela | O que ela tem de próprio |
+|---|---|---|
+| `/entrar` | Login em três passos na mesma página | Passo 1: e-mail e senha, "Esqueci a senha", "Criar conta da empresa". Passo 2 (só se a conta tem segundo fator): código de 6 dígitos (`dado`, `autocomplete="one-time-code"`), "Voltar para a senha". Passo 3 (só se o acesso vale para mais de uma empresa): lista de empresas em opções de rádio, a última usada marcada e rotulada |
+| `/criar-conta` | Cadastro da conta da empresa | Cartão de 720 px; dados da empresa, do responsável e da primeira unidade (turnos, subdivisão e código postal do país). **O país é o primeiro campo da seção Empresa depois dos nomes** e comanda o resto: define o **tipo de identificação** (CNPJ, CUIT ou RUC), o **fuso horário** e o **idioma padrão** sugerido. O país inicial vem da região do navegador (`pt-BR` leva ao Brasil, `es-AR` à Argentina, `es-PY` ao Paraguai); o idioma sugerido parte do idioma da interface e **não substitui o que a pessoa escolheu à mão**. Trocar o país limpa a identificação, a subdivisão e o código postal. O resumo de erros diz de qual campo é cada mensagem ("Responsável: Informe o nome") |
+| `/convite` | Aceitar convite | Texto diz o e-mail convidado; senha nova, ou aviso de que a senha existente continua valendo |
+| `/esqueci-a-senha` | Pedir o link | Resposta neutra, igual exista ou não a conta ("Se ... tem conta, enviamos o link") |
+| `/redefinir-senha` | Criar senha nova | Apoio da regra de senha; ao concluir, avisa que as sessões foram encerradas |
+| `/ativar-mfa` | Ativar o segundo fator exigido pela empresa | Alerta de atenção com o motivo; QR code (6.25); troca de empresa e "Sair" como saídas |
+| `/autorizar-app` | Autorizar o app de campo (OAuth com PKCE) | Diz quem pede acesso e que o app nunca vê a senha; empresa a autorizar; "Autorizar o app" e "Não autorizar" |
+
+Regras:
+
+- **Falha de credencial tem uma só mensagem**, que não diz se o e-mail existe (RF-ADM-006). Falha do código mantém o passo e diz quantas tentativas restam; desafio vencido ou sem tentativas volta ao passo 1 com alerta de atenção.
+- Erro de envio aparece em alerta `role="alert"` no topo do cartão; erro de campo, no campo e no resumo (6.2). Link inválido ou vencido (convite, redefinição) mostra alerta de erro com a ação "Pedir novo link" ou o que o convite diz.
+- "Não autorizar" devolve ao app o erro `access_denied` do OAuth pela URI de retorno registrada; não leva ao painel da web (hoje leva: achado de correção da revisão).
+- O login social (Google e Microsoft) do esquema de 5.6 não existe na E01; entra em fase posterior.
+- Quatro estados: padrão; carregando (botão com `aria-busy` e gerúndio: "Entrando", "Verificando", "Conferindo o convite"); vazio, que não se aplica; erro, como acima.
+- O seletor de idioma das telas sem sessão são links de texto no pé do cartão, com o nome de cada idioma no próprio idioma ("Português (Brasil)" e "Español"), sem bandeira (10.7). Em Minha conta o seletor é um grupo de opções de rádio (`SeletorDeIdioma`), e não faz parte do menu do usuário. O web escolhe e guarda o idioma localmente até a API ter `usuario.idioma` (pendência 13.40).
 
 ---
 
@@ -964,11 +1006,28 @@ Anatomia: rótulo (`rotulo`, acima do campo, sempre visível) → campo → text
 Tipos específicos:
 
 - **Medidor:** campo numérico com unidade fixa à direita dentro do campo (km, h), teclado numérico no app, última leitura mostrada abaixo ("Última: 248.315 km em 10/11/2026, pelo app"). Valor menor que a última leitura é erro; salto acima do esperado é aviso.
-- **Moeda:** prefixo "R$" fixo, formatação ao sair do campo.
+- **Moeda:** o símbolo vem da moeda da empresa (R$, ARS, PYG), nunca fixo no componente; formatação ao sair do campo por `formatos.ts` (3.11). O símbolo é o do país (R$, $, Gs.). O guarani não tem casas decimais.
+- **Custo por hora** (e demais preços unitários): aceita vírgula ou ponto como separador decimal, sem sinal, com **até 6 casas em qualquer moeda**, mesmo nas que não têm centavos. A recusa tem **uma só mensagem** ("Use um valor sem sinal, com até seis casas decimais, como 45,123456."), qualquer que seja o motivo (sinal, letra, casas demais). O apoio sob o campo diz o limite e, quando já há valor gravado, "Valor atual: ..." formatado pelo país e pela moeda da empresa (3.11). Campo em `dado`, com teclado decimal no celular.
+- **Identificação (CNPJ, CPF, CUIT, CUIL, DNI, RUC, CI):** o tipo vem do país (o da empresa; na pessoa, escolhido entre os do país). O campo aplica a **máscara do tipo enquanto a pessoa digita**, envia **normalizado** (maiúsculas, sem máscara) e mostra "Exemplo: ..." como apoio, com o exemplo do tipo no idioma em uso. Teclado numérico quando o tipo só tem dígitos; CNPJ e RUC aceitam letra. Em lista e detalhe a identificação aparece **mascarada**, na coluna "Documento" (e não "CPF", porque o tipo muda com o país).
+- **Código postal** (CEP no Brasil, "Código postal" na Argentina e no Paraguai): aceita a máscara que a pessoa digitar (espaço e hífen) e vai ao servidor **normalizado** (maiúsculas, sem espaço nem hífen). O erro diz o formato do país com um exemplo (6.2.1).
 - **Data:** digitação dd/mm/aaaa com máscara e calendário opcional. Nunca só calendário.
 - **TAG e placa:** JetBrains Mono, conversão automática para caixa alta.
 - **Texto longo:** contador de caracteres só quando houver limite; ditado por voz no app.
 - Validação ao sair do campo e ao salvar, nunca a cada tecla. Ao salvar com erros, o foco vai para o primeiro campo com erro e um resumo aparece no topo do formulário com links para cada campo.
+
+#### 6.2.1 Endereço por país
+
+Os campos de endereço mudam de rótulo, formato e lista com o país da empresa (o da conta, só de leitura depois de criada). **A subdivisão e o código postal são opcionais.**
+
+| País | Subdivisão (rótulo) | Código postal (rótulo e formato) |
+|---|---|---|
+| Brasil | "Estado", os 27 por nome oficial (valor `BR-MG`) | "CEP", 8 dígitos (`01310-100`) |
+| Argentina | "Província" / "Provincia", as 24 por nome oficial (valor `AR-B`, letra ISO) | "Código postal", CPA de 8 caracteres (`C1425DKF`) ou 4 dígitos. **A letra inicial do CPA tem de ser a da província escolhida**; senão, o erro "A letra inicial do CPA não é a da província escolhida." |
+| Paraguai | "Departamento", os 17 mais o distrito capital, com "Asunción (distrito capital)" em primeiro (valor `PY-ASU`) | "Código postal", 6 dígitos (`001526`) |
+
+- A subdivisão é um **seletor** (`CampoDeSubdivisao`) com o **nome oficial** de cada divisão e o rótulo do país, e envia o **código ISO 3166-2** completo. Os nomes próprios são os mesmos nos dois idiomas. Valor já gravado que não pertença ao país atual continua escolhível, para não ser apagado em silêncio.
+- Na lista de unidades, "Localização" junta município e subdivisão **com vírgula** ("Contagem, Minas Gerais"), pela função `listar`; o espaço entre os dois lia como um nome só. O rótulo do município é "Município" no Brasil e "Cidade ou localidade" nos outros países.
+- Na criação da conta, trocar o país **limpa a subdivisão e o código postal** (e os erros deles): o valor de um país não vale em outro.
 
 ### 6.3 Seletores
 
@@ -979,7 +1038,7 @@ Tipos específicos:
 | Seleção múltipla | Filtros, atribuição a vários técnicos | Itens marcados aparecem como chips removíveis no campo; "3 selecionados" quando passar de 2 chips |
 | Grupo de opções (radio) | 2 a 5 opções visíveis ao mesmo tempo | Preferir a seletor quando a escolha for frequente (motivo de pausa) |
 | Segmentado | 2 a 4 modos de visualização (Lista, Quadro, Calendário) | Não usar para dados de formulário |
-| Interruptor | Liga/desliga de efeito imediato (plano ativo) | Rótulo à esquerda descreve o estado ligado |
+| Interruptor | Liga/desliga de efeito imediato (plano ativo) ou de formulário ("Exigir segundo fator") | Chave de 44 × 24 px com o **rótulo à direita**, que descreve o estado ligado, e texto de apoio em `legenda` abaixo dele. Radix Switch, `role="switch"` e `aria-checked`; o rótulo inteiro é clicável. Ligado: fundo e contorno `texto`, bolinha `superficie`; desligado: contorno `borda-controle`, bolinha `texto-secundario`. Aceito com ajuste: o rótulo passa de esquerda para direita, o padrão de leitura e o da caixa de marcação (6.18) |
 | Árvore | Localização e hierarquia de ativos | Expandir com seta direita, recolher com seta esquerda (padrão ARIA `tree`); mostra o caminho completo no valor escolhido ("Planta Contagem › Linha 2 › CMP-0347") |
 
 Estados iguais aos de campo. A lista suspensa abre em `superficie-elevada`, `sombra-3`, altura máxima de 320 px, e fecha com Esc devolvendo o foco ao campo. Opção desabilitada mostra o motivo ("João Lima · NR-10 vencida").
@@ -1020,6 +1079,10 @@ Estados iguais aos de campo. A lista suspensa abre em `superficie-elevada`, `som
 - **Estados:** carregando (5 linhas de esqueleto com as larguras das colunas), vazio (seção 6.14), erro (linha única com mensagem e botão "Tentar de novo"), atualizando (barra de progresso fina no topo, dados atuais continuam visíveis).
 - **Teclado:** padrão ARIA `grid`: setas movem entre células, Enter abre, Espaço seleciona, Home e End vão ao início e fim da linha.
 - **Exportar:** CSV e XLSX respeitando filtros e colunas visíveis, com números em formato numérico (não texto).
+
+**Tabela simples (E01, aceita como subconjunto).** As listas da Administração usam uma versão enxuta, sem ordenação no cliente, seleção, colunas configuráveis nem edição em linha: contêiner com borda `borda` e raio `raio-lg`, rolagem horizontal quando estreita, `caption` oculto com o nome da tabela para leitor de tela, `th scope="col"` em `rotulo` e `texto-secundario`, células de 40 px, `aria-busy` durante a carga. A lista é ordenada pelo servidor. O que a 6.4 pede além disso entra com o primeiro módulo que precisar. O hover em `superficie-hover` só vale em linha que leva a algum lugar; linha sem ação não muda de cor.
+
+**Busca por texto aplicada ao enviar (E01, aceita).** Na lista ordenada pelo servidor, a busca é um campo com o botão "Buscar", dentro de `role="search"`, e só consulta ao teclar Enter ou ao acionar o botão, nunca a cada tecla (não pede uma página por letra). O termo vai para a URL. O campo de busca local do desenho acima continua valendo para listas inteiras já carregadas.
 
 ### 6.5 Chip de status
 
@@ -1164,6 +1227,8 @@ Estrutura: ícone + título opcional em `h4` + texto em `corpo-p` + até duas a�
 - Uma frase, sem título: "OS-2026-004812 encerrada. Ativo liberado para operação."
 - `aria-live="polite"` para sucesso, `assertive` para erro.
 
+**Sem toast na E01 (decisão).** O toast só entra com a primeira ação reversível ("Desfazer"), prevista para a etapa das OS. Até lá, a confirmação de uma gravação é um **alerta de sucesso em linha** (`role="status"`, uma frase: "Pessoa salva."), que fica até a próxima edição e some ao sair da tela. Em formulário comprido, o alerta tem de estar à vista depois de salvar: a tela rola até ele ou o mostra junto ao botão de salvar (achado da revisão). Erro continua em alerta `role="alert"` e não some sozinho.
+
 ### 6.13 Modais e confirmações
 
 - Larguras: P 400 px (confirmação), M 560 px (formulário curto), G 720 px (formulário com seções). Acima disso, use página ou painel lateral.
@@ -1210,6 +1275,7 @@ Sem ilustrações coloridas. Estados vazios usam ícones da biblioteca no estilo
 - Acima de 10 s, mostra texto: "Ainda carregando. Listas com mais de 10 mil itens podem levar alguns segundos."
 - O contêiner recebe `aria-busy="true"` e um texto oculto "Carregando ordens de serviço".
 - Atualização de dados já exibidos não volta ao esqueleto: usa barra de progresso fina no topo da área.
+- **Versão da E01 (aceita como etapa, com prazo).** O esqueleto das telas da Administração aparece desde o primeiro quadro e fica **estático** (blocos de 40 px em `superficie-esqueleto`, sem brilho), com `aria-busy="true"` e o texto oculto "Carregando as pessoas". A regra de 300 ms e o brilho de 1,6 s entram antes da etapa E03, quando as listas passam a ser grandes e rápidas (pendência 13.36). Sem brilho é a variante de movimento reduzido, já prevista acima.
 
 ### 6.16 Paginação
 
@@ -1222,6 +1288,7 @@ Sem ilustrações coloridas. Estados vazios usam ícones da biblioteca no estilo
 - Página e tamanho ficam na URL. Mudar filtro volta para a página 1.
 - No app, listas usam rolagem infinita com carga incremental e indicador ao fim ("Fim da lista · 128 OS").
 - Acima de 10 mil resultados, a contagem é aproximada ("mais de 10 mil") e sugere filtrar.
+- **Paginação por cursor (E01, decidida).** A API pagina por cursor e não devolve o total. Nas listas que dependem dela, o web mostra, no lugar de "1–50 de N" e da navegação por páginas, **"N itens carregados"** à esquerda (`dado`, `role="status"`) e o botão secundário **"Carregar mais"** à direita (com `aria-busy` e "Carregando" enquanto busca). Ao acabar, o botão some e o texto vira "Fim da lista · N itens", o mesmo do app. Não há "Itens por página": o servidor define o tamanho. Busca e filtros ficam na URL; mudar um deles recomeça do primeiro item. Quando o botão some por ter acabado a lista, o foco passa ao texto de contagem para não se perder. A paginação por número de página, com total, volta quando a API oferecer a contagem.
 
 ### 6.17 Gráficos de KPI
 
@@ -1434,6 +1501,41 @@ Entrega            [Pendente]                                      ┊┄┊
 - Localização com vários ativos mostra o status mais grave (Parado, Em manutenção, Atenção, Operando) e a contagem ao lado. Em implantação e Inativo só aparecem quando todos os ativos do ponto estão nessa situação.
 - Clique, toque ou Enter abre o cartão de ativo compacto (6.7) ancorado no marcador.
 - Teclado: Tab entra no mapa; setas percorrem os marcadores na ordem da lista lateral; Esc devolve o foco à lista.
+
+### 6.24 Editor de turnos por dia
+
+Usado no turno da unidade (RF-ADM-001 e RF-ADM-002, RN-ADM-019). Compõe só componentes existentes (campo, botão, alerta) com tokens.
+
+- **Estrutura:** `fieldset` geral com `legend` em `h4`, texto de apoio e a barra de modelos. Dentro, um `fieldset` por dia da semana, de segunda a domingo, com o nome do dia na `legend` (`rotulo`), borda `borda`, raio `raio-md` e padding de 12 px.
+- **Modelos:** os botões secundários "Comercial" e "Contínuo 24×7" só **preenchem** os horários no formulário, que seguem editáveis; não salvam. O sistema não impõe calendário: o formulário nasce vazio e cada dia sem turno diz "Sem turno neste dia." O modelo **substitui** o que está digitado, e o texto de apoio diz isso; com turno já digitado, o botão pede confirmação "Substituir os turnos?" (sugestão da revisão).
+- **Linha de turno:** Nome (opcional), Início e Fim em `dado` (JetBrains Mono, 112 px cada, `inputMode="numeric"`, exemplo em `placeholder`), botão de ícone "Remover turno de <dia>" (lixeira) e, no fim do dia, o botão secundário "Adicionar turno" com `aria-label` que cita o dia.
+- **Erros:** no campo (2 px em `status-parado`, ícone e mensagem em `texto`) e na mensagem geral do editor, em `role="alert"`: "sem turno", horário inválido e **sobreposição**, que aponta o turno em conflito. Fim menor que o início termina no dia seguinte; a nota diz como escrever a meia-noite.
+- **Larguras:** abaixo de 640 px a linha empilha os campos; Nome nunca fica com largura fixa. Em es-419 os rótulos são até 30% mais longos (10.7).
+- **Estados:** padrão; foco e erro por campo; desabilitado durante o envio; vazio é o estado inicial, sem turno em nenhum dia; carregando e erro de carga são os da tela que o contém.
+
+### 6.25 QR code do segundo fator (TOTP)
+
+- Desenhado em SVG a partir da matriz de módulos (`role="img"`, rótulo "QR code para o aplicativo autenticador"). Módulos em `nav-fundo` (Aço) sobre `nav-texto` (Névoa), 192 px, raio `raio-md`. **O fundo é claro e fixo nos dois temas e no Sol**: o leitor do aplicativo autenticador não lê QR claro sobre escuro. Contraste Aço sobre Névoa: 14,9:1.
+- Margem de silêncio de 4 módulos, o mínimo da norma do QR (o código atual usa 2; sugestão da revisão).
+- **Sempre acompanhado de texto:** "Sem câmera? Digite este código no aplicativo:" e o segredo em `dado`. O código que gera o QR é segredo: as capturas de evidência (skill `tenaz-evidencia-visual`) usam segredo de teste e nenhum QR real vai para `docs/screenshots/`.
+- Fluxo: passo 1 (ler o QR), passo 2 (digitar o código de 6 dígitos), "Confirmar e ativar" (primário). Estados: carregando ("Preparando"), erro de código com tentativas restantes, ativo.
+
+### 6.26 Aviso de dado de saúde
+
+Aviso fixo de RF-ADM-015 (sumário 3.6, "Dado de saúde recebido por engano"). É um **alerta de informação** (6.12: `superficie`, barra de 4 px em Aço, ícone `info`, `role="status"`), com largura máxima de 720 px, **sem botão de fechar** e sem parâmetro que o desligue.
+
+- Texto exato em pt-BR, aprovado pelo dono do produto: "A Tenaz não guarda dado de saúde. Não registre nem anexe ASO, exames, atestados ou qualquer informação médica." Mesma chave de texto em todas as telas (`pessoa.avisoSaude`); ninguém reescreve o texto na tela.
+- Aparece em **toda carga** das telas de criar, detalhar e editar pessoa, para qualquer perfil, inclusive o que só lê, e também **enquanto a pessoa carrega**, acima do esqueleto, para nunca piscar ausente.
+- O mesmo componente entra no dossiê do motorista (RF-FRO-001) e no envio de anexo (RNF-033, etapa E02).
+- **Só em pt-BR.** Decisão do dono do produto (13/11/2026, pendência 13.39): "Não incluir. Fica como customização se o cliente pedir." Com a interface em es-419, o aviso não aparece (nem espaço reservado), e a chave não existe no catálogo es-419; o teste de paridade dos catálogos tem essa chave como a única exceção declarada. A recusa de tipo de documento com nome ligado a saúde continua valendo em qualquer idioma.
+
+### 6.27 Interruptor de tabela
+
+Interruptor (6.3) dentro de célula, **sem rótulo visível**: o rótulo é o cabeçalho da coluna. Por isso o `aria-label` é obrigatório e diz a tela e a captura ("Capturar visualização da tela Pessoas"), para o leitor de tela distinguir as linhas. Mesma chave de 44 × 24 px, `role="switch"`, foco padrão e estados de 6.3; desabilitado durante a gravação. Efeito imediato: não há botão salvar.
+
+### 6.28 Alerta de conflito de versão
+
+Variante do alerta de atenção (6.12) para o 412: a frase de 10.3 e, abaixo, a **lista de campo e valor das alterações do usuário que não foram salvas**. `role="status"` e **rola até o alerta** ao aparecer (`rolar` no componente de alerta, `block: nearest`), o que vale também para o alerta de sucesso depois de salvar em formulário comprido. Sem botões: a pessoa corrige o formulário, já com a versão atual.
 
 ---
 
@@ -1719,6 +1821,31 @@ Medição reaberta volta a Em apuração e leva o complemento "Em apuração · 
 | Vencido | Parado | `circle-x` | "Vencido há 3 dias" |
 | Bloqueante vencido (impede atribuir OS ou liberar o veículo) | Parado | `octagon-x` | "Vencido · bloqueia atribuição" |
 | Sem documento | Neutro | `file-question` | "Não cadastrado" |
+
+### 7.7 Situação do cadastro (empresa, unidade, pessoa, usuário)
+
+Cadastros de administração têm **situação**, que não é o status operacional do ativo (7.2) e usa o mesmo chip (6.5), com a cor pelo significado geral de 7.1.
+
+| Situação | Quem usa | Cor | Ícone | Texto |
+|---|---|---|---|---|
+| `ativa` / `ativo` | Empresa e unidade (feminino), pessoa e usuário (masculino) | Operando | `circle-check` | Ativa, Ativo |
+| `convidado` | Usuário que recebeu o convite e ainda não o aceitou | Preventiva | `mail` | Convidado |
+| `inativa` / `inativo` | Empresa, unidade, pessoa, usuário | Inativo | `circle-slash` | Inativa, Inativo |
+
+- **Decisão: aceito com ajuste.** Reaproveitar Operando, Preventiva e Inativo é coerente com 7.1 (disponível, em andamento, fora de operação), e a palavra e o ícone acompanham a cor (11.4). O ajuste é a regra: o chip de situação **nunca aparece no mesmo cabeçalho que o status do ativo**, e "Ativo" (situação) nunca é a palavra do status operacional (`operando`).
+- Em es-419: Activa, Activo, Inactiva, Inactivo, Invitado (catálogo). "Activo" aqui é adjetivo de situação, não o substantivo do ativo; o glossário trata a colisão (10.7).
+
+### 7.8 Verificação da trilha de auditoria
+
+Chip de 6.5 para o estado de cada dia verificado em `/administracao/auditoria/integridade` (RF-ADM-011). Sempre texto e ícone, nunca só cor.
+
+| Estado | Cor | Ícone | Texto |
+|---|---|---|---|
+| `integro` | Operando | `circle-check` | Íntegro |
+| `violado` | Parado | `shield-alert` | Violado |
+| `nao_selado` | Inativo | `clock` | Ainda não selado |
+
+"Não selado" é o dia que ainda não fechou o selo; não é falha. Violado vem com o motivo e o primeiro evento alterado, nunca só o chip. Em es-419, os textos do catálogo.
 
 ---
 
@@ -2890,6 +3017,27 @@ Contratos com clientes › CT-2026-000004 › Medição de outubro de 2026
 | Erro | "Não foi possível fechar a medição. Ela continua Em apuração e nada foi perdido. Tente de novo." |
 | Sucesso | Toasts de 10.4: medição fechada, medição reaberta, exclusão aprovada |
 
+### 8.35 Telas da Administração da conta (E01)
+
+Rotas sob `/administracao/...` e `/conta`, com as permissões do menu (5.2). Todas seguem 5.4 (cabeçalho), os quatro estados e o aviso de 6.26 onde há dado de pessoa.
+
+| Tela | Rota | Padrão |
+|---|---|---|
+| Empresa | `/administracao/empresa` | Formulário em seções, interruptor "Exigir segundo fator" (6.3), alerta de conflito de versão (10.3) |
+| Unidades e detalhe | `/administracao/unidades`, `/administracao/unidades/<id>` | Tabela simples (6.4), chip de situação (7.7), editor de turnos (6.24), feriados e turnos em modal de 560 px (6.13) |
+| Pessoas e detalhe | `/administracao/pessoas`, `/administracao/pessoas/<id>` | Busca ao enviar, paginação por cursor (6.16), aviso de saúde (6.26), inativar e reativar |
+| Usuários e detalhe | `/administracao/usuarios`, `/administracao/usuarios/<id>` | Convite, escolha de perfis em caixas de marcação (mínimo um), situação com `convidado` |
+| Perfis | `/administracao/perfis` | Somente leitura: catálogo dos perfis |
+| Auditoria | `/administracao/auditoria` | Filtros na URL (módulo, tela, ação, período e IP), paginação por cursor, detalhe do evento com a diferença antes e depois, exportação em CSV |
+| Integridade da trilha | `/administracao/auditoria/integridade` | Verificação por período: um chip por dia (7.8), contagem de íntegros, violados e não selados, aviso em alerta quando há violado; sem resposta do armazenamento do selo, não afirma integridade |
+| Capturas da auditoria | `/administracao/auditoria/capturas` | Tabela agrupada por módulo com três interruptores de tabela por tela (visualização, impressão e extração, 6.27); cada troca vale na hora, só para eventos futuros |
+| Minha conta | `/conta` | Dados do próprio usuário, senha, segundo fator (6.25), idioma (10.7) |
+
+- **Filtros da trilha:** módulo, tela, ação, período (data inicial e final) e IP. O IP **exige data inicial** (a busca por IP sem período seria varredura da trilha inteira); a tela diz isso no apoio do campo e no erro. O **fim do período é inclusivo na tela** ("até 12/11" inclui o dia 12) e **exclusivo na API** (a tela envia o início do dia seguinte); a pessoa nunca vê a diferença. Tudo fica na URL.
+- **Exportação CSV:** o período é obrigatório e o teto é de **50.000 linhas**; acima dele a tela mostra a mensagem do servidor em alerta de erro e orienta reduzir o período. O sucesso é um alerta em linha (6.12).
+- **Estado vazio de lista** diz o que fazer: "Nenhuma pessoa cadastrada. Cadastre a primeira." com o botão. Sem resultado de busca: a frase com o termo e "Limpar busca".
+- Ação irreversível ou de grande alcance usa a confirmação de 6.13 com "Voltar" e o verbo repetido.
+
 ---
 
 ## 9. App de campo
@@ -3200,6 +3348,24 @@ Concluir · OS-2026-004871
 | Erro | Sem definições no aparelho e sem conexão: "Os campos extras desta OS aparecem quando o aparelho se conectar. Você pode continuar a execução." A conclusão fica bloqueada só se houver campo obrigatório conhecido e vazio |
 | Sucesso | Conclusão enfileirada: "OS-2026-004871 concluída no aparelho. Será enviada quando houver sinal." |
 
+### 9.11 Casca do app na E01 (login, Hoje, troca de empresa e Sobre)
+
+Na E01 o app é uma pilha de telas, sem a barra de abas de 9.1, que chega com as telas de trabalho. Cabeçalho da pilha em `nav-fundo` com título e seta de voltar em `nav-texto` (nunca Sinal). Alvo de toque de 48 dp em tudo; o botão primário tem 56 dp e os itens de empresa, 64 dp (9.2). Todo botão e item tem estado pressionado e desabilitado por token (`acao-primaria-pressionada`, `perigo-hover`, `texto-desabilitado`), sem opacidade. As cores vêm de `tokens.json` (`app/src/componentes/tema.ts`), sem transcrição à mão.
+
+| Tela | Rota | O que mostra |
+|---|---|---|
+| Login | `/login` | Marca "Tenaz" em texto (o logo entra quando houver `react-native-svg` ou PNG, pendência 13.38) e o slogan; seletor de idioma; **um só botão, "Entrar"**, que abre o navegador do sistema na tela de autorização da web (5.7). O app nunca vê a senha, por isso o esquema de campos de e-mail e senha de 9.1 não existe. Lembrete "Último acesso neste aparelho" quando há conta guardada e alerta "Sua sessão terminou" quando a sessão acabou, dizendo que o registrado no aparelho continua guardado |
+| Hoje | `/` | Título com a empresa, nome do usuário e o estado vazio da lista ("Sem ordens de serviço por aqui ainda"), sem número de requisito. Alerta de atenção quando falta ativar o segundo fator, com "Já ativei, verificar de novo". seletor de idioma, "Trocar de empresa" só com mais de uma, interruptor de bloqueio por biometria ou PIN, "Sobre" e "Sair" (fundo `perigo` com texto `perigo-texto`, com o aviso de que os registros do aparelho ficam) |
+| Trocar de empresa | `/empresas` | Lista de itens de 48 dp, a atual marcada e desabilitada; precisa de conexão e diz, sem conexão, que o app continua na empresa atual com tudo guardado |
+| Sobre | `/sobre` | Linhas em `sobrelinha` + `dado`, cada uma um único elemento para o leitor de tela: APP, BINÁRIO DA LOJA, ATUALIZAÇÃO SEM LOJA, API, DATA DO BUILD, COMMIT e AMBIENTE |
+
+- **Selo de versão (6.19)** em Hoje e no login, dentro da área segura. A tela Hoje reserva **72 dp** de folga inferior (48 do alvo + 8 de margem + 16 de respiro) para a rolagem nunca terminar sob o selo. Nas demais telas da pilha o selo não aparece; a versão está em Sobre.
+- **Sobre como tela de pilha (decisão: aceito).** A rota `/sobre` abre pelo selo e por um botão em Hoje. Quando a barra de abas chegar, vira item de Mais (9.1) e o selo continua abrindo a mesma tela. Segue o desenho de 6.19 com duas diferenças aceitas: a linha WEB vira **APP** (versão do release em execução) e entram **BINÁRIO DA LOJA** (versão e número de build do binário, só quando o app roda como binário de loja) e **ATUALIZAÇÃO SEM LOJA** (identificador da atualização recebida sem passar pela loja, ou "nenhuma"), porque o app tem três versões possíveis. "Copiar informações" existe; faltam os links "Novidades" e "Histórico de versões" (pendência 13.42). A linha da API diz "consultando" e depois a versão, ou "indisponível sem conexão", que no campo é o estado normal e **não é erro**.
+- **Fontes da marca no app: pendência registrada (13.38).** O app ainda usa a fonte do sistema e a monoespaçada do sistema no lugar de Inter, JetBrains Mono e Archivo Expanded. Aceito só até a primeira versão distribuída a testadores; o selo (6.19) fica na monoespaçada do sistema nesse intervalo.
+- **Erro e atenção** usam o componente `Mensagem` (`app/src/componentes/Mensagem.tsx`): texto em `texto`, ícone e barra lateral de 6 dp na cor do status, como o alerta do web. Texto em `perigo` sobre `fundo` mede 4,32:1 e reprova AA. Seguem 10.3.
+- **Idioma no app:** seletor numa linha com `radiogroup`, uma opção de 48 dp por idioma, com o nome de cada idioma no próprio idioma ("Português (Brasil)", "Español"), no login e em Hoje (`SeletorDeIdioma`). O app escolhe e guarda o idioma no aparelho até a API ter `usuario.idioma` (pendência 13.40).
+- **Textos:** todo texto do app vem do pacote `@tenaz/i18n`, nas chaves `mobile.*`, `selo.*`, `sobre.*`, `ambiente.*` e `idiomas.*`, nos dois idiomas (10.7); nenhum texto fica escrito na tela.
+
 ---
 
 ## 10. Microcopy e tom de voz
@@ -3216,6 +3382,7 @@ Do brandbook: direto, técnico sem jargão, calmo nos alertas. Diz o que fazer e
 6. **Frases curtas.** Um alerta é uma frase. Uma confirmação, duas no máximo.
 7. **Trate o usuário por "você" só quando necessário.** Prefira o imperativo ("Informe o motivo da pausa").
 8. **Caixa de frase** em títulos, botões e menus: "Nova ordem de serviço", não "Nova Ordem de Serviço".
+9. **A Tenaz é bilíngue (pt-BR e es-419) desde a E01.** Todo texto de interface, web e app, sai do pacote de textos nos dois idiomas, nunca escrito na tela. Em espanhol (es-419) valem os mesmos princípios, com imperativo de "usted" ou forma impessoal, sem voseo nem tuteo (10.7).
 
 ### 10.2 Termos
 
@@ -3301,6 +3468,7 @@ Formato: **o que aconteceu** + **o que fazer**. Dados do contexto sempre que pos
 | Permissão | "Acesso negado." | "Seu perfil não pode encerrar OS. Peça a liberação ao planejador da unidade." |
 | Erro do servidor | "Ocorreu um erro inesperado." | "Não foi possível salvar agora. Seus dados continuam no formulário. Tente de novo em alguns minutos; se continuar, informe o código E-4F21 ao suporte." |
 | Conflito | "Registro desatualizado." | "Esta OS foi alterada por Ana Souza às 14:20. Revise as diferenças antes de salvar." |
+| Conflito de versão, sem autor conhecido (E01) | "Registro desatualizado." | "Este registro foi alterado por outra pessoa. Mostramos a versão atual; suas alterações não salvas estão listadas abaixo. Revise e salve de novo." |
 | Saldo | "Estoque insuficiente." | "Saldo de 2 un. no Almoxarifado Central. Reduza a quantidade ou faça uma requisição." |
 | Capacitação | "Técnico inválido." | "João Lima não tem NR-10 válida (venceu em 03/11/2026). Escolha outro técnico ou atualize a capacitação." |
 | Importação | "Arquivo com erros." | "4 de 316 linhas não foram importadas. Baixe o relatório para ver o motivo de cada uma." |
@@ -3333,6 +3501,8 @@ Formato: **o que aconteceu** + **o que fazer**. Dados do contexto sempre que pos
 | Causa não aceita no contrato | "Exclusão inválida." | "Falta de energia não é causa aceita no CT-2026-000004. A parada continua na medição." |
 | Reabrir medição sem permissão | "Acesso negado." | "Seu perfil não pode reabrir medições. Peça a quem tem a permissão de reabrir medição." |
 | Pacote não aplicado | "Erro ao aplicar." | "Não foi possível aplicar o pacote. Nada foi criado na conta. Tente de novo em alguns minutos." |
+
+**Conflito de versão (412 `versao_desatualizada`), decisão da revisão da E01: aceito com ajuste.** A tela recarrega o registro e mostra a versão atual em alerta de atenção, como hoje. O ajuste: o alerta **lista as alterações do usuário que não foram salvas** (campo e valor digitado), para ele refazer sem perder o trabalho; descartar a edição em silêncio é perda de dado. O comparativo campo a campo, com "seu valor" e "valor atual" lado a lado, fica para as telas em que a edição concorrente é comum (OS, ativo) e é a pendência 13.35. Formulários de turno e feriado em modal mostram o mesmo aviso dentro do modal.
 
 ### 10.4 Confirmações e sucesso
 
@@ -3436,6 +3606,67 @@ Evite: "Sucesso!", "Tudo certo por aqui", "Operação realizada com sucesso".
 | Item abaixo da meta | "RAD-0031 está em 93,2 % em novembro, abaixo da meta de 98 % do CT-2026-000004." |
 | Medição aberta | "A medição de outubro do CT-2026-000004 está aberta. 2 paradas por causa externa aguardam decisão." |
 | Versão nova de pacote | "Há uma versão nova do pacote Fiscalização eletrônica, com 3 itens novos. Veja antes de aplicar." |
+
+### 10.7 Espanhol latino-americano neutro (es-419)
+
+A numeração 10.5 já é a dos estados vazios; esta seção ocupa o número livre seguinte.
+
+**Onde ficam.** Os textos da interface ficam em `pacotes/i18n/src/pt-BR.ts` e `pacotes/i18n/src/es-419.ts`, com as mesmas chaves, e o **glossário bilíngue**, fonte única dos termos aprovados, em [`pacotes/i18n/src/glossario.ts`](../pacotes/i18n/src/glossario.ts). O teste `es-419.test.ts` confere o catálogo contra o glossário: chaves nos dois idiomas, variáveis coincidentes e nenhum termo "não use" nos textos. Termo novo entra primeiro no glossário e depois nos catálogos (agente `tenaz-idiomas`). Web e app usam o mesmo pacote.
+
+**Regras.**
+
+- **Nome técnico não se traduz:** entidade, campo, estado, permissão (`adm.ler`), rota e evento ficam como no sumário; só o rótulo exibido se traduz.
+- **Sem voseo nem tuteo.** Imperativo de "usted" ou forma impessoal: "Inicie sesión", "Informe el motivo de la pausa". Nunca "ingresá", "ingresa" ou "vos".
+- **Sem exclamação, sem emoji, sem culpa**, como em 10.1. **Caixa de frase** em títulos, botões e menus.
+- **Moeda, data, número e documento pelas funções de `formatos.ts`** e pelo formato do país da empresa (3.11), nunca pelo `Intl`: nunca montar "R$ 1.234,50" ou "12/11/2026" como texto. Identificação fiscal e documentos mudam por país (sumário 3.6).
+- **Layout tolera texto até 30% mais longo.** Nenhum rótulo, botão ou coluna com largura fixa que o espanhol quebre; toda tela nova é revisada com o catálogo es-419.
+- **Idioma:** cada usuário escolhe o seu em Minha conta e, antes do login, num link de texto no cartão (5.7), com o nome de cada idioma no próprio idioma. Na primeira vez vale o do navegador ou do aparelho; a empresa pode definir um padrão (sumário 3.6).
+- **Marca e slogan:** "Cada activo listo para operar." em espanhol; "Tenaz" e os nomes comerciais seguem o glossário.
+
+**Termos principais** (o glossário tem todos, com fonte e nota; os marcados `revisar` precisam de um falante nativo da Argentina ou do Paraguai antes da primeira tela em produção):
+
+| pt-BR | es-419 | Não use |
+|---|---|---|
+| ordem de serviço (OS) | orden de trabajo (OT) | orden de servicio, OS, ticket |
+| solicitação | solicitud | ticket, pedido, requerimiento, reclamo |
+| ativo | activo | bien, máquina, "equipo" como termo geral |
+| encerrar / encerrada | cerrar / cerrada | finalizada, terminada, clausurada |
+| concluir / concluída | concluir / concluida | terminada, finalizada, completada |
+| parado | detenido | parado, fuera de servicio, en paro, inoperativo |
+| em implantação | en implementación | en implantación, en instalación, en obra |
+| em triagem | en evaluación | triaje, clasificación, revisión |
+| locação / locatário | alquiler / arrendatario | locación, locatario, inquilino, renta |
+| almoxarifado | almacén | depósito, bodega, pañol |
+| estoque | inventario | stock, existencias |
+| peça | repuesto | pieza, refacción, recambio |
+| falha | falla | fallo, avería, defecto |
+| checklist | lista de verificación | checklist, lista de chequeo, lista de control |
+| trilha de auditoria | pista de auditoría | rastro de auditoría, registro de auditoría, historial de auditoría |
+| entrar / sair (sessão) | iniciar sesión / cerrar sesión | ingresar, entrar, salir, loguearse |
+| e-mail | correo electrónico | e-mail, email, mail |
+| senha | contraseña | clave, password, pass |
+| segundo fator | segundo factor | doble factor, verificación en dos pasos, 2FA |
+| sem conexão | sin conexión | offline, fuera de línea, desconectado |
+| link | enlace | link, vínculo |
+
+Os estados do ativo também têm palavra própria: Operando = En operación, Em manutenção = En mantenimiento, Parado = Detenido, Inativo = Inactivo.
+
+**Idioma em uso.** O idioma da interface é o escolhido pela pessoa ou, na primeira vez, o do navegador. **Depois do login vale o do usuário** (`usuario.idioma`), e **a escolha em Minha conta grava no servidor**; antes do login, a escolha fica no navegador (5.7). O padrão da empresa serve a convites e a quem ainda não escolheu. Valores e datas seguem o **país da empresa**, não o idioma: um usuário em es-419 numa empresa brasileira vê "R$ 1.234,50" e "13/11/2026"; o idioma só escolhe as palavras (3.11).
+
+**Termos do glossário que as telas da E01 trouxeram** (os demais, como país, moeda e identificação, são iguais nos dois idiomas ou sem ambiguidade e ficam só no glossário):
+
+| pt-BR | es-419 | Não use |
+|---|---|---|
+| vincular / vinculada (pessoa e usuário) | vincular / vinculada | asociar, ligar |
+| tela | pantalla | ventana, vista, página |
+| chave de idempotência | identificador de idempotencia | clave de idempotencia (clave também é senha) |
+| código do segundo fator | código (no "desafío") del segundo factor | desafío |
+| idioma padrão | idioma predeterminado | idioma por defecto |
+| CEP / código postal | CEP (Brasil) / código postal | CP |
+| estado / província / departamento | estado / provincia / departamento | UF |
+| município / cidade ou localidade | municipio / ciudad o localidad | localidad sozinho, distrito |
+
+**Telas da E01.** As telas do web e do app são bilíngues e os textos seguem esse glossário. Web e app usam o pacote de textos (5.7 e 9.11) e a escolha do idioma é gravada no servidor (pendência 13.40).
 
 ---
 
@@ -3708,6 +3939,22 @@ Encontradas ao cruzar a marca (`marca/README.md`, `brandbook.html`) com o sumár
 | 13.32 | As paradas por causa externa só são decididas na medição (RF-CTR-003), que abre no mês seguinte (proposta de RF-CTR-004). Durante o mês, o painel do contrato (RF-CTR-005) mostra as paradas aguardando, sem poder decidir, e o desconto projetado as trata como não excluídas. | RF-CTR-003 × RF-CTR-005 | Painel só de leitura, com "São decididas na medição do mês". Validar com usuários se a decisão antecipada no painel é necessária. |
 | 13.33 | Quatro componentes novos (6.20 a 6.23): frase de regra, cronograma, régua de faixas e marcador de mapa. Cada um tem a justificativa na própria seção. | Seção 6 | Entram na biblioteca de componentes com testes de contraste e de teclado antes das telas 8.29 a 8.34. O cronograma e o mapa precisam de escolha de biblioteca no documento 5. |
 | 13.34 | Ao medir os pares da versão 0.4, `borda-controle` `#8592A0` sobre Névoa deu 2,88:1, abaixo de 3:1 para componente. As telas atuais põem campos sobre `superficie`, mas nada impedia um campo sobre `fundo`. | 4.1 × 4.4 | Regra 4.3.8: contorno de componente sobre `fundo` ou `superficie-hover` usa `texto-secundario`. Conferir as telas existentes na revisão de acessibilidade. |
+| 13.35 | O conflito de versão (412) recarrega o registro e avisa. Falta o comparativo campo a campo que 10.3 pedia ("Revise as diferenças"). | 10.3 · 6.28 | **Aplicada a decisão da revisão da E01:** o alerta de conflito lista campo e valor das alterações não salvas (web). O comparativo lado a lado fica para as telas de edição concorrente (OS, ativo) e depende de a API devolver quem alterou e quando. |
+| 13.36 | O esqueleto das telas da E01 aparece de imediato e é estático. Falta a regra de 300 ms de 6.15. | 6.15 | Entra antes da E03, junto com o brilho de 1,6 s. |
+| 13.37 | Não há toast (6.12). As confirmações são alertas de sucesso em linha. | 6.12 | O toast entra com a primeira ação "Desfazer" (etapa das OS). Até lá, o alerta em linha tem de ficar à vista depois de salvar. |
+| 13.38 | O app usa fonte do sistema no lugar de Inter, JetBrains Mono e Archivo Expanded, e a marca no login é texto, não o logo. | 9.11 · 3.5 | Carregar as fontes (`expo-font`) antes da primeira versão a testadores; gerar as instâncias estáticas de Archivo Expanded; logo exige `react-native-svg` ou PNG. |
+| 13.39 | ~~O texto do aviso de dado de saúde em es-419 foi redigido pelo `tenaz-idiomas`; só o texto em pt-BR foi aprovado pelo dono do produto.~~ **Resolvida em 13/11/2026:** o aviso não entra em espanhol; fica como customização se o cliente pedir (6.26). | 6.26 · RF-ADM-015 | — |
+| 13.40 | **Em parte resolvida em 13/11/2026:** a API guarda `usuario.idioma` e o padrão da empresa, a web grava a escolha de Minha conta no servidor e detecta o navegador na primeira vez; falta o app gravar do mesmo modo (9.11). Texto anterior: o web já escolhe e guarda o idioma localmente (links no pé do cartão sem sessão e opções de rádio em Minha conta), como o app. Falta a API guardar `usuario.idioma` e o padrão da empresa, e a detecção do navegador na primeira vez. | 5.3 · 5.7 · 9.11 · 10.7 · sumário 3.6 | `tenaz-api-contrato` e `tenaz-banco-dados` confirmam o campo de idioma do usuário e da empresa; `definirIdioma` é o ponto único que passa a gravar no servidor. |
+| 13.41 | **Resolvida.** O app passou a usar `@tenaz/i18n`, com chaves `mobile.*`, `selo.*`, `sobre.*`, `ambiente.*` e `idiomas.*`. | 9.11 · 10.7 | Conferir de novo na segunda revisão de telas. |
+| 13.42 | A tela Sobre do app já tem "Copiar informações"; faltam os links "Novidades" e "Histórico de versões" de 6.19. | 9.11 · 6.19 | Entram com a tela de novidades. |
+| 13.43 | Abaixo de 768 px o menu do web fica recolhido, sem gaveta. Os ícones do chip de situação e do alerta de atenção medem 2,99:1 (Operando) e 2,58:1 (Atenção) sobre o fundo do chip, abaixo de 3:1; a palavra ao lado carrega a informação. | 5.2 · 6.5 · 6.12 · 4.3 | Gaveta antes de a web ser usada em tablet. Nos ícones, usar `status-*-texto` ou escurecer a cor, e anotar a regra na seção 4.3. |
+
+| 13.44 | O resumo de erros do formulário lista só a mensagem; em "Criar conta" saíam duas vezes "Informe o nome" e "Informe o código" (responsável e unidade), sem dizer de qual campo. O componente já aceita `rotulos` (`web/src/componentes/Formulario.tsx:36`), mas só Criar conta o passa (corrigida na revisão). | 6.2 · 5.7 | `tenaz-frontend-web` passa `rotulos` em Empresa, Unidade, Pessoa e Usuário, ou o componente deduz o rótulo do `<label>` do campo. |
+| 13.45 | Campos somente leitura (país e moeda da empresa, e-mail em Minha conta) usam o campo comum, com borda e fundo de campo editável; 6.2 manda sem borda e fundo transparente. A pessoa tenta digitar e não entende por que não vai. | 6.2 | Aplicar o estado "Somente leitura" de 6.2 a `readOnly` em `CLASSE_CAMPO` (`web/src/componentes/Campo.tsx:46`), mantendo o foco visível. |
+| 13.46 | O código postal não tem "Exemplo: ..." como a identificação; só o erro mostra o formato (`FormularioDeUnidade.tsx:215`, `TelaCriarConta.tsx:252`, `FormularioDePessoa.tsx`). | 6.2.1 | Apoio "Exemplo: 01310-100" (BR), "C1425DKF" (AR) e "001526" (PY) pelo país, com chaves novas nos dois catálogos (`tenaz-idiomas`). |
+| 13.47 | Os nomes de subdivisão aparecem em espanhol também na interface em pt-BR, e "Asunción (distrito capital)" mistura os idiomas. É o nome oficial, mas os termos `localidade` e `idioma_padrao` seguem marcados `revisar` no glossário. | 6.2.1 · 10.7 | Falante nativo da Argentina e do Paraguai antes da primeira tela em produção, junto das demais marcas `revisar`. |
+
+| 13.48 | Os formatos de 3.11 (símbolo `Gs.`, negativo "-R$ 10,00", milhar a partir de 4 dígitos, data e hora sem segundos) foram decididos pelo desenho, a partir do CLDR e do uso do Banco Central del Paraguay, sem falante nativo. | 3.11 · ADR-013 Parte G | Falante nativo da Argentina e do Paraguai confere antes da primeira tela em produção; mudando o formato, muda `backend/testes/casos/formatos.json` junto. |
 
 **Outras pendências do documento**
 
@@ -3726,3 +3973,5 @@ Encontradas ao cruzar a marca (`marca/README.md`, `brandbook.html`) com o sumár
 | 0.2 | 12/11/2026 | Alinhada ao sumário executivo 0.3: prioridade `urgente`, status do ativo com as regras do sumário, transições e reconhecimento da OS, executor e responsável pelo custo, numeração OS/SS/OR/CL, estados de ordem de reparo e contrato de locação; telas de fornecedor, estoque geral e por subcontratada, ordem de reparo, contrato de locação, vistoria, portal do prestador, link de uso único e portal do locatário; selo de versão e tela de login; inconsistências 13.1, 13.2, 13.9, 13.11, 13.12 e 13.14 resolvidas |
 | 0.3 | 12/11/2026 | Alinhada ao sumário executivo 0.4: permissão `os.encerrar`, ação Assumir, link `/l/#<token>`, regras de solicitação e de contrato de locação, rótulos de origem da OS, papéis Posto de combustível e Seguradora, peça em trânsito e `est.decidir_destino`, locatário só no web, RNF-039 e RNF-040; módulo SRV: menu, estados de conexão e de sincronização, painel da subcontratada, técnicos e especialidades, clientes e equipamentos de clientes, abertura de OS de serviço, quadro de distribuição, app do técnico com componentes, número de série, fotos e assinatura do cliente, relatório PDF, conexão com cliente, OS vinculada nas duas contas, troca de conta e push; pendências 13.18 a 13.23 |
 | 0.4 | 12/11/2026 | Alinhada ao sumário executivo 0.5 (configuração por segmento): chip Em implantação e Colocar em operação (RF-ATV-013), tipo de OS Implantação, origens `cliente_conectado`, `projeto` e `regra`, causa externa, estados de regra, projeto, etapa, contrato com cliente e medição; componentes 6.20 a 6.23; telas de regras (RF-ADM-016), campos extras da OS no web e no app com validação offline (RF-OS-021), pacote de segmento nos primeiros passos (RF-ADM-017), projeto de implantação (RF-PRJ-001 a RF-PRJ-007), painel e medição do contrato com cliente (RF-CTR-001 a RF-CTR-005); visão Mapa de ativos sem requisito novo; contrastes 4.4 e regra 4.3.8; termos, erros, confirmações, estados vazios e alertas novos; ícones; pendências 13.24 a 13.34; histórico reordenado por versão |
+| 0.5 | 13/11/2026 | Revisão de desenho das telas da E01 e do app: chips de situação (7.7), interruptor, tabela simples, busca ao enviar, confirmação em alerta em linha, esqueleto, paginação por cursor, editor de turnos, QR do TOTP e aviso de saúde (6.3, 6.4, 6.12, 6.15, 6.16, 6.24 a 6.26); grupo Administração, item "Em breve" recusado, menu do usuário, telas sem sessão e da Administração (5.2, 5.3, 5.7, 8.35); casca do app (9.11); conflito de versão (10.3); espanhol es-419 e glossário (10.1, 10.7); pendências 13.35 a 13.43; web e app corrigidos conforme a revisão: tooltip do menu, itens "Em breve" removidos, idioma, alerta de conflito, trilha de auditoria com integridade, capturas e exportação (5.2, 5.7, 6.27, 6.28, 7.8, 8.35); app corrigido conforme a revisão (9.11, 13.38, 13.40 a 13.42); aviso de dado de saúde só em pt-BR, por decisão do dono do produto (6.26; pendência 13.39 resolvida) |
+| 0.6 | 13/11/2026 | Segunda revisão das telas da E01, multipaís e bilíngue (ADR-013): campos de identificação, código postal e custo por hora (6.2), endereço por país (6.2.1), cadastro da conta com o país primeiro (5.7), idioma no servidor e formatação por `formatos.ts` pelo país da empresa (3.11, 10.7), termos novos do glossário (10.7), pendências 13.44 a 13.48 e 13.40 atualizada; formatação por `formatos.ts` pelo país da empresa e decisões de símbolo, negativo, milhar e data (3.11, ADR-013 Parte G); correções na web: lista de unidades com vírgula entre município e subdivisão (`listar`) e resumo de erros de Criar conta com o campo de cada mensagem; pontos de formato fechados com os casos compartilhados (segundos cortados, casas do texto canônico, "R$ 0,41/km", código ISO para moeda de outro país, percentual em pontos percentuais, erro em entrada não canônica) (3.11) |

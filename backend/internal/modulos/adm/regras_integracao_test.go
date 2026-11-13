@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"slices"
 	"strings"
@@ -31,15 +32,15 @@ func TestMesmoCPFEEmailEmOutraEmpresa(t *testing.T) {
 	ctx := ctxWeb()
 
 	cpf := cpfAleatorio()
-	pb, err := svc.CriarPessoa(ctx, b.adm, adm.EntradaPessoa{Nome: "Carlos em B", CPF: &cpf})
+	pb, err := svc.CriarPessoa(ctx, b.adm, adm.EntradaPessoa{Nome: "Carlos em B", IdentificacaoTipo: ptr("cpf"), Identificacao: &cpf})
 	if err != nil {
 		t.Fatal(err)
 	}
-	pa, err := svc.CriarPessoa(ctx, a.adm, adm.EntradaPessoa{Nome: "Carlos em A", CPF: &cpf})
+	pa, err := svc.CriarPessoa(ctx, a.adm, adm.EntradaPessoa{Nome: "Carlos em A", IdentificacaoTipo: ptr("cpf"), Identificacao: &cpf})
 	if err != nil {
 		t.Fatalf("o CPF de B é aceito em A: %v", err)
 	}
-	_, err = svc.CriarPessoa(ctx, a.adm, adm.EntradaPessoa{Nome: "Repetido", CPF: &cpf})
+	_, err = svc.CriarPessoa(ctx, a.adm, adm.EntradaPessoa{Nome: "Repetido", IdentificacaoTipo: ptr("cpf"), Identificacao: &cpf})
 	exigirErro(t, err, erros.Duplicado) // controle: dentro de A, é único
 
 	// O e-mail já entra em B (usuário ativo, com identidade).
@@ -104,7 +105,7 @@ func TestMesmoCPFEEmailEmOutraEmpresa(t *testing.T) {
 			}
 		}
 	}
-	if det, err := svc.ObterPessoa(ctx, a.adm, pa.ID); err != nil || det.CPF == nil || *det.CPF != cpf {
+	if det, err := svc.ObterPessoa(ctx, a.adm, pa.ID); err != nil || det.Identificacao == nil || *det.Identificacao != cpf {
 		t.Errorf("pessoa de A com o CPF: %v", err)
 	}
 }
@@ -242,7 +243,7 @@ func TestSituacaoDoUsuario(t *testing.T) {
 		t.Fatalf("nasce convidado: %+v %v", criado.Usuario, err)
 	}
 	id := criado.Usuario.ID
-	if _, err := svc.AceitarConvite(ctx, caixa.token(t, em), senhaBoa); err != nil {
+	if _, err := svc.AceitarConvite(ctx, caixa.token(t, em), senhaBoa, nil); err != nil {
 		t.Fatal(err)
 	}
 	if u := situacao(t, id); u.Situacao != "ativo" || !u.IdentidadeLigada {
@@ -292,7 +293,7 @@ func TestSituacaoDoUsuario(t *testing.T) {
 	if _, err := svc.InativarUsuario(ctx, c.adm, nunca.Usuario.ID); err != nil {
 		t.Fatal(err)
 	}
-	_, err = svc.AceitarConvite(ctx, link1, senhaBoa)
+	_, err = svc.AceitarConvite(ctx, link1, senhaBoa, nil)
 	exigirErro(t, err, erros.LinkEmailInvalido)
 	if u := situacao(t, nunca.Usuario.ID); u.Situacao != "inativo" || u.IdentidadeLigada {
 		t.Fatalf("link de usuário inativado não ativa: %+v", u)
@@ -307,9 +308,9 @@ func TestSituacaoDoUsuario(t *testing.T) {
 	if link2 == link1 {
 		t.Fatal("a reativação emite convite novo")
 	}
-	_, err = svc.AceitarConvite(ctx, link1, senhaBoa)
+	_, err = svc.AceitarConvite(ctx, link1, senhaBoa, nil)
 	exigirErro(t, err, erros.LinkEmailInvalido) // o anterior continua inválido
-	if _, err := svc.AceitarConvite(ctx, link2, senhaBoa); err != nil {
+	if _, err := svc.AceitarConvite(ctx, link2, senhaBoa, nil); err != nil {
 		t.Fatalf("o convite novo vale: %v", err)
 	}
 	if u := situacao(t, nunca.Usuario.ID); u.Situacao != "ativo" {
@@ -408,15 +409,22 @@ func TestAuditoriaDasAlteracoes(t *testing.T) {
 	}
 
 	// A retirada de perfil e de permissão avulsa é exclusão lógica
-	// (excluido_em): a trilha a grava como alteração de excluido_em, ligada à
-	// inclusão pelo entidade_id (o id da linha). Pendência registrada: o
-	// tg_auditar não a mostra como exclusao nem repete o código retirado.
+	// (excluido_em): a trilha a grava como exclusao, ligada à inclusão pelo
+	// entidade_id (o id da linha), com a linha inteira em antes (E01-18).
 	conferirRetirada = func(t *testing.T, nome string, inclusao adm.Evento) {
 		t.Helper()
-		e := conferir(t, nome, eventosDe(t, c, inclusao.Entidade, "alteracao", inclusao.EntidadeID, nil), 1)
+		// E01-18: a retirada é uma exclusao (exclusão lógica) com a linha
+		// inteira em antes, que diz qual perfil ou permissão saiu; depois leva
+		// só o que mudou, o excluido_em.
+		e := conferir(t, nome, eventosDe(t, c, inclusao.Entidade, "exclusao", inclusao.EntidadeID, nil), 1)
 		if !slices.Equal(e.CamposAlterados, []string{"excluido_em"}) || campo(t, e.Antes, "excluido_em") != nil ||
 			campo(t, e.Depois, "excluido_em") == nil {
-			t.Errorf("%s: esperada a alteração de excluido_em; campos %v, antes %s, depois %s", nome, e.CamposAlterados, e.Antes, e.Depois)
+			t.Errorf("%s: esperada a exclusão de excluido_em; campos %v, antes %s, depois %s", nome, e.CamposAlterados, e.Antes, e.Depois)
+		}
+		for _, k := range []string{"perfil_id", "permissao"} {
+			if quem := campo(t, inclusao.Depois, k); quem != nil && fmt.Sprint(campo(t, e.Antes, k)) != fmt.Sprint(quem) {
+				t.Errorf("%s: antes deveria dizer %s = %v, e traz %s", nome, k, quem, e.Antes)
+			}
 		}
 	}
 

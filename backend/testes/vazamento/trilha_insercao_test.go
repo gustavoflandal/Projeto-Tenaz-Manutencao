@@ -162,17 +162,17 @@ func moldeConexaoSinc(f *fixturesE01) []tentativaTrilha {
 	conexao, outra := novoID(), novoID()
 	c := contexto{Empresa: a.ID, Conexao: conexao}
 	return []tentativaTrilha{
-		{papelSinc, c, eventoTrilha(a.ID, "sincronizacao_conexao", "", "sincronizacao", "ordem_servico", conexao), true},
-		{"tenaz_sinc_conexao", c, eventoTrilha(a.ID, "sincronizacao_conexao", "", "sincronizacao", "ordem_servico", conexao), true},
+		{papelSinc, c, eventoTrilha(a.ID, "sincronizacao_conexao", "", "alteracao", "ordem_servico", conexao), true},
+		{"tenaz_sinc_conexao", c, eventoTrilha(a.ID, "sincronizacao_conexao", "", "alteracao", "ordem_servico", conexao), true},
 		// evento de outra conexão
-		{papelSinc, c, eventoTrilha(a.ID, "sincronizacao_conexao", "", "sincronizacao", "ordem_servico", outra), false},
+		{papelSinc, c, eventoTrilha(a.ID, "sincronizacao_conexao", "", "alteracao", "ordem_servico", outra), false},
 		// evento sem conexão, ou com outro ator
-		{papelSinc, c, eventoTrilha(a.ID, "sincronizacao_conexao", "", "sincronizacao", "ordem_servico", ""), false},
+		{papelSinc, c, eventoTrilha(a.ID, "sincronizacao_conexao", "", "alteracao", "ordem_servico", ""), false},
 		{papelSinc, c, eventoTrilha(a.ID, "usuario", a.UsuarioInterno, "alteracao", "ordem_servico", conexao), false},
 		// sem a conexão no contexto
-		{papelSinc, contexto{Empresa: a.ID}, eventoTrilha(a.ID, "sincronizacao_conexao", "", "sincronizacao", "ordem_servico", conexao), false},
+		{papelSinc, contexto{Empresa: a.ID}, eventoTrilha(a.ID, "sincronizacao_conexao", "", "alteracao", "ordem_servico", conexao), false},
 		// evento de B na transação de A
-		{papelSinc, c, eventoTrilha(b.ID, "sincronizacao_conexao", "", "sincronizacao", "ordem_servico", conexao), false},
+		{papelSinc, c, eventoTrilha(b.ID, "sincronizacao_conexao", "", "alteracao", "ordem_servico", conexao), false},
 	}
 }
 

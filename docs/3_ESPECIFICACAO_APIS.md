@@ -1,11 +1,17 @@
 # Especificação de APIs — Tenaz
 
-**Versão:** 0.6 · **Data:** 13/11/2026 · **Status:** Em elaboração
-**Alinhado ao sumário executivo 0.7.**
+**Versão:** 0.9 · **Data:** 13/11/2026 · **Status:** Em elaboração
+**Alinhado ao sumário executivo 0.8.**
 **Produto:** Tenaz · Gestão de Manutenção e Frota
 **Protocolo:** HTTPS (TLS 1.2 ou superior, preferência por 1.3) · **Formato:** JSON · **Contrato:** OpenAPI 3.1
 
 **Mudanças da versão 0.4:** configuração por segmento (sumário 0.5, seção 3.7). Entram no MVP as regras configuráveis de condição e efeito (`/v1/regras-automacao`, `/v1/disparos-regra`), os campos extras da OS (`/v1/campos-extras-os` e `campos_extras` na OS), a fase de ciclo de vida do ativo (`fase_ciclo_vida`, `data_entrada_operacao`, ação `colocar-em-operacao`, unitária e em lote) e o tipo de OS `implantacao`. Entram na Fase 2 os pacotes de segmento (`/v1/pacotes-segmento`, `/v1/aplicacoes-pacote`) e dois módulos novos: **PRJ** (`/v1/modelos-projeto`, `/v1/projetos`, etapas e `/v1/medicoes-etapa`) e **CTR** (`/v1/contratos-cliente`, itens, painel e `/v1/medicoes-contrato`). A OS ganha a origem `projeto` (e passa a usar `cliente_conectado`, que o sumário já tinha), `causa_externa` e `etapa_projeto_id`; a solicitação ganha a origem `regra`; o bloqueio de ativo ganha `origem`. Nove permissões novas, 9 eventos de webhook novos (um deles proposta) e 24 códigos de erro novos. Catálogo de 482 para 564 endpoints. Seções novas 23 a 25; as pendências passam para a seção 26.
+
+**Mudanças da versão 0.9:** representação do dinheiro (ADR-013, Parte F, documento 5): a seção 2.5 troca "duas casas" e "moeda implícita BRL" pelo texto decimal canônico, com as casas da moeda (`BRL` e `ARS` 2, `PYG` 0) para valor e das casas da moeda a seis para preço unitário; o limite de 4 casas dos custos unitários de estoque passa a 6, como no documento 2. `custo_hora` passa a preço unitário. A parte do Go (migração 00010 e `plataforma/dinheiro`) está em andamento na E01.
+
+**Mudanças da versão 0.8:** adaptação multipaís e bilíngue (ADR-013, documento 5; migração `00009_pais_identificacao_idioma`, documento 2). `cnpj` e `cpf` saem de empresa, unidade e pessoa e entram `pais`, `moeda`, `idioma_padrao`, `identificacao_tipo` e `identificacao` (2.17); `idioma` e `moeda` no usuário; negociação do idioma da API, com `Content-Language` e `Vary: Accept-Language` (2.15); `valores_aceitos` preenchido para tipo de identificação, país e idioma (3.1). Nenhum código de erro novo.
+
+**Mudanças da versão 0.7:** trilha de auditoria configurável (RF-ADM-011), gerada do código em E01. Cabeçalho `X-Tenaz-Tela` (2.10 e 2.16); filtros novos e campos novos em `GET /v1/eventos-auditoria`; `hash` e `detalhe` no evento; exportação em CSV, verificação de integridade e captura por tela (6.1); contagem de ADM sobe de 106 para 110 (6.20); lacunas A-40 a A-43 (26.1) e pendência do idioma da 2.15 (26.2). Nenhum código de erro novo.
 
 **Mudanças da versão 0.6:** a Tenaz não guarda dado de saúde (sumário 0.7, seção 3.6, "Dados de saúde"). Sai a permissão `pessoa.saude.ler`, e com ela a única exceção ao formato `<módulo>.<ação>`; saem as menções a documentos de saúde na pessoa, na agenda de documentos, nos escopos de token, na exportação e nos exemplos. A seção 4.8 passa a listar doze permissões finas.
 
@@ -140,7 +146,15 @@ A versão principal está no caminho: `/v1`. Só muda com mudança incompatível
 
 ### 2.5 Dinheiro e números decimais
 
-- **Dinheiro é string decimal** com ponto e duas casas: `"1250.40"`. Custos unitários de estoque aceitam até quatro casas: `"12.3456"`. Moeda implícita BRL; o campo `moeda` existe só em documentos fiscais e importações.
+- **Dinheiro é string decimal** (ADR-013, Parte F, documento 5): ponto como separador, sem separador de milhar, sem expoente, sem `+`, sem zero à esquerda; o sinal `-` só onde o campo aceita negativo. A **moeda** (`BRL`, `ARS` ou `PYG`, ISO 4217) vem sempre ao lado, no campo `moeda` do recurso, só leitura; ela é a da empresa (2.17). As casas decimais são da **moeda**, não do país: `BRL` e `ARS` 2, `PYG` 0.
+- **Duas espécies de número em dinheiro.**
+  - **Valor** (total da OS, valor de uma linha, valor de contrato, valor de reposição): na saída, exatamente as casas da moeda (`"1250.40"` em `BRL`, `"75000"` em `PYG`). Forma no contrato: `^-?(0|[1-9][0-9]{0,15})(\.[0-9]{1,2})?$`.
+  - **Preço unitário** (dinheiro por unidade: hora, litro, quilo, peça; inclui `custo_hora` e o custo médio de estoque): na saída, no mínimo as casas da moeda e no máximo seis, sem zeros à direita além das casas da moeda (`"45.50"`, `"37.8462"`, `"25000"` e `"0.5"` em `PYG`). O limite de **seis casas** vale para todos os custos unitários, inclusive os de estoque (antes, quatro), e iguala o `numeric(18,6)` do documento 2. Forma no contrato: `^-?(0|[1-9][0-9]{0,11})(\.[0-9]{1,6})?$`.
+- **Entrada.** A leitura aplica **primeiro exatamente a gramática do padrão do contrato** (valor: até 2 casas; preço unitário: até 6) e só depois confere a moeda da empresa. Aceita menos casas (`"125.5"` vale `125.50`) e, dentro do máximo da gramática, casas além da escala da moeda só quando são zeros: `"75000.00"` em `PYG` é aceito, mas `"75000.000"` em `PYG`, `"1.500"` em `BRL` (valor com três casas) e `"0.1234560"` (preço com sete casas) são recusados. **Recusa, sem nunca arredondar**, o que não é exatamente representável (`"75000.50"` em `PYG`, por exemplo). A escala da moeda é conferida no serviço, que conhece a moeda da empresa; a expressão do contrato confere a forma.
+- **Sinal.** Campo que não aceita negativo usa o padrão **sem** `-?` (por exemplo `custo_hora`: `^(0|[1-9][0-9]{0,11})(\.[0-9]{1,6})?$`), e `"-0"` ou qualquer sinal nele é recusado. Onde o campo aceita negativo, `"-0"` vale zero e sai sem sinal.
+- **Erros.** O único erro de leitura é `422 validacao_falhou` com `formato_invalido` no campo, inclusive para sinal não aceito, casas demais e dígitos demais (o limite da faixa é o número de dígitos do padrão). A `mensagem` diz à pessoa qual foi o problema, no idioma da resposta; o código é um só. `fora_da_faixa` só aparece como código de campo quando o **resultado de uma operação** feita a partir da entrada (soma, subtração, multiplicação) sai da faixa da coluna, ou quando um campo tem limite mais estreito que o da espécie. A `moeda` não vem na requisição; nenhum código de erro novo entra na API: `moeda_diferente`, `moeda_desconhecida` e `rateio_invalido` são erros internos da biblioteca de dinheiro (ADR-013, Parte F, item 10) e, se acontecerem, saem como `erro_interno` (500).
+- **Exemplos.** Os exemplos de JSON deste documento mostram `"moeda"` uma vez por objeto que carrega dinheiro, só na resposta; nos exemplos de `BRL` os valores têm duas casas e os preços unitários, a forma canônica (`"18.45"`, `"1240.00"`).
+- **`custo_hora` é preço unitário** (feito em E01, migração 00010 e `plataforma/dinheiro`). Em `POST /v1/usuarios`, `PATCH /v1/usuarios/{id}`, `GET /v1/usuarios/{id}` e `GET /v1/usuarios/eu`: texto decimal com ponto, sem sinal, de `0` a `999999999999.999999`, no máximo seis casas, padrão `^(0|[1-9][0-9]{0,11})(\.[0-9]{1,6})?$`. A entrada aceita menos casas (`"125.5"` vale `125.50`); a saída é canônica, com no mínimo as casas da moeda da empresa (`moeda` ao lado) e no máximo seis, sem zeros à direita além delas (em `PYG`, `"75000.50"` é preço válido e sai `"75000.5"`). Nunca é arredondado; fora da gramática é `422 validacao_falhou` com `formato_invalido` em `custo_hora`; `null` no `PATCH` apaga.
 - **Proposta:** quantidades de estoque, litros de combustível e valores de medidor também são strings decimais (`"125430.5"`), para não perder precisão em `float` no JavaScript. Contagens inteiras (número de falhas, quantidade de OS) são `integer`.
 - Percentuais em indicadores são número decimal de 0 a 100 com até duas casas (`92.35`), por serem só leitura e exibição.
 
@@ -208,6 +222,8 @@ Toda lista é paginada por cursor opaco.
 
 Toda escrita gera um `evento_auditoria` imutável (quem, o quê, quando, antes e depois, IP, dispositivo). O cabeçalho opcional `X-Tenaz-Motivo` (até 500 caracteres) é gravado no evento, para alterações administrativas que não têm campo de motivo próprio (proposta).
 
+**Cabeçalho `X-Tenaz-Tela` (RF-ADM-011).** A web informa a tela de origem no formato `<modulo>.<tela>` do catálogo fechado (por exemplo, `adm.pessoas`; o catálogo é uma lista no código, `auditoria/catalogo.go`, e sai em `GET /v1/capturas-auditoria`). Valor fora do catálogo é ignorado, sem erro. O servidor lê o cabeçalho em qualquer requisição, mas só a web o envia: em API, job e sincronização a tela não existe. A tela só é gravada no evento se começar pelo código do módulo que atende a chamada (a tela do painel que chama a listagem de usuários não grava `ind.painel` num evento de ADM). É rótulo da trilha e **nunca decide acesso**.
+
 ### 2.11 Concorrência otimista (ETag e If-Match)
 
 - Toda resposta de recurso único traz `ETag: "<versao>"`, por exemplo `ETag: "12"`.
@@ -259,8 +275,46 @@ Estados: `na_fila`, `em_andamento`, `concluido`, `falhou`, `cancelado`. Ao concl
 ### 2.15 Idioma
 
 - A API, os nomes de recurso, os campos e os enums são em **português do Brasil, sem acento**. Não há aliases em inglês. A exceção é SCIM, que segue o esquema padrão da RFC 7643.
-- Textos para pessoas (`title`, `detail` dos erros, `mensagem` de validação, rótulos de indicadores) saem em pt-BR. O servidor respeita `Accept-Language`, mas no lançamento só existe `pt-BR`; outro idioma cai em `pt-BR` e a resposta traz `Content-Language: pt-BR`.
+- Textos para pessoas (`title`, `detail` dos erros, `erros[].mensagem`, nome da tela em `GET` e `PUT /v1/capturas-auditoria`) saem em um dos dois idiomas suportados: `pt-BR` e `es-419` (espanhol latino-americano, ADR-013). O idioma da resposta é negociado nesta ordem: (1) `Accept-Language`, conforme a RFC 9110 com pesos `q` (`pt` e `pt-*` levam a `pt-BR`; `es` e `es-*` levam a `es-419`; outro idioma é ignorado); (2) `usuario.idioma` da sessão; (3) `empresa.idioma_padrao` (token de API ou rota sem usuário); (4) `pt-BR`.
+- A resposta de erro e a de `/v1/capturas-auditoria` trazem `Content-Language` com o idioma usado e `Vary: Accept-Language`. Mudam com o idioma só os textos: `codigo`, `type`, `status`, os membros adicionais, os nomes de campo, os enums, o `ETag` e os recursos JSON não dependem dele. Isso vale para **todo** o `/v1`, inclusive os textos da camada HTTP (CSRF, sessão, `If-Match`, idempotência, cursor) e os de autenticação: só o `codigo` é interface de máquina. O e-mail de redefinição de senha sai no idioma negociado; o convite, no `usuario.idioma` do destinatário.
 - **Códigos de erro e enums são estáveis e nunca traduzidos.** O cliente decide pelo código, nunca pelo texto.
+
+### 2.17 País, moeda e identificação
+
+Regras da adaptação multipaís (ADR-013, documento 5; colunas na migração `00009_pais_identificacao_idioma`, documento 2).
+
+| Campo | Onde | Regra |
+|---|---|---|
+| `pais` | Empresa (`POST /v1/empresas`, `GET` e `PATCH /v1/empresa`) | `BR`, `AR` ou `PY`. Define `moeda`, `idioma_padrao` sugerido, `fuso_horario` padrão e o tipo de identificação. Só leitura depois da criação (`PATCH` com `pais`: `422 campo_somente_leitura`) |
+| `moeda` | Empresa e usuário | `BRL`, `ARS` ou `PYG`, dada pelo país. Só leitura. No usuário é a moeda de `custo_hora` |
+| `idioma_padrao` | Empresa | `pt-BR` ou `es-419`; editável por quem tem `adm.gerenciar_empresa`. Ausente na criação: o do país (`pt-BR` no BR, `es-419` na AR e no PY). É o idioma com que nasce o convite |
+| `idioma` | Usuário | `pt-BR` ou `es-419`; só o próprio usuário altera, em `PATCH /v1/usuarios/eu`. `PATCH /v1/usuarios/{id}` com `idioma`: `422 campo_somente_leitura` |
+| `fuso_horario` | Empresa e unidade (`POST /v1/empresas`, `PATCH /v1/empresa`, `POST /v1/unidades`, `PATCH /v1/unidades/{id}`) | Nome IANA que o perfil do país da empresa lista (a unidade não tem país próprio): BR, 16 zonas, de `America/Noronha` a `America/Rio_Branco`; AR, as 12 de `America/Argentina/*`; PY, `America/Asuncion`. Ausente em `POST /v1/empresas`: `America/Sao_Paulo` (BR), `America/Argentina/Buenos_Aires` (AR) ou `America/Asuncion` (PY). Fora da lista, ou nome que não é IANA: `422 validacao_falhou`, `erros[].campo` = `fuso_horario` (na unidade inicial da conta, `unidade.fuso_horario`), `codigo` = `valor_invalido` e `valores_aceitos` = a lista do país |
+| `identificacao_tipo` e `identificacao` | Empresa e unidade (pessoa jurídica) | `cnpj` (BR), `cuit` (AR) ou `ruc` (PY): o do país da empresa. A unidade aceita os dois campos, opcionais e sempre juntos |
+| `identificacao_tipo` e `identificacao` | Pessoa | `cpf`, `cuil`, `dni` ou `ci`, de qualquer país. Na lista sai `identificacao_mascarada` (CPF no formato `***.982.247-**`; os demais mostram só os três últimos caracteres); a `identificacao` completa só no detalhe, com a visualização gravada na trilha com `sensivel = true` |
+
+- `identificacao` é recebida com ou sem máscara e devolvida **normalizada**: maiúsculas, só letras e dígitos.
+- Conferência: CPF e CNPJ têm o dígito verificador conferido, e o CNPJ alfanumérico é aceito (algoritmo oficial); CUIT, CUIL, DNI, RUC e CI são conferidos só pela forma.
+- Erros (`422 validacao_falhou`): `identificacao_tipo` com `obrigatorio`, ou `valor_invalido` com `valores_aceitos` (tipo desconhecido ou de outro país); `identificacao` com `obrigatorio` ou `formato_invalido` (forma ou dígito); `pais` com `obrigatorio` ou `valor_invalido` (com `valores_aceitos`); `idioma` e `idioma_padrao` com `valor_invalido` (com `valores_aceitos`); `fuso_horario` com `valor_invalido` e `valores_aceitos` com os fusos do país da empresa. Na unidade inicial de `POST /v1/empresas` o campo é `unidade.identificacao_tipo` ou `unidade.identificacao`; na pessoa criada junto de um usuário, `nova_pessoa.identificacao`.
+- `409 conflito` com `erros[].campo` = `identificacao` quando a identificação já existe (empresa ou pessoa).
+- **País e idioma na sessão** (aditivo, compatível, 18.1). `EmpresaSessao` (empresa da sessão, no login, em `GET /v1/auth/sessao`, no seletor e na troca de empresa) ganha `pais`, `moeda` e `idioma_padrao`, todos só leitura e sempre presentes. `UsuarioSessao` ganha `idioma`. `GET /v1/usuarios/eu` ganha `pais` ao lado de `moeda` e `idioma`; o `pais` do `Usuario` sai da moeda da empresa (correspondência 1:1) e está sempre presente. A interface lê `pais` e nunca o deriva da `moeda`. Os valores são os mesmos enums desta seção.
+- No `POST /v1/empresas` o responsável fica com o idioma de `Accept-Language`, se suportado; senão, com `idioma_padrao`.
+- Os campos `pais`, `moeda`, `idioma` e `idioma_padrao` são `enum` no contrato OpenAPI, e os tipos TypeScript gerados os trazem como união de literais.
+- Os módulos de fornecedor, cliente atendido, locatário e conexão entre contas ainda descrevem `cnpj` e `cpf`; a adaptação deles segue nas etapas desses módulos (26.2).
+
+### 2.18 Endereço multipaís
+
+O objeto `endereco` (hoje em `unidade`, e o mesmo desenho vale para os endereços dos módulos de fornecedor, cliente atendido e locatário quando migrarem) nasceu com `cep` e `uf`, nomes e formatos brasileiros. Como a `/v1` ainda não foi lançada (o `CHANGELOG.md` está em `[Não lançado]`), os dois campos **saem** de `Endereco` e entram `subdivisao` e `codigo_postal`, sem depreciação, sem espelhamento e sem `/v2`, do mesmo modo que `cnpj` e `cpf` saíram de empresa, unidade e pessoa (2.17). **Não há `pais` no endereço:** um país por empresa (ADR-013) e a unidade não tem país próprio, como já é no fuso horário. O país do endereço é sempre o da empresa, e `subdivisao` e `codigo_postal` são conferidos pelo perfil do país da empresa.
+
+| Campo | Regra |
+|---|---|
+| `subdivisao` | Código ISO 3166-2 completo: `BR-SP`, `AR-C` (Ciudad Autónoma de Buenos Aires), `AR-B` (Provincia de Buenos Aires), `PY-11` (Central), `PY-ASU` (Asunción). Lista fechada do país da empresa (27 unidades da federação, 24 jurisdições argentinas de `AR-A` a `AR-Z` sem `I` nem `O`, 18 do Paraguai: `PY-1` a `PY-16`, `PY-19` e `PY-ASU`). **Não recebe trim nem troca de caixa:** `"AR-C "` e `"BR-sp"` são recusados, e `PY-01` também (só `PY-1`). Fora da lista: `422 validacao_falhou`, `valor_invalido`, `valores_aceitos` com os códigos do país (sem os nomes, que ficam na interface) |
+| `codigo_postal` | Aceita até 16 caracteres na entrada, com máscara; sai normalizado (maiúsculas, sem espaço e sem hífen). BR: CEP, 8 dígitos. AR: CPA de 8 caracteres (`^[A-HJ-NP-Z][0-9]{4}[A-Z]{3}$`, por exemplo `C1425DKF`) ou o código antigo de 4 dígitos. PY: 6 dígitos. Fora da forma: `422 validacao_falhou`, `formato_invalido`. **Regra da Tenaz na Argentina:** CPA de 8 caracteres cuja primeira letra difere da letra da `subdivisao` (`C1425DKF` só com `AR-C`) é `422 validacao_falhou`, `valor_invalido`, em `codigo_postal`; sem subdivisão ou com o código de 4 dígitos não há cruzamento |
+| `municipio`, `logradouro`, `numero`, `complemento`, `bairro` | Sem mudança; `municipio` é o nome da localidade (BR: município; AR: localidad; PY: ciudad ou distrito). `bairro` é opcional em qualquer país |
+
+Os dois campos novos são **opcionais** (vazio vale "não informado"), como eram `cep` e `uf`. Os erros usam a notação de ponto dos demais campos aninhados: `endereco.subdivisao` e `endereco.codigo_postal` (na unidade inicial de `POST /v1/empresas`, `unidade.endereco.subdivisao` e `unidade.endereco.codigo_postal`). O `PATCH` revalida o endereço **mesclado inteiro** (por exemplo, trocar só a `subdivisao` de um endereço com CPA que já não confere é recusado). A nota de pesquisa é `docs/pesquisa/enderecos_br_ar_py.md`.
+
+Pendência de fonte: as formas e as listas acima vêm de fontes secundárias (nota de pesquisa); a conferência em fonte oficial pelo `tenaz-conformidade-mercosul` (Correios, Paraguay e ISO 3166-2) antes do lançamento está em 26.2.
 
 ### 2.16 Cabeçalhos padrão
 
@@ -274,6 +328,7 @@ Estados: `na_fila`, `em_andamento`, `concluido`, `falhou`, `cancelado`. Ao concl
 | `traceparent` | Ambos | W3C Trace Context, para correlação com OpenTelemetry |
 | `X-Tenaz-App-Versao` | Requisição | Versão do app de campo (18.5) |
 | `X-Tenaz-Dispositivo-Id` | Requisição | Dispositivo do app (seção 12) |
+| `X-Tenaz-Tela` | Requisição | Tela de origem da web, `<modulo>.<tela>` do catálogo fechado; rótulo da trilha de auditoria, nunca decide acesso (2.10) |
 | `ETag`, `Location` | Resposta | Versão do recurso, recurso criado |
 | `Idempotency-Replayed: true` | Resposta | Resposta repetida pela chave de idempotência (2.9) |
 | `Cache-Control: no-store` | Resposta | Toda resposta que traz credencial, `csrf_token` ou segredo de MFA |
@@ -315,7 +370,7 @@ Todo erro usa `Content-Type: application/problem+json` e o formato da RFC 9457, 
 | `instance` | Caminho da requisição |
 | `codigo` | **Código estável** em snake_case, português. É o que o cliente deve tratar. |
 | `id_rastreio` | Igual ao `X-Request-Id`; o suporte usa para localizar o log |
-| `erros` | Lista de erros por campo, com `campo` em notação de ponto (`registro_nr12.indicacao_conclusiva`, `respostas[3].valor_numero`), `codigo` do vocabulário curto (abaixo), `mensagem` e, em enumeração, `valores_aceitos` |
+| `erros` | Lista de erros por campo, com `campo` em notação de ponto (`registro_nr12.indicacao_conclusiva`, `respostas[3].valor_numero`), `codigo` do vocabulário curto (abaixo), `mensagem` (no idioma da resposta, 2.15) e, em enumeração, `valores_aceitos` (preenchido, por exemplo, em `identificacao_tipo`, `pais`, `idioma`, `idioma_padrao` e `fuso_horario` com `valor_invalido`) |
 
 Membros adicionais aparecem quando úteis: `recurso_atual` e `versao_atual` (412), `desafio_id` e `desafio_expira_em` (`401 mfa_obrigatorio`), `tentativas_restantes` (`401 mfa_codigo_invalido`), `mfa_pendente` (`401 nao_autenticado` de sessão restrita à ativação do MFA, 4.2), `error` (erros de `POST /oauth/token`, com o valor da RFC 6749, como `invalid_grant`), `estado_atual` e `transicoes_permitidas` (409 de transição), `plano_necessario` (403 de plano), `campos_faltantes` (422 de transição e de campo extra obrigatório), `estado_conexao`, `lado_dono`, `campos` e `grupos` (erros de conexão entre contas, 22.8), `tipos_documento_faltantes`, `ordens_servico_pendentes`, `predecessoras_pendentes`, `etapas_pendentes` e `ativos` (erros de entrada em operação e de projeto, seções 23 e 24), `faixas` (contrato com cliente, 25.2), `limite` (erros de limite de configuração).
 
@@ -571,7 +626,7 @@ Consequências:
 - Não existe parâmetro, cabeçalho ou subdomínio de empresa. `empresa_id` enviado no corpo ou na consulta devolve `400 campo_nao_permitido`. A escolha da empresa ao entrar ou ao trocar usa `empresa_escolhida_id` (2.2), conferido contra os acessos da pessoa e só emitindo credencial nova.
 - A camada de acesso a dados abre uma transação por requisição e executa `set_config('app.empresa_id', <id>, true)` (escopo local da transação) antes de qualquer consulta. O PostgreSQL aplica Row-Level Security forçado em todas as tabelas de negócio, e o repositório também filtra por `empresa_id` (dupla proteção, conforme o risco R2 do sumário).
 - Um `id` de outra empresa se comporta como inexistente: `404 recurso_nao_encontrado`, nunca `403`, para não revelar que o recurso existe.
-- Usuário com acesso a mais de uma empresa (consultor, grupo econômico) troca de empresa em `POST /v1/auth/trocar-empresa`, que emite **nova** sessão ou novos tokens. Uma credencial nunca vale para duas empresas. Isso vale também para contas conectadas (SRV): o gestor da subcontratada não entra na conta do cliente, e o do cliente não entra na da subcontratada; cada lado vê só a própria cópia da OS e do equipamento.
+- Usuário com acesso a mais de uma empresa (consultor, grupo econômico) troca de empresa em `POST /v1/auth/trocar-empresa`, que emite **nova** sessão ou novos tokens. Uma credencial nunca vale para duas empresas: a troca **revoga na hora a credencial anterior** (A-43). Isso vale também para contas conectadas (SRV): o gestor da subcontratada não entra na conta do cliente, e o do cliente não entra na da subcontratada; cada lado vê só a própria cópia da OS e do equipamento.
 - Testes automatizados de vazamento entre empresas rodam em todo build sobre todos os endpoints do contrato (meta de isolamento do sumário).
 
 ### 4.8 Autorização: perfis, unidades e plano
@@ -772,20 +827,20 @@ Legenda das colunas:
 | POST | `/v1/auth/mfa/confirmar` | Ativa o segundo fator com o primeiro código certo | Todos, Externos | E | MVP |
 | POST | `/v1/auth/mfa/desativar` | Desativa o segundo fator, com um código válido | Todos, Externos | E | MVP |
 | POST | `/v1/auth/convites/consultar` | Confere o link do convite sem gastá-lo: `email` e `pede_senha` | Público | E | MVP |
-| POST | `/v1/auth/convites/aceitar` | Aceita o convite: liga o login ao usuário convidado e o ativa | Público | E | MVP |
+| POST | `/v1/auth/convites/aceitar` | Aceita o convite: liga o login ao usuário convidado e o ativa; aceita `idioma` opcional (o convite nasce com `empresa.idioma_padrao`) | Público | E | MVP |
 | GET | `/oauth/authorize` | Início do fluxo OAuth 2.1 com PKCE (app): `302` para a tela `/autorizar-app` da web | Público | E | MVP |
 | POST | `/oauth/authorize` | Decisão da tela de autorização: emite o código para a empresa escolhida (só sessão web) | Todos, Externos | E | MVP |
 | POST | `/oauth/token` | Troca de código e renovação rotativa de refresh token (formulário) | Público | E | MVP |
 | POST | `/oauth/revoke` | Revoga refresh token; o token no corpo é a credencial | Público | E | MVP |
 | GET | `/v1/versao` | Versão do produto em SemVer, commit, data do build e ambiente (18.8) | Público | E | MVP |
-| POST | `/v1/empresas` | Cadastro da conta pelo site: empresa, unidade inicial, 12 perfis padrão e responsável como administrador convidado (RF-ADM-001, RF-SRV-001); responde só `convite_enviado`, sem identificadores; `409 conflito` em CNPJ já cadastrado | Público | E, S | MVP |
-| GET | `/v1/empresa` | Dados da empresa, inclusive `mfa_obrigatorio` | Leitura | E | MVP |
-| PATCH | `/v1/empresa` | Altera dados cadastrais e `mfa_obrigatorio` (segundo fator exigido de todos, RN-ADM-027); plano e SRV não mudam aqui (`422 campo_somente_leitura`) | Admin | E | MVP |
+| POST | `/v1/empresas` | Cadastro da conta pelo site: empresa, unidade inicial, 12 perfis padrão e responsável como administrador convidado (RF-ADM-001, RF-SRV-001); responde só `convite_enviado`, sem identificadores; exige `pais` (`BR`, `AR`, `PY`), `identificacao_tipo` e `identificacao` (2.17); `409 conflito` (`erros[].campo` = `identificacao`) em identificação já cadastrada | Público | E, S | MVP |
+| GET | `/v1/empresa` | Dados da empresa, inclusive `pais`, `moeda`, `idioma_padrao`, `identificacao_tipo`, `identificacao` e `mfa_obrigatorio` | Leitura | E | MVP |
+| PATCH | `/v1/empresa` | Altera dados cadastrais, `idioma_padrao` e `mfa_obrigatorio` (segundo fator exigido de todos, RN-ADM-027); plano, SRV, `pais` e `moeda` não mudam aqui (`422 campo_somente_leitura`) | Admin | E | MVP |
 | GET | `/v1/empresa/plano` | Plano, recursos habilitados e uso (técnicos, veículos ativos, créditos de IA) | Admin | E | MVP |
 | GET | `/v1/unidades` | Lista unidades | Leitura | E | MVP |
 | POST | `/v1/unidades` | Cria unidade com pelo menos um turno. O Essencial tem 1 unidade; a segunda exige o Profissional (`403 plano_nao_inclui_recurso`) | Admin | E | MVP |
 | GET | `/v1/unidades/{id}` | Detalha unidade | Leitura | E | MVP |
-| PATCH | `/v1/unidades/{id}` | Altera unidade (nome, endereço, fuso, CNPJ) | Admin | E | MVP |
+| PATCH | `/v1/unidades/{id}` | Altera unidade (nome, endereço, fuso, `identificacao_tipo` e `identificacao`, os do país da empresa) | Admin | E | MVP |
 | DELETE | `/v1/unidades/{id}` | Inativa unidade; a última unidade ativa não é inativada (a regra "sem ativos ativos" entra com ATV, em E02) | Admin | E | MVP |
 | POST | `/v1/unidades/{id}/reativar` | Reativa unidade inativa, respeitando o limite de unidades do plano | Admin | E | MVP |
 | POST | `/v1/unidades/{id}/turnos` | Inclui turno (`turno_unidade`): `dia_semana` (1 = segunda ... 7 = domingo), `hora_inicio`, `hora_fim`, `nome` | Admin | E | MVP |
@@ -794,18 +849,18 @@ Legenda das colunas:
 | GET | `/v1/unidades/{id}/feriados` | Feriados da unidade (`feriado_unidade`), com filtro `data[gte]` e `data[lte]` | Leitura | E | MVP |
 | POST | `/v1/unidades/{id}/feriados` | Inclui feriado (`data`, `descricao`); `409 conflito` em data repetida | Admin | E | MVP |
 | DELETE | `/v1/unidades/{id}/feriados/{feriado_id}` | Remove feriado (ETag do feriado) | Admin | E | MVP |
-| GET | `/v1/pessoas` | Lista pessoas (`com_usuario`, `fornecedor_id`, `unidade_id`, `situacao`, `busca`; `especialidade_tecnico_id` entra com o SRV), com CPF mascarado | Gestão | E | MVP |
+| GET | `/v1/pessoas` | Lista pessoas (`com_usuario`, `fornecedor_id`, `unidade_id`, `situacao`, `busca`; `especialidade_tecnico_id` entra com o SRV), com `identificacao_mascarada` | Gestão | E | MVP |
 | POST | `/v1/pessoas` | Cadastra pessoa, com ou sem usuário (técnico, motorista, condutor eventual, técnico de fornecedor, PLH); aceita `especialidade_tecnico_ids` (22.3) | Gestão | E | MVP |
-| GET | `/v1/pessoas/{id}` | Detalha pessoa, com o CPF completo (a leitura vai para a trilha) | Gestão, titular | E | MVP |
+| GET | `/v1/pessoas/{id}` | Detalha pessoa, com a `identificacao` completa (a leitura vai para a trilha como dado sensível) | Gestão, titular | E | MVP |
 | PATCH | `/v1/pessoas/{id}` | Altera pessoa | Gestão | E | MVP |
 | DELETE | `/v1/pessoas/{id}` | Inativa pessoa; ligada a usuário `ativo` ou `convidado`, responde `409 transicao_invalida`: inative o usuário antes (RN-ADM-021) | Gestão | E | MVP |
 | POST | `/v1/pessoas/{id}/reativar` | Reativa pessoa inativa | Gestão | E | MVP |
 | GET | `/v1/usuarios` | Lista usuários | Gestão | E | MVP |
 | POST | `/v1/usuarios` | Cria usuário `convidado` e envia convite (7 dias); aceita `pessoa_id` ou `nova_pessoa` (cria a pessoa junto; nunca os dois), `fornecedor_id` (obrigatório para `prestador`), `locatario_id` (obrigatório para `locatario`), `custo_hora` e `unidade_padrao_id`; responde com `convite_enviado`. A pessoa ligada tem de estar ativa (`422`, `erros[].codigo = "inativo"`) e ter o mesmo fornecedor do usuário, nos dois sentidos: pessoa de fornecedor só com `prestador` dele, e usuário interno só com pessoa sem fornecedor; `nova_pessoa` de um `prestador` herda o `fornecedor_id` dele e o vínculo `terceiro` (RN-ADM-020, RN-ADM-021) | Admin | E | MVP |
 | GET | `/v1/usuarios/eu` | Próprio usuário, perfis, unidades e preferências | Todos, Externos | E | MVP |
-| PATCH | `/v1/usuarios/eu` | Altera os dados próprios (no MVP, `nome` e `telefone`) | Todos, Externos | E | MVP |
+| PATCH | `/v1/usuarios/eu` | Altera os dados próprios (`nome`, `telefone` e `idioma`) | Todos, Externos | E | MVP |
 | GET | `/v1/usuarios/{id}` | Detalha usuário | Gestão | E | MVP |
-| PATCH | `/v1/usuarios/{id}` | Altera perfis (lista completa em `perfis`), unidades e dados | Admin | E | MVP |
+| PATCH | `/v1/usuarios/{id}` | Altera perfis (lista completa em `perfis`), unidades e dados; `idioma`, `pais` e `moeda` não mudam aqui (`422 campo_somente_leitura`) | Admin | E | MVP |
 | POST | `/v1/usuarios/{id}/desativar` | `situacao` → `inativo`; revoga sessões e tokens do usuário; `409 ultimo_administrador` | Admin | E | MVP |
 | POST | `/v1/usuarios/{id}/reativar` | `inativo` → `ativo` (ou `convidado`, com convite novo, se nunca aceitou) | Admin | E | MVP |
 | POST | `/v1/usuarios/{id}/reenviar-convite` | Revoga o link anterior e envia outro (7 dias); só para `convidado` | Admin | E | MVP |
@@ -819,8 +874,12 @@ Legenda das colunas:
 | GET | `/v1/permissoes` | Catálogo de permissões finas | Admin | E | MVP |
 | GET | `/v1/parametros-empresa` | Parâmetros da empresa (MTTR com ou sem espera, janela de aderência, alertas D-60/D-30/D-7, sessão, validade do link de uso único) | Gestão | E | MVP |
 | PATCH | `/v1/parametros-empresa` | Altera parâmetros | Admin | E | MVP |
-| GET | `/v1/eventos-auditoria` | Trilha de auditoria com filtros por entidade, registro, usuário e período | Admin, `gestor` | E | MVP |
-| GET | `/v1/eventos-auditoria/{id}` | Evento com valores antes e depois | Admin, `gestor` | E | MVP |
+| GET | `/v1/eventos-auditoria` | Trilha de auditoria (`adm.ler_auditoria`). Filtros, todos juntos como E: `usuario_id`, `tela`, `modulo`, `acao` (um dos nove tipos), `ocorrido_em[gte]`, `ocorrido_em[lt]`, `ip` (exato; exige `ocorrido_em[gte]`), `entidade`, `entidade_id`, `cursor`, `limite`. Filtro inválido: `422 validacao_falhou` com o campo. Linha com `usuario_nome`, `resultado` (`sucesso` ou `falha`), `modulo`, `tela`, `sensivel` | Admin, `gestor` | E | MVP |
+| GET | `/v1/eventos-auditoria/{id}` | Evento com `antes`, `depois`, `detalhe` (jsonb) e `hash` (sha256 em hexadecimal, 64 caracteres). Abrir o detalhe é uma `visualizacao`, gravada se a captura da tela estiver ligada (`adm.ler_auditoria`) | Admin, `gestor` | E | MVP |
+| GET | `/v1/exportacoes-eventos-auditoria` | Exporta a trilha em `text/csv; charset=utf-8` (`Content-Disposition: attachment`): mesmos filtros, com `ocorrido_em[gte]` e `ocorrido_em[lt]` obrigatórios e teto de 50.000 linhas (acima, `422`). É uma `extracao` (`adm.ler_auditoria`) | Admin, `gestor` | E | MVP |
+| GET | `/v1/verificacoes-auditoria` | Verifica a integridade da trilha por dia UTC (`de` e `ate`, inclusive, no máximo 400 dias): `integro`, `violado` ou `nao_selado` (`adm.ler_auditoria`) | Admin, `gestor` | E | MVP |
+| GET | `/v1/capturas-auditoria` | Todas as telas do catálogo com as chaves de captura (`visualizacao`, `impressao`, `extracao`, `configurada`) (`adm.gerenciar_parametros`); `nome` da tela no idioma da resposta, `tela` não muda | Admin | E | MVP |
+| PUT | `/v1/capturas-auditoria/{tela}` | Grava as três chaves da tela (`adm.gerenciar_parametros`); sem `If-Match` | Admin | E | MVP |
 | GET | `/v1/provedores-identidade` | Lista configurações de SSO | Admin | P | MVP |
 | POST | `/v1/provedores-identidade` | Configura OIDC (P) ou SAML (Ent) | Admin | P | MVP |
 | PATCH | `/v1/provedores-identidade/{id}` | Altera configuração de SSO | Admin | P | MVP |
@@ -872,6 +931,14 @@ Legenda das colunas:
 **Pessoa e usuário.** `pessoa` é quem executa, conduz ou responde por algo, com ou sem login; `usuario` é o login e pode apontar para uma pessoa (`usuario.pessoa_id`, opcional). CNH, capacitações e documentos pessoais ligam-se à pessoa (`pessoa_id` em `documentos-vencimento` e `capacitacoes`), nunca ao usuário. Condutor eventual sem login é uma pessoa sem usuário, não um usuário sem acesso. A Tenaz não guarda dado de saúde (sumário 3.6): não existe tipo de documento, campo nem anexo para ASO, exame toxicológico ou outro dado de saúde da pessoa.
 
 **Regras configuráveis e pacotes de segmento** (RF-ADM-016, RF-ADM-017; sumário 3.6 e 3.7). Ficam em ADM, no pacote Go `configuracao`. Regras exigem `adm.gerenciar_regras`; a aplicação de pacote, `adm.gerenciar_configuracao`. As regras e os campos extras são do Essencial, no MVP; os pacotes são do Essencial, na Fase 2. As rotas `E` também valem no plano Serviços (22.2). O detalhamento está na seção 23.
+
+
+**Trilha de auditoria (RF-ADM-011).** Todas as rotas acima são do escopo `interno`; sem a permissão, `403 permissao_negada`; escopo externo, `404`. Nenhum código de erro novo.
+
+- **Listagem.** `acao` aceita os nove tipos: `login`, `logout`, `inclusao`, `alteracao`, `exclusao`, `delecao`, `visualizacao`, `impressao`, `extracao`. `modulo` é o código do módulo e `tela` é do catálogo; valor desconhecido responde `422 validacao_falhou` com o `campo`. O filtro por `ip` exige `ocorrido_em[gte]`. Paginação por cursor, `limite` de 1 a 200 (padrão 50), do mais recente ao mais antigo.
+- **Exportação (CSV).** Colunas, nesta ordem: `id`, `ocorrido_em`, `usuario_id`, `usuario_nome`, `ator_tipo`, `ip`, `acao`, `resultado`, `modulo`, `tela`, `entidade`, `entidade_id`, `entidade_chave`, `campos_alterados` (separados por `;`), `sensivel`, `origem`, `request_id`, `hash`. Nas colunas de texto livre (`usuario_nome`, `entidade`, `entidade_chave`, `campos_alterados`), o valor que começa por `=`, `+`, `-`, `@`, tabulação ou retorno de carro ganha um apóstrofo na frente (injeção de fórmula em planilha). A exportação é uma `extracao`: grava evento se a captura de extração da tela de origem estiver ligada (inclusive na tela de auditoria), com `detalhe` `{formato, quantidade, filtros}`.
+- **Verificação.** `GET /v1/verificacoes-auditoria?de=AAAA-MM-DD&ate=AAAA-MM-DD`: lista (`dados`, inteira numa página) de `{dia, estado, motivo, evento_id}`. `estado` é `integro`, `violado` ou `nao_selado`. Motivos de `violado`: `evento_alterado`, `eventos_divergentes`, `selo_adulterado`, `cadeia_quebrada`, `selo_ausente`, `evento_anterior_ao_primeiro_selo`, `copia_ausente`, `copia_divergente`. Motivos de `nao_selado`: `ainda_nao_selado`, `anterior_ao_primeiro_selo`. `evento_id` aponta o primeiro evento alterado, quando há como apontar. Data fora do formato, `ate` antes de `de` ou `ate` mais de 400 dias depois de `de`: `422 validacao_falhou`. Armazenamento imutável do selo fora do ar ou não configurado: `503 servico_indisponivel`, porque sem a cópia não se afirma integridade.
+- **Captura por tela.** `GET /v1/capturas-auditoria` devolve todas as telas do catálogo `{tela, modulo, nome, visualizacao, impressao, extracao, configurada}`; `configurada=false` significa que vale o padrão (impressão e extração ligadas, visualização desligada). `PUT /v1/capturas-auditoria/{tela}` exige as três chaves no corpo e as grava juntas (por isso `PUT`, e não `PATCH`: o upsert grava as três); não usa `If-Match`. Tela fora do catálogo: `422 validacao_falhou` com `campo = tela`. A troca é um evento `inclusao` (primeira vez) ou `alteracao` de `captura_auditoria`, com `entidade_chave` igual à tela, sempre gravado; vale só para eventos futuros. Login, logout, inclusão, alteração, exclusão, deleção e a visualização de dado sensível nunca se desligam e não têm chave.
 
 ### 6.2 ATV — Ativos
 
@@ -1527,7 +1594,7 @@ Módulo da Fase 2, plano Profissional (sumário 2.1 e 4; RF-CTR-001 a RF-CTR-005
 
 | Módulo | Endpoints | MVP | F2 | F3 | Variação desde a versão 0.3 |
 |---|---|---|---|---|---|
-| ADM | 106 | 83 | 23 | 0 | +17 na versão 0.4: regras configuráveis (9) e disparos (2), no MVP; pacotes de segmento (4) e aplicações (2), na Fase 2. +19 na versão 0.5 (E01): `POST /v1/empresas`, convites (2), MFA do próprio usuário (3), `trocar-senha`, `POST /oauth/authorize`, turnos (3), feriados (3), reativação de unidade e de pessoa, reenvio de convite e permissões avulsas (2); `DELETE /v1/unidades/{id}` passa da Fase 2 ao MVP |
+| ADM | 110 | 87 | 23 | 0 | +17 na versão 0.4: regras configuráveis (9) e disparos (2), no MVP; pacotes de segmento (4) e aplicações (2), na Fase 2. +19 na versão 0.5 (E01): `POST /v1/empresas`, convites (2), MFA do próprio usuário (3), `trocar-senha`, `POST /oauth/authorize`, turnos (3), feriados (3), reativação de unidade e de pessoa, reenvio de convite e permissões avulsas (2); `DELETE /v1/unidades/{id}` passa da Fase 2 ao MVP. +4 na versão 0.7 (E01, trilha de auditoria): exportação, verificação de integridade e capturas (2) |
 | ATV | 27 | 27 | 0 | 0 | +2: `colocar-em-operacao`, unitária e em lote (campos `fase_ciclo_vida`, `data_entrada_operacao`, `projeto_id`) |
 | MED | 12 | 12 | 0 | 0 | — |
 | SOL | 11 | 11 | 0 | 0 | — (origem `regra`) |
@@ -1546,7 +1613,7 @@ Módulo da Fase 2, plano Profissional (sumário 2.1 e 4; RF-CTR-001 a RF-CTR-005
 | INT | 52 | 26 | 26 | 0 | — |
 | IA | 13 | 0 | 9 | 4 | — |
 | MOB | 9 | 9 | 0 | 0 | — |
-| **Total** | **583** | **342** | **237** | **4** | **+82 na versão 0.4; +19 na versão 0.5** |
+| **Total** | **587** | **346** | **237** | **4** | **+82 na versão 0.4; +19 na versão 0.5; +4 na versão 0.7** |
 
 ADM inclui autenticação (19 rotas, entre elas as 4 de OAuth fora de `/v1`), SCIM (10 rotas em `/scim/v2`), pessoas, versão do produto, anexos, processamentos, notificações e exportação completa. Os sub-recursos de frota e de conformidade pendurados em `ativos` e `ordens-servico` (dados de veículo, pneus no mapa, registro de bloqueio, NR-13) são contados nos módulos FRO e CON; as ações `atribuir-fornecedor` e `retirar-fornecedor` e as 4 rotas públicas do link de uso único, em TER; `assumir`, `servicos` e `relatorio-pdf`, em OS. O SRV conta só as rotas próprias (22.2); a conta da subcontratada usa também as rotas de ADM, ATV, MED, OS, CHK, EST, IND e MOB. As regras configuráveis e os pacotes de segmento contam em ADM; as definições e os valores de campos extras, em OS; `colocar-em-operacao`, em ATV; `gerar-os` da etapa, em PRJ; as medições de etapas (`/v1/medicoes-etapa`), em PRJ; as medições do contrato (`/v1/medicoes-contrato`), em CTR.
 
@@ -1785,6 +1852,7 @@ O tipo `implantacao` fica fora dos KPIs de manutenção (MTBF, MTTR, disponibili
   "codigo_falha_modo_id": null,
   "codigo_falha_causa_id": null,
   "codigo_falha_atividade_id": null,
+  "moeda": "BRL",
   "custo_mao_obra": "0.00",
   "custo_pecas": "0.00",
   "custo_terceiros": "0.00",
@@ -2043,6 +2111,7 @@ Idempotency-Key: 2b7c4d1e-0f9a-4c3b-8e2d-5a6f7b8c9d0e
   "encerrada_por_id": "0192f800-aaaa-7bbb-8ccc-000000000009",
   "status_operacional_ativo": "operando",
   "responsavel_custo": "empresa",
+  "moeda": "BRL",
   "custo_mao_obra": "412.50",
   "custo_pecas": "86.90",
   "custo_terceiros": "0.00",
@@ -2399,7 +2468,7 @@ Regras:
       "codigo": "custo_manutencao",
       "nome": "Custo de manutenção",
       "valor": "48210.77",
-      "unidade_medida": "BRL",
+      "moeda": "BRL",
       "situacao": "calculado",
       "composicao": { "mao_obra": "21980.00", "pecas": "19410.77", "terceiros": "6820.00" },
       "variacao_percentual": 4.1
@@ -2408,7 +2477,7 @@ Regras:
 }
 ```
 
-- Valores monetários seguem a regra 2.5 (string decimal); os demais são números.
+- Valores monetários seguem a regra 2.5 (string decimal, com as casas da moeda). O indicador em dinheiro traz `moeda` (ISO 4217, a da empresa, só leitura) **no lugar de** `unidade_medida`, que fica para os demais (`horas`, `percentual`, `semanas`); o `valor` e os itens de `composicao` são valores na escala dessa moeda. Os demais indicadores são números.
 - `situacao` pode ser `calculado`, `dados_insuficientes` (com `motivo`) ou `nao_aplicavel`.
 - Os KPIs são calculados a partir de views materializadas ou de réplica de leitura, atualizadas a cada 5 minutos (proposta); `dados_ate` informa o instante dos dados.
 
@@ -2808,6 +2877,7 @@ Tenaz-Webhook-Tentativa: 1
       "responsavel_custo": "empresa",
       "contrato_locacao_id": null,
       "data_encerramento": "2026-11-13T11:02:00Z",
+      "moeda": "BRL",
       "custo_mao_obra": "412.50",
       "custo_pecas": "86.90",
       "custo_terceiros": "0.00",
@@ -3872,9 +3942,10 @@ Origem ou destino incompatível com o tipo devolve `422 almoxarifado_tipo_incomp
   "almoxarifado_destino_id": "0193b110-0000-7aaa-8bbb-000000000111",
   "fornecedor_id": "0193b100-0000-7aaa-8bbb-000000000101",
   "data_movimentacao": "2026-11-12T16:00:00Z",
+  "moeda": "BRL",
   "itens": [
-    { "item_estoque_id": "0192fa10-3333-7ddd-8eee-000000000101", "quantidade": "20", "custo_unitario": "18.4500", "custo_total": "369.00" },
-    { "item_estoque_id": "0192fa10-3333-7ddd-8eee-000000000144", "quantidade": "2", "custo_unitario": "1240.0000", "custo_total": "2480.00", "pecas_serializadas_ids": ["0193b200-0000-7aaa-8bbb-000000000501", "0193b200-0000-7aaa-8bbb-000000000502"] }
+    { "item_estoque_id": "0192fa10-3333-7ddd-8eee-000000000101", "quantidade": "20", "custo_unitario": "18.45", "custo_total": "369.00" },
+    { "item_estoque_id": "0192fa10-3333-7ddd-8eee-000000000144", "quantidade": "2", "custo_unitario": "1240.00", "custo_total": "2480.00", "pecas_serializadas_ids": ["0193b200-0000-7aaa-8bbb-000000000501", "0193b200-0000-7aaa-8bbb-000000000502"] }
   ],
   "nfe_numero": "18342",
   "nfe_chave": "35261112345678000190550010000183421000183428",
@@ -3972,6 +4043,7 @@ Orçamento recusado (`POST /v1/orcamentos-fornecedor/{id}/recusar`) leva a `decl
   "data_retorno": "2026-11-24T14:10:00Z",
   "nfe_remessa": { "numero": "18351", "chave": "35261112345678000190550010000183511000183515" },
   "nfe_retorno": { "numero": "7712", "chave": "35261198765432000110550010000077121000077129" },
+  "moeda": "BRL",
   "custo_total": "1380.00",
   "itens": [
     {
@@ -4080,6 +4152,7 @@ Regras do sumário 3.6: **sublocação não é permitida** (ativo `de_terceiro` 
   "franquia_horas": "200",
   "franquia_km": null,
   "periodo_franquia": "mes",
+  "moeda": "BRL",
   "valor_excedente_hora": "95.00",
   "valor_excedente_km": null,
   "sla_substituicao_horas": null,
@@ -4352,6 +4425,7 @@ Content-Type: application/json
   "telefone": "+5511976543210",
   "unidade_id": "0193e010-0000-7aaa-8bbb-000000000011",
   "fornecedor_id": null,
+  "moeda": "BRL",
   "custo_hora": "68.00",
   "especialidades": [
     { "id": "0193e600-0000-7aaa-8bbb-000000000601", "nome": "Compressores de parafuso" },
@@ -4732,6 +4806,7 @@ Resposta `200`, `ETag: "3"`, com `status: "em_execucao"`, `data_inicio: "2026-11
   "data_fim": "2026-11-13T15:55:00Z",
   "duracao_min": 165,
   "tipo_hora": "normal",
+  "moeda": "BRL",
   "custo_hora": "68.00",
   "custo": "187.00",
   "criado_em": "2026-11-13T15:56:10Z"
@@ -4946,6 +5021,7 @@ Na conta da subcontratada, a OS é executada por técnico próprio (`executor_ti
   "pecas": [
     { "id": "0193d220-0000-7aaa-8bbb-000000000e21", "tipo_material": "substituido", "descricao": "Elemento separador ar/óleo", "quantidade": "1", "numero_serie_retirado": "SEP-2023-00412", "numero_serie_instalado": "SEP-2026-01877", "origem_remota": true }
   ],
+  "moeda": "BRL",
   "custo_mao_obra": "0.00",
   "custo_terceiros": "0.00",
   "vinculo": {
@@ -5594,7 +5670,7 @@ Módulo da Fase 2, plano Profissional (RF-CTR-001 a RF-CTR-005). Controla o cont
       ]
     }
   ],
-  "total": { "valor_referencia": "48000.00", "desconto_valor": "0.00", "valor_com_desconto": "48000.00" },
+  "total": { "moeda": "BRL", "valor_referencia": "48000.00", "desconto_valor": "0.00", "valor_com_desconto": "48000.00" },
   "memoria_calculo": "Disponibilidade contratual = (horas requeridas − horas paradas não excluídas) ÷ horas requeridas, no calendário de apuração."
 }
 ```
@@ -5677,6 +5753,10 @@ Os 15 pontos da versão 0.1 (I-1 a I-15) foram resolvidos pelo sumário 0.3 e j�
 | A-37 | Lacunas da implementação de E01 na camada HTTP | (a) Idempotência guardada na memória de cada instância (2.9): correta só com uma instância; antes de escalar a API, o depósito precisa ser compartilhado (tabela no banco, que é do documento 2, ou Valkey); a obrigatoriedade da chave para o app e para tokens de API também fica para depois. (b) Rate limit da seção 5 ainda não implementado, inclusive o de login e de `/oauth/token`; hoje só vale o bloqueio progressivo da identidade. (c) `X-Forwarded-For` não é lido: o IP gravado é o da conexão; atrás do balanceador, é preciso a lista de proxies confiáveis. (d) `If-None-Match` e `304` não implementados (2.11). (e) Nas ações de estado e no `DELETE`, a versão do `If-Match` é conferida por leitura antes da ação, não na mesma transação. (f) `PATCH /v1/usuarios/{id}` com `perfis` e dados roda em duas transações (perfis primeiro, depois dados), e a troca de perfis não muda a versão do usuário. (g) Erro de `/oauth/token` com `401`, e não o `400` da RFC 6749 para `invalid_grant`, para manter o código `credencial_invalida` com um status só |
 | A-38 | Campos de `GET /v1/versao` | A seção 18.8 lista `ambiente`; a seção 9.5 do documento 5 e o servidor devolvem só `versao`, `commit` e `data_build`. Decidir qual vale e alinhar o outro |
 | A-39 | Escopo `link` fora do alcance | A seção 4.9 manda responder `404` também ao escopo `link` fora das rotas dele, mas hoje o código responde `403 permissao_negada`, porque `Ator.Externo()` não trata `link` como externo. Sem efeito em E01: a sessão do link de uso único só nasce em E06/E09. Na etapa do link, `Ator.Externo()` deve tratar `link` como externo, com `404` fora do alcance. A regra da seção 4.9 não muda |
+| A-40 | Paginação por cursor sem total | A web pediu o total de registros nas listas abertas (pessoas, usuários, eventos de auditoria), mas a paginação por cursor (2.6) não devolve contagem. Decisão pendente: manter assim (a web mostra "carregar mais") ou acrescentar um `total` opcional, sob pedido, onde o índice permitir; acrescentar campo é compatível |
+| A-41 | `Idempotency-Key` fora do contrato | O cabeçalho é aceito em todo `POST` (2.9), mas não está declarado como parâmetro nas operações do `openapi.yaml`, e portanto não sai nos tipos TypeScript gerados nem na documentação pública. Corrigir no gerador (parâmetro opcional em todo `POST`), para que o contrato diga o que o servidor faz |
+| A-42 | Identificador da empresa na sessão | O app pediu o `id` da empresa atual em `EmpresaSessao` (`GET /v1/auth/sessao`, login, troca de empresa). Hoje a estrutura traz só `nome`, `plano` e `srv_habilitado`, de propósito: a empresa vem da credencial (4.7) e o `id` sai só em `GET /v1/empresa` e no seletor (`EmpresaAcesso.id`, usado como `empresa_escolhida_id`). Decidir com o `tenaz-isolamento` e o `tenaz-mobile-offline` se o app lê o `id` do seletor ou se `EmpresaSessao` ganha o campo; até lá, nada muda |
+| A-43 | `trocar-empresa` e a credencial anterior | Comportamento do código, registrado na 4.7: `POST /v1/auth/trocar-empresa` emite a credencial nova **e revoga na hora a anterior**. Quem reutiliza o cookie de sessão ou os tokens antigos recebe `401`. O cliente troca a credencial na mesma chamada, sem manter duas abertas |
 
 **Divergências do documento 1 (seção 8.3) tratadas na versão 0.5:** ponto 39, grupo **Conexão** (`srv.gerenciar_conexao`, padrão `administrador` e `gestor`) nas rotas de conexão da 6.10, no lugar de "Admin", mantendo o lado de cada ação; ponto 42, `prestador` nomeado nas rotas de modelos e execuções de checklist (6.7), com o alcance das OS do seu fornecedor (4.9); ponto 43, `plh` nomeado em `PUT /v1/ativos/{id}/enquadramento-nr13` (6.13); ponto 44, `POST /v1/ordens-reparo/{id}/registrar-orcamento` no grupo das rotas de orçamento de fornecedor (Gestão, Compras, `prestador`; permissão `ter.registrar_orcamento`). A seção 4.8 passa a remeter ao catálogo de RF-ADM-005 e lista `srv.gerenciar_conexao` entre as permissões finas.
 
@@ -5687,6 +5767,8 @@ Os 15 pontos da versão 0.1 (I-1 a I-15) foram resolvidos pelo sumário 0.3 e j�
 | P1 — ICP-Brasil no item 1.6 da NR-1 | Forma de `assinatura_anexo_id` no encerramento NR-12, no registro pelo link de uso único (19.4) e nos relatórios NR-13. A assinatura eletrônica avançada já está em todos os planos no MVP; ICP-Brasil pode exigir endpoint de assinatura com certificado (A1/A3 ou nuvem) |
 | P2 — Tabela de validade de CIV e CIPP | Hoje `documentos-vencimento` recebe a validade digitada; se a tabela for confirmada, entra um campo `validade_sugerida` calculado |
 | P3 — API Senatran/Serpro | Sem API, `POST /v1/multas` e `indicar-condutor` são registros manuais; com API, entra um conector de importação |
+| Endereço multipaís (2.18) | Forma do `codigo_postal` (BR, AR e PY de 6 dígitos) e lista de `subdivisao` vêm de fontes secundárias; conferir em fonte oficial por `tenaz-conformidade-mercosul` |
+| Escopo multipaís e bilíngue (sumário 0.8, seção 3.6, "Países e idiomas"; ADR-013; etapa 014) | Em E01 a seção 2.15 (Idioma) e a 2.17 (País, moeda e identificação) já valem para empresa, unidade, pessoa e usuário. Fornecedor, cliente atendido, locatário e conexão entre contas ainda usam `cnpj` e `cpf` e mudam nas etapas desses módulos |
 | P5 — Nome e domínio | URLs base, prefixos de token (`tnz_`, `lx_`), nomes de cabeçalho (`Tenaz-*`, `X-Tenaz-*`) |
 | P6 — Prazos NR-13 com SPIE | Valores devolvidos por `GET /v1/prazos-nr13` |
 | P7 — Local da cópia de recuperação de desastre | Sem efeito no contrato da API. Pode afetar a documentação pública (região, RTO de região publicado) |
@@ -5717,3 +5799,6 @@ Todas as marcações "proposta" deste documento, em especial: limites de rate li
 | 0.5 | 13/11/2026 | — | Alinhamento ao código e ao contrato regerado de E01 (mesma versão): `mfa_obrigatorio` em `GET` e `PATCH /v1/empresa`; `mfa_pendente` na sessão (login, `mfa/verificar`, `GET /v1/auth/sessao`, troca de empresa) e como membro do `401 nao_autenticado` (3.1, 3.2); sessão web restrita à ativação do MFA com as cinco rotas que ela atende, recusa no app e em `/oauth/token`, `409 transicao_invalida` com `estado_atual = "exigido_pela_empresa"` em `mfa/desativar` e passo TOTP de uso único (RN-ADM-027, 4.2); `pessoa.situacao` só `ativa` e `inativa`; regras de RN-ADM-020 e RN-ADM-021 em `POST /v1/usuarios` e `DELETE /v1/pessoas/{id}` (6.1) |
 | 0.6 | 13/11/2026 | — | Alinhamento ao sumário 0.7 e ao documento 1 versão 0.6: a Tenaz não guarda dado de saúde. Sai `pessoa.saude.ler` da tabela de permissões finas (4.8, agora doze) e a exceção ao formato `<módulo>.<ação>`; texto ajustado em 4.4 (escopos de token e ações sensíveis), 6.1 (detalhe da pessoa, permissão avulsa de exemplo, "Pessoa e usuário"), 6.13 (agenda de documentos), 6.15 e 13.6 ("saúde" da integração passa a "indicadores de entrega" e "situação de funcionamento"), 17.3 (pacote da exportação), 19.3 e 19.4 (exemplos de `observacao_fornecedor`) e 22.10 |
 | 0.6 | 13/11/2026 | — | Seção 4.3: regras de verificação do access token do app (`exp` obrigatório, tolerância de 30 s, `iat` e `nbf` no futuro recusados, `iss` `tenaz`, `aud` `tenaz-api`, cabeçalho `alg: EdDSA`, `typ: JWT`, `kid` conhecido; `nbf` respeitado quando presente), depois da correção do defeito em que o servidor ignorava `nbf`. Pendência A-39 (escopo `link` recebe `403` em vez de `404` até a etapa do link) |
+| 0.7 | 13/11/2026 | — | Trilha de auditoria configurável (RF-ADM-011), conforme o código e o contrato regerado de E01. Cabeçalho `X-Tenaz-Tela` (2.10, 2.16). `GET /v1/eventos-auditoria` com filtros `tela`, `modulo`, `acao`, `ocorrido_em[gte]`, `ocorrido_em[lt]` e `ip`, e campos `usuario_nome`, `resultado`, `modulo`, `tela`, `sensivel`; `GET /v1/eventos-auditoria/{id}` com `detalhe` e `hash`. Rotas novas: `GET /v1/exportacoes-eventos-auditoria`, `GET /v1/verificacoes-auditoria`, `GET /v1/capturas-auditoria`, `PUT /v1/capturas-auditoria/{tela}` (6.1). Contagem de ADM 106 para 110 e total 583 para 587 (6.20). Lacunas A-40 a A-43 e pendência do idioma (26.1, 26.2) |
+| 0.8 | 13/11/2026 | — | Adaptação multipaís e bilíngue de E01 (ADR-013, documento 5; migração `00009`, documento 2), conforme o código e o contrato regerado. `cnpj` e `cpf` saem de empresa, unidade e pessoa; entram `pais`, `moeda`, `idioma_padrao`, `identificacao_tipo`, `identificacao` e `identificacao_mascarada`; `idioma` e `moeda` no usuário; nova seção 2.17; negociação de idioma, `Content-Language` e `Vary` em 2.15; `valores_aceitos` preenchido em 3.1; linhas de 6.1 ajustadas. Nenhum código de erro novo. |
+| 0.9 | 13/11/2026 | — | Representação do dinheiro (ADR-013, Parte F, documento 5 versão 0.9). Seção 2.5 reescrita: texto decimal canônico, casas pela moeda (`BRL` e `ARS` 2, `PYG` 0), valor e preço unitário com seus padrões, entrada que recusa sem arredondar, moeda sempre ao lado, limite de custo unitário de estoque de 4 para 6 casas (alinha o documento 2). `custo_hora` passa a preço unitário; contrato e Go em andamento na E01 (migração 00010, `plataforma/dinheiro`). Exemplos de JSON alinhados: `moeda` ao lado do dinheiro, preço unitário canônico, indicador em dinheiro com `moeda` no lugar de `unidade_medida`. Fuso horário por país (lista IANA do perfil do país, `valor_invalido` com `valores_aceitos`) e textos de erro de todo o `/v1` no idioma negociado. Leitura de dinheiro pela gramática do padrão (sem zeros extras além dela), sinal só onde o campo o aceita, `formato_invalido` como único erro de leitura. `custo_hora` implementado como preço unitário; `pais`, `moeda` e `idioma_padrao` na sessão (2.17); endereço multipaís: `cep` e `uf` saem de `Endereco` e entram `subdivisao` e `codigo_postal`, sem `pais` e sem depreciação (2.18). Endereço implementado: erros em `endereco.subdivisao` e `endereco.codigo_postal`, `subdivisao` sem trim nem troca de caixa, `codigo_postal` até 16 na entrada, regra do CPA e da subdivisão na Argentina, `PATCH` revalida o endereço inteiro. Nenhum código de erro novo. |

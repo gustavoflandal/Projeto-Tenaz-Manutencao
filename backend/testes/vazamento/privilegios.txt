@@ -20,7 +20,7 @@
 app.evento_auditoria  tenaz_sinc  INSERT(acao,antes,ator_tipo,campos_alterados,conexao_empresa_id,depois,dispositivo_id,empresa_id,entidade,entidade_chave,entidade_id,escopo,ip,ocorrido_no_dispositivo_em,origem,request_id,token_api_id,user_agent,usuario_id)  # o sincronizador grava o evento da conexão (seção 2.10.4): exatamente as colunas que tg_auditar lista no INSERT (ISO-E01-05)
 
 # --- papel das credenciais fora de plataforma (ADR-011) --------------------
-app.evento_auditoria  tenaz_autenticacao  INSERT(acao,ator_tipo,campos_alterados,depois,dispositivo_id,empresa_id,entidade,entidade_id,ip,origem,request_id,user_agent,usuario_id)  # eventos de login, falha, logout e alteração da identidade, contidos pela restritiva autenticacao_identidade; sem SELECT (seção 9.2)
+app.evento_auditoria  tenaz_autenticacao  INSERT(acao,ator_tipo,campos_alterados,depois,dispositivo_id,empresa_id,entidade,entidade_id,ip,origem,request_id,resultado,tela,user_agent,usuario_id,usuario_nome)  # eventos de login (com resultado sucesso ou falha), logout e alteração da identidade, contidos pela restritiva autenticacao_identidade, que confere usuario_nome com acesso_empresa (00007, seção 9.1); sem modulo, sensivel, detalhe nem hash (o trigger fixa modulo = adm e calcula o hash); sem SELECT (seção 9.2)
 app.uuid_v7()         tenaz_autenticacao  EXECUTE  # valor padrão do id das credenciais
 app.empresa_atual()   tenaz_autenticacao  EXECUTE  # policy auditoria_insercao: o evento é da empresa da transação
 

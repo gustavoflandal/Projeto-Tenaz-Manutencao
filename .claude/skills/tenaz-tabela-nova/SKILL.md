@@ -77,8 +77,10 @@ Padrão **expandir e contrair**:
 2. Coluna nova aceita nulo ou tem valor padrão; preenchimento é passo separado.
 3. **Remoção de coluna só no release seguinte** ao que parou de usá-la.
 4. Renomear é adicionar, copiar, parar de usar e remover depois.
-5. Índice em tabela grande criado de forma concorrente; migração que trava tabela grande é dividida.
-6. Todo índice novo acompanha a consulta que o justifica, e começa por `empresa_id` quando a consulta filtra por empresa.
+5. FK nova (ou `CHECK` cuja função consulta outra tabela) sobre tabela que já tem linhas: a validação do `ADD CONSTRAINT` **não confia** sob RLS forçado, porque roda como `tenaz_dono` e só enxerga o que a policy deixa (provado no PostgreSQL 17.11: passa com violador dentro). Confira antes, num bloco `DO` como migrador (`RESET ROLE`, depois `SET ROLE tenaz_dono`), e aborte com `23503` se houver violador. `CHECK` simples sobre a própria linha não é afetado. Documento 2, seção 14.2.
+6. **Migração que converte, copia ou confere dado ganha teste em `backend/testes/migracoes/`**: aplica até N-1 (`migracao.AplicarAte`), grava o dado antigo como migrador, aplica N e confere a conversão; roda o Down (`migracao.ReverterAte`) e o Up de novo; e cobre cada recusa (violador, código de erro esperado, versão do esquema sem avançar). Documento 2, seção 14.2.
+7. Índice em tabela grande criado de forma concorrente; migração que trava tabela grande é dividida.
+8. Todo índice novo acompanha a consulta que o justifica, e começa por `empresa_id` quando a consulta filtra por empresa.
 
 ## 7. Fechar
 

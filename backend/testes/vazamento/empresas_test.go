@@ -3,6 +3,7 @@ package vazamento
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -223,16 +224,89 @@ func escritaCruzada(t *testing.T, ctx context.Context, tb tabelaDeEmpresa, papel
 	// Cópia exata de uma linha de B, inserida no contexto de A: o WITH CHECK
 	// recusa antes de qualquer unicidade (que, se viesse primeiro, confirmaria
 	// a existência da linha).
-	_, err = tentar("INSERT INTO "+tb.Nome+" SELECT * FROM jsonb_populate_record(NULL::"+tb.Nome+", $1::jsonb)", string(a.LinhaB))
+	copia := "INSERT INTO " + tb.Nome + " SELECT * FROM jsonb_populate_record(NULL::" + tb.Nome + ", $1::jsonb)"
+	_, err = tentar(copia, string(a.LinhaB))
 	// Quem tem INSERT na tabela precisa ser barrado pela POLICY (WITH CHECK da
 	// empresa); quem não tem, pelo privilégio. Um 42501 de outra origem não
 	// prova o WITH CHECK.
 	rotulo := papel + ": INSERT de linha com a empresa B em " + tb.Nome
-	if temInsert(t, ctx, papel, tb.Nome) {
-		exigirRLS(t, rotulo, err)
-	} else {
+	if !temInsert(t, ctx, papel, tb.Nome) {
 		exigirErro(t, rotulo, err, erroPrivilegio)
+		return
 	}
+	if cols := colunasSemInsert(t, ctx, papel, tb.Nome); len(cols) > 0 {
+		// INSERT por coluna (evento_auditoria desde a 00008: sem id,
+		// ocorrido_em, transacao e hash). A cópia inteira tem de ser barrada
+		// pelo PRIVILÉGIO, e a policy é provada com a cópia só das colunas que
+		// o papel pode mandar.
+		if err == nil || recusaDeRLS(err) || sqlstate(err) != erroPrivilegio {
+			t.Errorf("%s (todas as colunas, inclusive %v, fora do GRANT): esperado privilégio negado, veio %v", rotulo, cols, err)
+		}
+		lista := colunasComInsert(t, ctx, papel, tb.Nome)
+		copia = "INSERT INTO " + tb.Nome + " (" + lista + ") SELECT " + lista +
+			" FROM jsonb_populate_record(NULL::" + tb.Nome + ", $1::jsonb)"
+		_, err = tentar(copia, string(a.LinhaB))
+		rotulo += " (só as colunas do GRANT)"
+	}
+	if !recusaDeRLS(err) && err != nil && temGatilhoAntesDaInsercao(t, ctx, tb.Nome) {
+		// Um trigger BEFORE INSERT (o do selo, que recalcula a linha) recusou
+		// antes do WITH CHECK, que o PostgreSQL avalia sobre a linha que sai dos
+		// triggers. A recusa veio, mas não prova a policy: a suíte repete a
+		// inserção com os triggers de usuário desligados, só nesta transação.
+		err = inserirSemGatilhos(t, ctx, papel, f.internoA(), tb.Nome, copia, string(a.LinhaB))
+		rotulo += " (com os triggers de usuário desligados)"
+	}
+	exigirRLS(t, rotulo, err)
+}
+
+// colunasSemInsert lista as colunas em que o papel não tem INSERT (vazio
+// quando o INSERT é da tabela inteira ou de todas as colunas).
+func colunasSemInsert(t *testing.T, ctx context.Context, papel, tabela string) []string {
+	t.Helper()
+	return listarTexto(t, ctx, pool, `SELECT attname FROM pg_attribute WHERE attrelid = $2::regclass AND attnum > 0
+	                                  AND NOT attisdropped AND NOT has_column_privilege($1::name, $2::regclass, attname, 'INSERT')
+	                                  ORDER BY attnum`, papel, tabela)
+}
+
+// colunasComInsert devolve, prontas para SQL, as colunas em que o papel tem
+// INSERT.
+func colunasComInsert(t *testing.T, ctx context.Context, papel, tabela string) string {
+	t.Helper()
+	l := listarTexto(t, ctx, pool, `SELECT quote_ident(attname) FROM pg_attribute WHERE attrelid = $2::regclass AND attnum > 0
+	                                  AND NOT attisdropped AND has_column_privilege($1::name, $2::regclass, attname, 'INSERT')
+	                                  ORDER BY attnum`, papel, tabela)
+	return strings.Join(l, ", ")
+}
+
+// temGatilhoAntesDaInsercao: a tabela tem trigger de usuário BEFORE INSERT FOR
+// EACH ROW.
+func temGatilhoAntesDaInsercao(t *testing.T, ctx context.Context, tabela string) bool {
+	t.Helper()
+	var tem bool
+	if err := pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = $1::regclass AND NOT tgisinternal
+	                                  AND tgtype & 1 <> 0 AND tgtype & 2 <> 0 AND tgtype & 4 <> 0)`, tabela).Scan(&tem); err != nil {
+		t.Fatalf("conferir triggers de %s: %v", tabela, err)
+	}
+	return tem
+}
+
+// inserirSemGatilhos executa a inserção como o papel, no contexto, com os
+// triggers de usuário da tabela desligados numa transação desfeita. Serve só
+// para observar a policy que um trigger anterior esconde; as chaves
+// estrangeiras (triggers internos) continuam valendo.
+func inserirSemGatilhos(t *testing.T, ctx context.Context, papel string, c contexto, tabela, sql string, args ...any) error {
+	t.Helper()
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("abrir transação: %v", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	estragar(t, ctx, tx, "ALTER TABLE "+tabela+" DISABLE TRIGGER USER")
+	if err := prepararTransacao(ctx, tx, papel, c); err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, sql, args...)
+	return err
 }
 
 // O contexto não sobrevive ao fim da transação na mesma conexão física: é a
@@ -299,8 +373,8 @@ func TestFKCompostaRecusaReferenciaABNaPratica(t *testing.T) {
 			[]any{f.A.ID, f.B.UsuarioInterno, f.A.PerfilGestor}},
 		{"permissão avulsa a usuário de B", `INSERT INTO app.usuario_permissao (empresa_id, usuario_id, permissao) VALUES ($1, $2, 'os.executar')`,
 			[]any{f.A.ID, f.B.UsuarioInterno}},
-		{"usuário de A ligado a pessoa de B", `INSERT INTO app.usuario (empresa_id, nome, pessoa_id) VALUES ($1, 'x', $2)`,
-			[]any{f.A.ID, f.B.PessoaInterna}},
+		{"usuário de A ligado a pessoa de B", `INSERT INTO app.usuario (empresa_id, nome, pessoa_id, moeda) VALUES ($1, 'x', $2, $3)`,
+			[]any{f.A.ID, f.B.PessoaInterna, f.A.Moeda}},
 		{"pessoa de A na unidade de B", `INSERT INTO app.pessoa (empresa_id, nome, unidade_id) VALUES ($1, 'x', $2)`,
 			[]any{f.A.ID, f.B.Unidade}},
 	}

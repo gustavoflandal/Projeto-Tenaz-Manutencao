@@ -3,6 +3,8 @@ package adm
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"tenaz/internal/plataforma/textos"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -12,14 +14,16 @@ import (
 	"tenaz/internal/plataforma/autorizacao"
 	"tenaz/internal/plataforma/db/consultas"
 	"tenaz/internal/plataforma/erros"
+	"tenaz/internal/plataforma/pais"
 )
 
 // Unidade, turnos e feriados: RF-ADM-002.
 
 func unidadeDeLinha(r consultas.AdmBuscarUnidadeRow) Unidade {
 	u := Unidade{
-		ID: r.ID, Codigo: r.Codigo, Nome: r.Nome, CNPJ: r.Cnpj, FusoHorario: r.FusoHorario,
-		Latitude: coordenada(r.Latitude), Longitude: coordenada(r.Longitude), Situacao: r.Situacao, Versao: r.Versao,
+		ID: r.ID, Codigo: r.Codigo, Nome: r.Nome, IdentificacaoTipo: r.IdentificacaoTipo, Identificacao: r.Identificacao,
+		FusoHorario: r.FusoHorario,
+		Latitude:    coordenada(r.Latitude), Longitude: coordenada(r.Longitude), Situacao: r.Situacao, Versao: r.Versao,
 		CriadoEm: r.CriadoEm, AtualizadoEm: r.AtualizadoEm,
 	}
 	if len(r.Endereco) > 0 {
@@ -101,7 +105,10 @@ func (s *servico) ObterUnidade(ctx context.Context, a autorizacao.Ator, id uuid.
 	err := s.naEmpresa(ctx, a, func(ctx context.Context) error {
 		var err error
 		u, err = lerUnidade(ctx, a.EmpresaID, id)
-		return err
+		if err != nil {
+			return err
+		}
+		return s.visualizou(ctx, a, "unidade", id, false)
 	})
 	return u, err
 }
@@ -133,6 +140,20 @@ func (s *servico) CriarUnidade(ctx context.Context, a autorizacao.Ator, e Entrad
 		if ee := dominio.PodeCriarUnidade(emp.Plano, n); ee != nil {
 			return ee
 		}
+		// A unidade só aceita o tipo de identificação do país da empresa.
+		perfil, ok := pais.Perfil(emp.Pais)
+		if !ok {
+			return fmt.Errorf("empresa com país %q fora do perfil de país", emp.Pais)
+		}
+		if ee := dominio.ConferirTipoDaUnidade("", perfil, un.ident); ee != nil {
+			return ee
+		}
+		if ee := conferirFusoDaUnidade("", perfil, un.fuso); ee != nil {
+			return ee
+		}
+		if ee := conferirEnderecoDaUnidade("", perfil, &un, e.Endereco); ee != nil {
+			return ee
+		}
 		id := novoID()
 		if err := criarUnidadeTx(ctx, q, a.EmpresaID, id, un); err != nil {
 			return err
@@ -148,8 +169,7 @@ func (s *servico) EditarUnidade(ctx context.Context, a autorizacao.Ator, id uuid
 		return Unidade{}, err
 	}
 	if len(e.Turnos) > 0 {
-		return Unidade{}, erros.EntradaInvalida.ComCampo("turnos", erros.CampoValorInvalido,
-			"Turnos mudam pelas operações de turno, não na edição da unidade.")
+		return Unidade{}, erros.EntradaInvalida.ComCampoChave("turnos", erros.CampoValorInvalido, "campo.turnos_na_edicao", nil)
 	}
 	un, err := validarUnidade("", e, false)
 	if err != nil {
@@ -168,8 +188,26 @@ func (s *servico) EditarUnidade(ctx context.Context, a autorizacao.Ator, id uuid
 		if err := conferirVersao(e.VersaoEsperada, atual.Versao); err != nil {
 			return err
 		}
+		emp, err := q.AdmBuscarEmpresa(ctx, a.EmpresaID)
+		if err != nil {
+			return naoEncontrado(err)
+		}
+		perfil, ok := pais.Perfil(emp.Pais)
+		if !ok {
+			return fmt.Errorf("empresa com país %q fora do perfil de país", emp.Pais)
+		}
+		if ee := dominio.ConferirTipoDaUnidade("", perfil, un.ident); ee != nil {
+			return ee
+		}
+		if ee := conferirFusoDaUnidade("", perfil, un.fuso); ee != nil {
+			return ee
+		}
+		if ee := conferirEnderecoDaUnidade("", perfil, &un, e.Endereco); ee != nil {
+			return ee
+		}
 		err = q.AdmAtualizarUnidade(ctx, consultas.AdmAtualizarUnidadeParams{
-			EmpresaID: a.EmpresaID, ID: id, Codigo: un.codigo, Nome: un.nome, Cnpj: un.cnpj, Endereco: un.endereco,
+			EmpresaID: a.EmpresaID, ID: id, Codigo: un.codigo, Nome: un.nome, IdentificacaoTipo: un.identTipo(),
+			Identificacao: un.identValor(), Endereco: un.endereco,
 			FusoHorario: un.fuso, Latitude: un.lat, Longitude: un.lon,
 		})
 		if err != nil {
@@ -211,7 +249,7 @@ func (s *servico) situacaoUnidade(ctx context.Context, a autorizacao.Ator, id uu
 			return naoEncontrado(err)
 		}
 		if atual.Situacao == nova {
-			return erros.TransicaoInvalida.Com("a unidade já está %s", nova).ComDado("estado_atual", atual.Situacao)
+			return erros.TransicaoInvalida.ComChave("detalhe.unidade_ja_situacao", textos.Parametros{"situacao": textos.Chave("situacao." + nova)}).ComDado("estado_atual", atual.Situacao)
 		}
 		if nova == "inativa" {
 			n, err := q.AdmContarUnidadesAtivas(ctx, a.EmpresaID)
@@ -219,7 +257,7 @@ func (s *servico) situacaoUnidade(ctx context.Context, a autorizacao.Ator, id uu
 				return err
 			}
 			if n <= 1 {
-				return erros.TransicaoInvalida.Com("a empresa precisa de pelo menos uma unidade ativa").
+				return erros.TransicaoInvalida.ComChave("detalhe.empresa_uma_unidade_ativa", nil).
 					ComDado("estado_atual", atual.Situacao)
 			}
 		}

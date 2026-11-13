@@ -57,13 +57,9 @@ func (r *rotas) registrarUsuarios(s *api.Servidor) {
 			return nil, err
 		}
 		b := in.Body
-		custo, err := api.Centavos("custo_hora", b.CustoHora)
-		if err != nil {
-			return nil, err
-		}
 		e := adm.EntradaUsuario{
 			Nome: b.Nome, Email: b.Email, Telefone: b.Telefone, Perfis: b.Perfis, FornecedorID: b.FornecedorID,
-			LocatarioID: b.LocatarioID, PessoaID: b.PessoaID, CustoHoraCentavos: custo, UnidadePadraoID: b.UnidadePadraoID,
+			LocatarioID: b.LocatarioID, PessoaID: b.PessoaID, CustoHora: b.CustoHora, UnidadePadraoID: b.UnidadePadraoID,
 		}
 		if b.NovaPessoa != nil {
 			p := dePessoa(*b.NovaPessoa)
@@ -94,7 +90,7 @@ func (r *rotas) registrarUsuarios(s *api.Servidor) {
 
 	api.Registrar(s, rotaADM(api.Rota{
 		ID: "alterarUsuarioEu", Metodo: http.MethodPatch, Caminho: "/v1/usuarios/eu", Escopos: api.EscoposDoProprioUsuario,
-		Resumo: "Alterar os próprios dados", Descricao: "Só nome e telefone. JSON Merge Patch com If-Match.",
+		Resumo: "Alterar os próprios dados", Descricao: "Nome, telefone e idioma (pt-BR ou es-419): só o próprio usuário altera o idioma. JSON Merge Patch com If-Match.",
 	}), func(ctx context.Context, in *entradaPatch[PatchEu]) (*saida[Usuario], error) {
 		svc, a, err := r.contexto(ctx)
 		if err != nil {
@@ -112,10 +108,10 @@ func (r *rotas) registrarUsuarios(s *api.Servidor) {
 			return nil, err
 		}
 		var n camposEu
-		if _, err := api.MesclarPatch(camposEu{Nome: atual.Nome, Telefone: atual.Telefone}, in.RawBody, &n); err != nil {
+		if _, err := api.MesclarPatch(camposEu{Nome: atual.Nome, Telefone: atual.Telefone, Idioma: atual.Idioma}, in.RawBody, &n); err != nil {
 			return nil, err
 		}
-		u, err := svc.EditarEu(ctx, a, adm.EntradaEu{Nome: n.Nome, Telefone: n.Telefone})
+		u, err := svc.EditarEu(ctx, a, adm.EntradaEu{Nome: n.Nome, Telefone: n.Telefone, Idioma: &n.Idioma})
 		if err != nil {
 			return nil, err
 		}
@@ -173,7 +169,7 @@ func (r *rotas) registrarUsuarios(s *api.Servidor) {
 		}
 		esperada := atual.Versao
 		base := camposUsuario{
-			Nome: atual.Nome, Telefone: atual.Telefone, CustoHora: api.Dinheiro(atual.CustoHoraCentavos),
+			Nome: atual.Nome, Telefone: atual.Telefone, CustoHora: precoTexto(atual.CustoHora),
 			UnidadePadraoID: atual.UnidadePadraoID, PessoaID: atual.PessoaID,
 		}
 		var n camposUsuario
@@ -189,12 +185,8 @@ func (r *rotas) registrarUsuarios(s *api.Servidor) {
 			}
 		}
 		if api.PatchTemCampoAlem(in.RawBody, "perfis") {
-			custo, err := api.Centavos("custo_hora", n.CustoHora)
-			if err != nil {
-				return nil, err
-			}
 			u, err = svc.EditarUsuario(ctx, a, atual.ID, adm.EntradaEditarUsuario{
-				Nome: n.Nome, Telefone: n.Telefone, CustoHoraCentavos: custo, UnidadePadraoID: n.UnidadePadraoID,
+				Nome: n.Nome, Telefone: n.Telefone, CustoHora: n.CustoHora, UnidadePadraoID: n.UnidadePadraoID,
 				PessoaID: n.PessoaID, VersaoEsperada: &esperada,
 			})
 			if err != nil {

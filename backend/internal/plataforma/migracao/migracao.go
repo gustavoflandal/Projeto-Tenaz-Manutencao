@@ -61,6 +61,38 @@ func Aplicar(ctx context.Context, url string) error {
 	return nil
 }
 
+// AplicarAte sobe o banco até a versão indicada (inclusive). Existe para o teste
+// de migração de dados (testes/migracoes): aplica N-1, grava dado no formato
+// antigo e só então aplica N.
+func AplicarAte(ctx context.Context, url string, versao int64) error {
+	return mover(ctx, url, func(bd *sql.DB) error {
+		return goose.UpToContext(ctx, bd, esquema.DiretorioMigracoes, versao)
+	})
+}
+
+// ReverterAte desfaz as migrações acima da versão indicada (a indicada fica
+// aplicada). Só para teste do Down; produção não reverte por esta função.
+func ReverterAte(ctx context.Context, url string, versao int64) error {
+	return mover(ctx, url, func(bd *sql.DB) error {
+		return goose.DownToContext(ctx, bd, esquema.DiretorioMigracoes, versao)
+	})
+}
+
+func mover(ctx context.Context, url string, f func(*sql.DB) error) error {
+	if err := preparar(); err != nil {
+		return err
+	}
+	bd, err := abrir(url)
+	if err != nil {
+		return err
+	}
+	defer bd.Close()
+	if _, err := bd.ExecContext(ctx, `CREATE SCHEMA IF NOT EXISTS plataforma`); err != nil {
+		return fmt.Errorf("criar esquema plataforma: %w", err)
+	}
+	return f(bd)
+}
+
 // Situacao imprime o estado das migrações.
 func Situacao(ctx context.Context, url string) error {
 	if err := preparar(); err != nil {

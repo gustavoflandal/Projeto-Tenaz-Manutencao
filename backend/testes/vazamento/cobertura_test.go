@@ -230,6 +230,14 @@ func estragar(t *testing.T, ctx context.Context, tx pgx.Tx, comandos ...string) 
 	}
 }
 
+// sqlPrivilegioComColuna é o teste de privilégio que vê também o concedido
+// por coluna (SELECT, INSERT, UPDATE, REFERENCES): has_table_privilege só vê o
+// da tabela inteira, e um GRANT UPDATE (coluna) passaria calado.
+func sqlPrivilegioComColuna(papel, objeto, privilegio string) string {
+	return "CASE WHEN " + privilegio + " IN ('SELECT', 'INSERT', 'UPDATE', 'REFERENCES') THEN has_any_column_privilege(" +
+		papel + ", " + objeto + ", " + privilegio + ") ELSE has_table_privilege(" + papel + ", " + objeto + ", " + privilegio + ") END"
+}
+
 func contem(lista []string, item string) bool {
 	for _, x := range lista {
 		if x == item {
@@ -253,7 +261,7 @@ WHERE n.nspname = 'app' AND c.relispartition AND c.relkind IN ('r', 'p')
        OR EXISTS (SELECT 1
                   FROM unnest(` + sqlPapeisDaAplicacao + `) r,
                        unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) p
-                  WHERE has_table_privilege(r, c.oid, p))
+                  WHERE CASE WHEN p IN ('SELECT', 'INSERT', 'UPDATE', 'REFERENCES') THEN has_any_column_privilege(r, c.oid, p) ELSE has_table_privilege(r, c.oid, p) END)
        OR EXISTS (SELECT 1 FROM pg_trigger tp
                   WHERE tp.tgrelid = (SELECT i.inhparent FROM pg_inherits i WHERE i.inhrelid = c.oid)
                     AND NOT tp.tgisinternal
@@ -405,7 +413,7 @@ func problemasSomenteInsercao(t *testing.T, ctx context.Context, q consultor, ta
 	falhou(`SELECT NOT EXISTS (SELECT 1
 	          FROM unnest(`+sqlPapeisDaAplicacao+`) r,
 	               unnest(ARRAY['UPDATE', 'DELETE', 'TRUNCATE']) p
-	          WHERE has_table_privilege(r, $1::regclass, p))`,
+	          WHERE `+sqlPrivilegioComColuna("r", "$1::regclass", "p")+`)`,
 		"algum papel da aplicação tem UPDATE, DELETE ou TRUNCATE")
 	falhou(`SELECT EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = $1::regclass
 	                        AND tgfoid = 'app.tg_somente_insercao'::regproc

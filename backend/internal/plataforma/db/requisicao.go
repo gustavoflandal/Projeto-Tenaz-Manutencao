@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/netip"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -44,6 +45,42 @@ type Requisicao struct {
 	TokenAPIID              *uuid.UUID
 	DispositivoID           *uuid.UUID
 	OcorridoNoDispositivoEm *time.Time // instante do aparelho, em comando feito offline
+
+	// Modulo é o código do módulo que atende a chamada (sumário, seção 2, em
+	// minúsculas): vai para evento_auditoria.modulo. Quem monta o serviço do
+	// módulo o fixa; vazio grava nulo.
+	Modulo string
+	// Tela é a tela de origem, '<modulo>.<tela>', já validada contra o
+	// catálogo fechado (X-Tenaz-Tela). Só vale quando começa pelo módulo da
+	// chamada, como exige ck_evento_auditoria_tela; senão é descartada. Vazia
+	// em API, job e sincronização.
+	Tela string
+}
+
+// TelaDoModulo devolve a tela só se ela é do módulo da chamada.
+func (r Requisicao) TelaDoModulo() string { return telaCoerente(strings.ToLower(r.Modulo), r.Tela) }
+
+// Módulos aceitos em evento_auditoria.modulo (ck_evento_auditoria_modulo).
+var modulosValidos = map[string]struct{}{
+	"adm": {}, "atv": {}, "med": {}, "sol": {}, "os": {}, "pre": {}, "chk": {}, "est": {}, "ter": {}, "srv": {},
+	"prj": {}, "ctr": {}, "loc": {}, "fro": {}, "con": {}, "ind": {}, "int": {}, "ia": {}, "mob": {},
+}
+
+// ModuloValido informa se o código é um dos 19 módulos do sumário.
+func ModuloValido(m string) bool {
+	_, ok := modulosValidos[m]
+	return ok
+}
+
+// ComModulo devolve o contexto com o módulo da chamada fixado, preservando o
+// resto da requisição.
+func ComModulo(ctx context.Context, modulo string) context.Context {
+	r := RequisicaoDe(ctx)
+	if r.Modulo == modulo {
+		return ctx
+	}
+	r.Modulo = modulo
+	return ComRequisicao(ctx, r)
 }
 
 type chaveRequisicao struct{}
@@ -102,7 +139,23 @@ func (r Requisicao) normalizada(escopo Escopo) (Requisicao, error) {
 	}
 	r.UserAgent = cortar(r.UserAgent, maxUserAgent)
 	r.RequestID = cortar(r.RequestID, maxRequestID)
+	r.Modulo = strings.ToLower(r.Modulo)
+	if r.Modulo != "" && !ModuloValido(r.Modulo) {
+		return r, fmt.Errorf("módulo inválido: %q", r.Modulo)
+	}
+	r.Tela = telaCoerente(r.Modulo, r.Tela)
 	return r, nil
+}
+
+// telaCoerente descarta a tela que não é do módulo da chamada: o CHECK da
+// trilha exige que ela comece pelo módulo, e uma tela de outro módulo (a
+// listagem de usuários chamada pela tela do painel, por exemplo) faria a
+// transação inteira falhar no primeiro evento.
+func telaCoerente(modulo, tela string) string {
+	if modulo == "" || !strings.HasPrefix(tela, modulo+".") {
+		return ""
+	}
+	return tela
 }
 
 // Saneada devolve os campos técnicos prontos para o banco, sem decidir ator:
@@ -125,6 +178,9 @@ func (r Requisicao) Saneada() Requisicao {
 	}
 	r.UserAgent = cortar(r.UserAgent, maxUserAgent)
 	r.RequestID = cortar(r.RequestID, maxRequestID)
+	// O evento da identidade é sempre do módulo adm (RF-ADM-006).
+	r.Modulo = "adm"
+	r.Tela = telaCoerente(r.Modulo, r.Tela)
 	return r
 }
 

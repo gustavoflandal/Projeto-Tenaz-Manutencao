@@ -240,7 +240,36 @@ api() {
     TENAZ_CHAVE_JWT_ID="dev-1" \
     TENAZ_SMTP_ENDERECO="127.0.0.1:1025" \
     TENAZ_EMAIL_REMETENTE="nao-responda@tenaz.local" \
+    "${S3_AMBIENTE_DEV[@]}" \
     go run ./cmd/tenaz api)
+}
+
+# Armazenamento do selo da trilha de auditoria (RF-ADM-011) para a API e para o
+# job `selar-auditoria`. Valores SÓ de desenvolvimento, do SeaweedFS do compose
+# (infra/docker/seaweedfs/s3.json): a identidade `tenaz_auditoria`, que lê,
+# grava e retém no bucket tenaz-auditoria e nada mais. O SeaweedFS exige
+# endereçamento por caminho. Sem estas variáveis, a verificação de integridade
+# responde 503 (servico_indisponivel). Em homologação e produção vêm do cofre.
+# TENAZ_BANCO_URL_JOB só é exigida fora do desenvolvimento; aqui o job usa
+# TENAZ_BANCO_URL com SET ROLE tenaz_job.
+S3_AMBIENTE_DEV=(
+  env
+  TENAZ_S3_ENDPOINT="http://127.0.0.1:8333"
+  TENAZ_S3_REGIAO="us-east-1"
+  TENAZ_S3_CAMINHO_EXPLICITO="true"
+  TENAZ_S3_BUCKET_AUDITORIA="$S3_BUCKET_AUDITORIA"
+  TENAZ_S3_CHAVE_ACESSO="$S3_AUDITORIA_CHAVE"
+  TENAZ_S3_CHAVE_SECRETA="$S3_AUDITORIA_SEGREDO"
+)
+
+# Sela os dias pendentes da trilha e copia cada selo ao bucket imutável. É o
+# job diário; aqui serve ao E2E e à demonstração. Exige `infra` e `migrar`.
+selar_auditoria() {
+  titulo "Selando a trilha de auditoria"
+  (cd backend && \
+    TENAZ_BANCO_URL="$BANCO_DEV" \
+    "${S3_AMBIENTE_DEV[@]}" \
+    go run ./cmd/tenaz selar-auditoria)
 }
 
 formatar() {
@@ -259,6 +288,15 @@ conferir_formato() {
     return 1
   fi
   verde "formato ok"
+}
+
+# Catálogos de texto do servidor (ADR-013): chave faltando ou sobrando, variável
+# {{...}} diferente, plural incompleto, termo proibido pelo glossário, código de
+# erro ou tela da trilha sem texto nos dois idiomas.
+textos() {
+  titulo "Catálogos de texto do servidor (pt-BR e es-419)"
+  (cd backend && go test ./internal/plataforma/textos/ ./internal/plataforma/erros/ ./internal/plataforma/auditoria/     -run 'TestConferirCatalogos|TestTodoCodigoTemTitulo|TestTodaTelaTemNome|TestTrava|TestSemTextoLivre' -count=1)
+  verde "textos ok"
 }
 
 vet() {
@@ -339,6 +377,8 @@ tipos_js() {
 lint_js() {
   titulo "Análise estática de JavaScript"
   "${PNPM[@]}" -r lint
+  # Trava de formatação (ADR-013, Parte G) no app e nos pacotes.
+  "${PNPM[@]}" --filter @tenaz/web lint:pacotes
 }
 
 tokens_ui() {
@@ -367,6 +407,15 @@ conferir_docs() {
   python ferramentas/verificar_docs.py
 }
 
+# Casos compartilhados Go/TypeScript gerados por oráculo (ADR-013, Partes F
+# e G: dinheiro.json e formatos.json):
+# o JSON não é editado à mão; falha se divergir do gerador.
+conferir_casos() {
+  titulo "Casos compartilhados em dia com o gerador"
+  python -I backend/testes/casos/gerar_dinheiro.py --conferir
+  python -I backend/testes/casos/gerar_formatos.py --conferir
+}
+
 versao() { bash "$RAIZ/ferramentas/versao.sh"; }
 
 # ------------------------------------------------------------------- conjuntos
@@ -374,10 +423,12 @@ versao() { bash "$RAIZ/ferramentas/versao.sh"; }
 conferir() {
   conferir_formato
   vet
+  textos
   conferir_contrato
   conferir_gerados_js
   tipos_js
   lint_js
+  conferir_casos
   conferir_docs
   verde $'\nTodas as conferências passaram'
 }
@@ -408,10 +459,12 @@ Infraestrutura
 
 Backend
   compilar             compila com a versão injetada pela tag
-  api                  sobe a API local
+  api                  sobe a API local (com o S3 do selo, só de desenvolvimento)
+  selar-auditoria      sela a trilha de auditoria pendente e copia o selo ao bucket
   formatar             formata o código Go
   conferir-formato     falha se houver código fora do formato
   vet                  análise estática
+  textos               conferência dos catálogos de texto do servidor (chaves, variáveis, plural)
   testar               todos os testes, com contêiner descartável
   testar-rapido        todos os testes, reaproveitando o banco local
   vazamento            suíte de isolamento, com saída detalhada
@@ -425,13 +478,14 @@ JavaScript
   instalar-js          instala as dependências da web e do app
   testar-js            testes da web e do app
   tipos-js             conferência de tipos da web e do app
-  lint-js              análise estática (ESLint) da web
+  lint-js              análise estática (ESLint) da web e trava de formatação do app e dos pacotes
   tokens-ui            regera o CSS dos tokens a partir de tokens.json
   conferir-gerados-js  falha se tipos da API ou CSS dos tokens divergirem
   compilar-web         compila a web com a versão injetada
 
 Documentação
   conferir-docs        verifica links, IDs, versões, etapas e PDFs
+  conferir-casos       falha se os casos compartilhados divergirem do gerador
   versao               mostra a versão derivada da tag git
 
 Conjuntos
@@ -453,9 +507,11 @@ case "$tarefa" in
   migrar-situacao)   migrar_situacao "$@" ;;
   compilar)          compilar "$@" ;;
   api)               api "$@" ;;
+  selar-auditoria)   selar_auditoria "$@" ;;
   formatar)          formatar "$@" ;;
   conferir-formato)  conferir_formato "$@" ;;
   vet)               vet "$@" ;;
+  textos)            textos "$@" ;;
   testar)            testar "$@" ;;
   testar-rapido)     testar_rapido "$@" ;;
   vazamento)         vazamento "$@" ;;
@@ -470,6 +526,7 @@ case "$tarefa" in
   conferir-gerados-js) conferir_gerados_js "$@" ;;
   compilar-web)      compilar_web "$@" ;;
   conferir-docs)     conferir_docs "$@" ;;
+conferir-casos)    conferir_casos "$@" ;;
   versao)            versao "$@" ;;
   conferir)          conferir "$@" ;;
   tudo)              tudo "$@" ;;

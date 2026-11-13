@@ -10,11 +10,13 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/google/uuid"
 
+	"tenaz/internal/plataforma/auditoria"
 	"tenaz/internal/plataforma/autenticacao"
 	"tenaz/internal/plataforma/autorizacao"
 	"tenaz/internal/plataforma/db"
 	"tenaz/internal/plataforma/erros"
 	"tenaz/internal/plataforma/obs"
+	"tenaz/internal/plataforma/textos"
 	"tenaz/internal/plataforma/versao"
 )
 
@@ -22,6 +24,7 @@ const (
 	cabecalhoRequestID    = "X-Request-Id"
 	cabecalhoCSRF         = "X-CSRF-Token"
 	cabecalhoDispositivo  = "X-Tenaz-Dispositivo-Id"
+	cabecalhoTela         = "X-Tenaz-Tela"
 	cabecalhoVersaoTenaz  = "Tenaz-Versao"
 	tamanhoMaxRequestID   = 128
 	prefixoAutorizacaoApp = "Bearer "
@@ -54,8 +57,8 @@ func envolver(proximo http.Handler) http.Handler {
 		// Não existe parâmetro de empresa (seção 4.7): a empresa vem só da
 		// credencial. No corpo, a validação do contrato faz a mesma recusa.
 		if r.URL.Query().Has("empresa_id") {
-			escreverProblema(w, r, erros.CampoNaoPermitido.Com("A empresa vem sempre da credencial; remova empresa_id da consulta.").
-				ComCampo("empresa_id", erros.CampoValorInvalido, "A empresa vem da credencial; não envie empresa_id."))
+			escreverProblema(w, r, erros.CampoNaoPermitido.ComChave("detalhe.empresa_id_requisicao", nil).
+				ComCampoChave("empresa_id", erros.CampoValorInvalido, "validacao.empresa_id", nil))
 			return
 		}
 
@@ -71,7 +74,17 @@ func envolver(proximo http.Handler) http.Handler {
 				req.DispositivoID = &d
 			}
 		}
+		// Tela de origem (RF-ADM-011): a web diz em qual tela o usuário está.
+		// Vale só se estiver no catálogo fechado; qualquer outro valor é
+		// ignorado, e o evento grava só o módulo. A tela é rótulo da trilha,
+		// nunca decide acesso.
+		if t := strings.TrimSpace(r.Header.Get(cabecalhoTela)); auditoria.TelaValida(t) {
+			req.Tela = t
+		}
 		ctx := db.ComRequisicao(r.Context(), req)
+		// Idioma da resposta (ADR-013): o cabeçalho vale desde já; o idioma do
+		// usuário e o da empresa entram quando a credencial é resolvida.
+		ctx = textos.ComPreferencias(ctx, textos.Preferencias{AcceptLanguage: r.Header.Get("Accept-Language")})
 		proximo.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -134,7 +147,7 @@ func (s *Servidor) mwCredencial(ctx huma.Context, next func(huma.Context)) {
 	// Requisição de navegador que altera dados vinda de outra origem é
 	// recusada mesmo em rota pública (login CSRF, criação de conta).
 	if !bearer && !metodoSeguro(ctx.Method()) && !s.origemAceita(ctx, false) {
-		s.falhar(ctx, erros.CSRFInvalido.Com("A requisição veio de uma origem que não é a da web da Tenaz."))
+		s.falhar(ctx, erros.CSRFInvalido.ComChave("detalhe.origem_invalida", nil))
 		return
 	}
 	if r.Publica {
@@ -142,7 +155,7 @@ func (s *Servidor) mwCredencial(ctx huma.Context, next func(huma.Context)) {
 		return
 	}
 	if s.aut == nil {
-		s.falhar(ctx, erros.ServicoIndisponivel.Com("A autenticação não está configurada neste servidor."))
+		s.falhar(ctx, erros.ServicoIndisponivel.ComChave("detalhe.autenticacao_nao_configurada", nil))
 		return
 	}
 
@@ -153,30 +166,30 @@ func (s *Servidor) mwCredencial(ctx huma.Context, next func(huma.Context)) {
 	)
 	switch {
 	case bearer && r.ApenasSessaoWeb:
-		err = erros.NaoAutenticado.Com("Esta rota só aceita a sessão web.")
+		err = erros.NaoAutenticado.ComChave("detalhe.so_sessao_web", nil)
 	case bearer:
 		token := strings.TrimPrefix(ctx.Header("Authorization"), prefixoAutorizacaoApp)
 		ator, err = s.aut.AutenticarApp(ctx.Context(), token)
 	default:
 		c, errCookie := huma.ReadCookie(ctx, s.cfg.NomeCookie())
 		if errCookie != nil || c.Value == "" {
-			err = erros.NaoAutenticado.Com("Entre na Tenaz para continuar.")
+			err = erros.NaoAutenticado.ComChave("detalhe.entre_para_continuar", nil)
 			break
 		}
 		cookie = c.Value
 		alteraDados := !metodoSeguro(ctx.Method())
 		if alteraDados && !s.origemAceita(ctx, true) {
-			err = erros.CSRFInvalido.Com("Envie a requisição a partir da web da Tenaz.")
+			err = erros.CSRFInvalido.ComChave("detalhe.csrf_origem", nil)
 			break
 		}
 		ator, err = s.aut.AutenticarWeb(ctx.Context(), cookie, ctx.Header(cabecalhoCSRF), alteraDados)
 		if errors.Is(err, erros.CSRFInvalido) {
-			err = erros.CSRFInvalido.Com("Envie o cabeçalho X-CSRF-Token com o csrf_token da sessão.")
+			err = erros.CSRFInvalido.ComChave("detalhe.csrf_cabecalho", nil)
 		}
 	}
 	if err != nil {
 		if errors.Is(err, erros.CredencialInvalida) {
-			err = erros.CredencialInvalida.Com("A sessão terminou ou não é válida; entre de novo.")
+			err = erros.CredencialInvalida.ComChave("detalhe.sessao_invalida", nil)
 		}
 		s.falhar(ctx, err)
 		return
@@ -199,6 +212,7 @@ func (s *Servidor) mwCredencial(ctx huma.Context, next func(huma.Context)) {
 			return
 		}
 	}
+	ctx = huma.WithContext(ctx, textos.ComUsuario(ctx.Context(), ator.Idioma, ator.IdiomaEmpresa))
 	ctx = huma.WithValue(ctx, chaveAtor{}, ator)
 	if cookie != "" {
 		ctx = huma.WithValue(ctx, chaveCookie{}, cookie)

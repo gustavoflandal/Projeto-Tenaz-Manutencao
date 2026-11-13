@@ -12,7 +12,7 @@ O roadmap continua sendo a fonte da verdade de escopo, sequência, dependências
 | # | Documento | Conteúdo |
 |---|---|---|
 | 1 | [1_MODELO_EXECUCAO.md](1_MODELO_EXECUCAO.md) | Como se trabalha: papéis, ciclo de uma etapa, orquestração dos agentes, portões que bloqueiam, o que não se delega |
-| 2 | [2_EQUIPE_AGENTES.md](2_EQUIPE_AGENTES.md) | Os 16 agentes: especialidade, documentos donos, quando chamar, quem revisa quem |
+| 2 | [2_EQUIPE_AGENTES.md](2_EQUIPE_AGENTES.md) | Os 18 agentes: especialidade, documentos donos, quando chamar, quem revisa quem |
 | 3 | [3_SKILLS.md](3_SKILLS.md) | As 12 skills: o procedimento obrigatório de cada tarefa recorrente |
 | 4 | [4_ETAPAS.md](4_ETAPAS.md) | As etapas E00 a E12 do MVP e os blocos das fases 2 e 3, com agentes, prompt e evidência de cada uma |
 
