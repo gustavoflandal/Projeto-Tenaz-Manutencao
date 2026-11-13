@@ -327,6 +327,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/capturas-auditoria": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Captura da trilha por tela
+         * @description Todas as telas do catálogo, por módulo, com o nome da tela no idioma da resposta (Accept-Language, depois o idioma do usuário e o da empresa; Content-Language informa qual), com as chaves de visualização, impressão e extração da empresa (o padrão onde ela não mudou nada). Login, logout, inclusão, alteração, exclusão, deleção e a visualização de dado sensível nunca se desligam e não têm chave. Lista curta, inteira numa página.
+         */
+        get: operations["listarCapturasAuditoria"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/capturas-auditoria/{tela}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Ligar ou desligar a captura de uma tela
+         * @description Grava as três chaves da tela (todas obrigatórias). A troca é uma alteração sempre gravada na trilha e só vale para eventos futuros. 422 validacao_falhou se a tela não está no catálogo.
+         */
+        put: operations["alterarCapturaAuditoria"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/empresa": {
         parameters: {
             query?: never;
@@ -346,7 +386,7 @@ export interface paths {
         head?: never;
         /**
          * Alterar dados cadastrais
-         * @description JSON Merge Patch com If-Match. Plano e módulo SRV mudam pela cobrança (RF-ADM-009), não aqui: 422 campo_somente_leitura. mfa_obrigatorio liga o segundo fator obrigatório: quem não o tem passa a entrar com sessão restrita à ativação (RN-ADM-027).
+         * @description JSON Merge Patch com If-Match. Plano e módulo SRV mudam pela cobrança (RF-ADM-009), não aqui; país e moeda não mudam pela API: 422 campo_somente_leitura. A identificação é a do tipo do país da empresa e idioma_padrao é o que o usuário convidado recebe. mfa_obrigatorio liga o segundo fator obrigatório: quem não o tem passa a entrar com sessão restrita à ativação (RN-ADM-027).
          */
         patch: operations["alterarEmpresa"];
         trace?: never;
@@ -362,7 +402,7 @@ export interface paths {
         put?: never;
         /**
          * Criar a conta da empresa (cadastro pelo site)
-         * @description Cria a empresa com a unidade inicial, os 12 perfis padrão com a matriz de RF-ADM-005 e o responsável como administrador convidado, e envia o convite, que confirma o e-mail antes do primeiro acesso (RF-ADM-001; RF-SRV-001 com srv_habilitado). 409 conflito em CNPJ já cadastrado.
+         * @description Cria a empresa com a unidade inicial, os 12 perfis padrão com a matriz de RF-ADM-005 e o responsável como administrador convidado, e envia o convite, que confirma o e-mail antes do primeiro acesso (RF-ADM-001; RF-SRV-001 com srv_habilitado). O pais define a moeda e o idioma padrão. 409 conflito em identificação já cadastrada.
          */
         post: operations["criarEmpresa"];
         delete?: never;
@@ -380,7 +420,7 @@ export interface paths {
         };
         /**
          * Trilha de auditoria
-         * @description Filtros por entidade, registro, usuário, ação e período; paginada por cursor, do mais recente (RF-ADM-011).
+         * @description Filtros por usuário, tela ou módulo, tipo de operação (acao), período, IP, entidade e registro; todos juntos valem como E. Paginada por cursor, do mais recente (RF-ADM-011). O filtro por IP exige ocorrido_em[gte].
          */
         get: operations["listarEventosAuditoria"];
         put?: never;
@@ -400,9 +440,29 @@ export interface paths {
         };
         /**
          * Evento de auditoria
-         * @description Com os valores antes e depois. O evento é imutável.
+         * @description Com antes, depois, detalhe, hash e sensivel. O evento é imutável. Abrir o detalhe é uma visualizacao, gravada quando a captura da tela de origem está ligada.
          */
         get: operations["obterEventoAuditoria"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/exportacoes-eventos-auditoria": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Exportar a trilha em CSV
+         * @description As mesmas linhas e os mesmos filtros de GET /v1/eventos-auditoria, do mais recente ao mais antigo, em CSV UTF-8. Exige o período inteiro (ocorrido_em[gte] e ocorrido_em[lt]) e no máximo 50.000 eventos. A exportação é uma extracao: grava um evento quando a captura de extração da tela de origem está ligada, inclusive na tela de auditoria (RF-ADM-011).
+         */
+        get: operations["exportarEventosAuditoria"];
         put?: never;
         post?: never;
         delete?: never;
@@ -460,13 +520,13 @@ export interface paths {
         };
         /**
          * Listar pessoas
-         * @description Paginada por cursor, ordem -criado_em. O CPF sai mascarado; o inteiro só no detalhe.
+         * @description Paginada por cursor, ordem -criado_em. A identificação sai mascarada (identificacao_mascarada); a inteira só no detalhe.
          */
         get: operations["listarPessoas"];
         put?: never;
         /**
          * Cadastrar pessoa
-         * @description Com ou sem usuário (RF-ADM-015). 409 conflito em CPF repetido na empresa.
+         * @description Com ou sem usuário (RF-ADM-015). 409 conflito em identificação repetida na empresa.
          */
         post: operations["criarPessoa"];
         delete?: never;
@@ -484,7 +544,7 @@ export interface paths {
         };
         /**
          * Detalhar pessoa
-         * @description Com o CPF inteiro; a leitura é registrada na trilha. O titular lê a própria pessoa sem adm.ler_pessoas. Traz ETag.
+         * @description Com a identificação inteira; a leitura é registrada na trilha como sensível. O titular lê a própria pessoa sem adm.ler_pessoas. Traz ETag.
          */
         get: operations["obterPessoa"];
         put?: never;
@@ -570,7 +630,7 @@ export interface paths {
         head?: never;
         /**
          * Alterar unidade
-         * @description Nome, código, endereço, fuso, CNPJ e coordenadas. JSON Merge Patch com If-Match.
+         * @description Nome, código, endereço, fuso, identificação (do tipo do país da empresa) e coordenadas. JSON Merge Patch com If-Match.
          */
         patch: operations["alterarUnidade"];
         trace?: never;
@@ -870,9 +930,29 @@ export interface paths {
         head?: never;
         /**
          * Alterar os próprios dados
-         * @description Só nome e telefone. JSON Merge Patch com If-Match.
+         * @description Nome, telefone e idioma (pt-BR ou es-419): só o próprio usuário altera o idioma. JSON Merge Patch com If-Match.
          */
         patch: operations["alterarUsuarioEu"];
+        trace?: never;
+    };
+    "/v1/verificacoes-auditoria": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Verificar a integridade da trilha
+         * @description Para cada dia UTC do período (de..ate, inclusive, até 400 dias), recalcula no banco o hash dos eventos, o selo e a cadeia, e compara o selo com a cópia no armazenamento imutável. Estados: integro, violado (motivo e primeiro evento alterado, quando há como apontar) e nao_selado (dia que ainda não tem selo). 503 servico_indisponivel se o armazenamento do selo não responde: sem a cópia não se afirma integridade (RF-ADM-011).
+         */
+        get: operations["verificarIntegridadeAuditoria"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/versao": {
@@ -922,6 +1002,25 @@ export interface components {
             /** @description Valores aceitos, quando o campo é uma enumeração */
             valores_aceitos?: string[] | null;
         };
+        CapturaAuditoria: {
+            /** @description Falso: a empresa ainda não mudou nenhuma chave desta tela e vale o padrão (impressão e extração ligadas, visualização desligada) */
+            configurada: boolean;
+            /** @description Grava a extração (lista, relatório, exportação) feita nesta tela */
+            extracao: boolean;
+            /** @description Grava a impressão (PDF ou tela) feita nesta tela */
+            impressao: boolean;
+            /** @example adm */
+            modulo: string;
+            /** @example Pessoas */
+            nome: string;
+            /**
+             * @description <modulo>.<tela> do catálogo fechado
+             * @example adm.pessoas
+             */
+            tela: string;
+            /** @description Grava um evento por registro aberto nesta tela */
+            visualizacao: boolean;
+        };
         ConfiguracaoMFA: {
             /** @description Segredo para digitar no aplicativo autenticador */
             segredo_base32: string;
@@ -942,20 +1041,53 @@ export interface components {
             /** @description Falso: o e-mail já entrava em outra empresa e usa a senha que tem */
             identidade_nova: boolean;
         };
+        DiaVerificado: {
+            /**
+             * Format: date
+             * @description Dia UTC
+             */
+            dia: string;
+            /** @enum {string} */
+            estado: "integro" | "violado" | "nao_selado";
+            /**
+             * Format: uuid
+             * @description Primeiro evento alterado, quando há como apontar
+             */
+            evento_id: string;
+            /** @description Em violado: evento_alterado, eventos_divergentes, selo_adulterado, cadeia_quebrada, selo_ausente, evento_anterior_ao_primeiro_selo, copia_ausente ou copia_divergente. Em nao_selado: ainda_nao_selado ou anterior_ao_primeiro_selo */
+            motivo: string | null;
+        };
         Empresa: {
             /** Format: date-time */
             atualizado_em: string;
-            /** @description 14 dígitos, sem máscara */
-            cnpj: string | null;
             /** Format: date-time */
             criado_em: string;
             /** @example America/Sao_Paulo */
             fuso_horario: string;
             /** Format: uuid */
             id: string;
+            /** @description Normalizada: maiúsculas, só letras e dígitos, sem máscara */
+            identificacao: string | null;
+            /** @description cnpj no BR, cuit na AR, ruc no PY */
+            identificacao_tipo: string | null;
+            /**
+             * @description Idioma que o usuário convidado recebe; cada usuário muda o seu em PATCH /v1/usuarios/eu
+             * @enum {string}
+             */
+            idioma_padrao: "pt-BR" | "es-419";
             /** @description Segundo fator exigido de todos os usuários (RN-ADM-027): quem não o tem entra com sessão restrita à ativação */
             mfa_obrigatorio: boolean;
+            /**
+             * @description Moeda da empresa, dada pelo país; só leitura
+             * @enum {string}
+             */
+            moeda: "BRL" | "ARS" | "PYG";
             nome_fantasia: string | null;
+            /**
+             * @description Define a moeda, o idioma padrão sugerido e o tipo de identificação; só leitura depois da criação da conta
+             * @enum {string}
+             */
+            pais: "BR" | "AR" | "PY";
             /** @description essencial, profissional ou enterprise; nulo na conta só do plano Serviços */
             plano: string | null;
             razao_social: string;
@@ -980,7 +1112,22 @@ export interface components {
             nome: string;
         };
         EmpresaSessao: {
+            /**
+             * @description Idioma padrão da empresa (empresa.idioma_padrao)
+             * @enum {string}
+             */
+            idioma_padrao: "pt-BR" | "es-419";
+            /**
+             * @description Moeda da empresa, dada pelo país; só leitura
+             * @enum {string}
+             */
+            moeda: "BRL" | "ARS" | "PYG";
             nome: string;
+            /**
+             * @description País da empresa (ISO 3166-1 alfa-2); só leitura
+             * @enum {string}
+             */
+            pais: "BR" | "AR" | "PY";
             /**
              * @description Nulo na conta só do plano Serviços
              * @enum {string|null}
@@ -991,12 +1138,14 @@ export interface components {
         };
         Endereco: {
             bairro?: string;
-            cep?: string;
+            /** @description CEP (BR), CPA ou código de 4 dígitos (AR), 6 dígitos (PY); recebido com ou sem máscara, devolvido normalizado */
+            codigo_postal?: string;
             complemento?: string;
             logradouro?: string;
             municipio?: string;
             numero?: string;
-            uf?: string;
+            /** @description Código ISO 3166-2 do país da empresa (BR-SP, AR-C, PY-ASU) */
+            subdivisao?: string;
         };
         EntradaAutorizarPOSTBody: {
             client_id: string;
@@ -1013,10 +1162,20 @@ export interface components {
             response_type: "code";
             state?: string;
         };
+        EntradaCapturaAuditoria: {
+            extracao: boolean;
+            impressao: boolean;
+            visualizacao: boolean;
+        };
         EntradaCodigoMFABody: {
             codigo: string;
         };
         EntradaConviteAceitarBody: {
+            /**
+             * @description Idioma em que a pessoa aceitou; passa a ser o dela. Ausente: o do convite (padrão da empresa)
+             * @enum {string}
+             */
+            idioma?: "pt-BR" | "es-419";
             /** @description Obrigatória quando pede_senha; ignorada quando o e-mail já tem login */
             senha?: string;
             token: string;
@@ -1057,13 +1216,18 @@ export interface components {
         };
         EntradaPessoa: {
             cargo?: string;
-            /** @description Com ou sem máscara */
-            cpf?: string;
             /** Format: date */
             data_nascimento?: string;
             email?: string;
             /** Format: uuid */
             fornecedor_id?: string;
+            /** @description Com ou sem máscara; a forma e, no CPF, o dígito verificador são conferidos */
+            identificacao?: string;
+            /**
+             * @description Qualquer país suportado; vai junto com identificacao
+             * @enum {string}
+             */
+            identificacao_tipo?: "cpf" | "cuil" | "dni" | "ci";
             matricula?: string;
             nome: string;
             registro_profissional?: string;
@@ -1123,10 +1287,15 @@ export interface components {
             nome?: string;
         };
         EntradaUnidade: {
-            cnpj?: string;
             codigo: string;
             endereco?: components["schemas"]["Endereco"];
             fuso_horario?: string;
+            identificacao?: string;
+            /**
+             * @description Só o tipo do país da empresa; vai junto com identificacao
+             * @enum {string}
+             */
+            identificacao_tipo?: "cnpj" | "cuit" | "ruc";
             /** Format: double */
             latitude?: number;
             /** Format: double */
@@ -1136,7 +1305,10 @@ export interface components {
             turnos?: components["schemas"]["EntradaTurno"][] | null;
         };
         EntradaUsuario: {
-            /** @example 125.50 */
+            /**
+             * @description Preço unitário em texto decimal, até 6 casas, sem sinal; recusado, sem arredondar, o que a moeda da empresa não representa
+             * @example 125.50
+             */
             custo_hora?: string;
             email: string;
             /**
@@ -1164,7 +1336,11 @@ export interface components {
             unidade_padrao_id?: string;
         };
         Evento: {
-            acao: string;
+            /**
+             * @description Tipo de operação (lista fechada, sumário 3.6)
+             * @enum {string}
+             */
+            acao: "login" | "logout" | "inclusao" | "alteracao" | "exclusao" | "delecao" | "visualizacao" | "impressao" | "extracao";
             /** @description Valores antes da alteração; nulo na criação */
             antes: unknown;
             /** @enum {string} */
@@ -1172,17 +1348,23 @@ export interface components {
             campos_alterados: string[] | null;
             /** Format: uuid */
             conexao_empresa_id: string;
-            /** @description Valores depois da alteração; nulo na exclusão */
+            /** @description Valores depois da alteração; nulo na exclusão. Na falha de login, traz o motivo */
             depois: unknown;
+            /** @description Filtros, formato e quantidade de uma impressão ou extração; nunca o conteúdo mostrado */
+            detalhe: unknown;
             /** Format: uuid */
             dispositivo_id: string;
             entidade: string;
             entidade_chave: string | null;
             /** Format: uuid */
             entidade_id: string;
+            /** @description sha256, em hexadecimal, do conteúdo do evento (formato 1, documento 2, seção 9.2.1) */
+            hash: string;
             /** Format: uuid */
             id: string;
             ip: string | null;
+            /** @description Código do módulo (sumário, seção 2), em minúsculas */
+            modulo: string | null;
             /** Format: date-time */
             ocorrido_em: string;
             /** Format: date-time */
@@ -1190,11 +1372,22 @@ export interface components {
             /** @enum {string|null} */
             origem: "web" | "app" | "api" | "job" | "importacao" | null;
             request_id: string | null;
+            /**
+             * @description falha só em login; o motivo está em depois do detalhe do evento
+             * @enum {string}
+             */
+            resultado: "sucesso" | "falha";
+            /** @description O registro mostrado, impresso ou extraído tem dado sensível */
+            sensivel: boolean;
+            /** @description Tela de origem, <modulo>.<tela> do catálogo fechado; nula em API, job e sincronização */
+            tela: string | null;
             /** Format: uuid */
             token_api_id: string;
             user_agent: string | null;
             /** Format: uuid */
             usuario_id: string;
+            /** @description Nome do usuário no instante do evento; a troca de nome não reescreve o histórico */
+            usuario_nome: string | null;
         };
         Feriado: {
             /** Format: date */
@@ -1206,6 +1399,14 @@ export interface components {
             unidade_id: string;
             /** Format: int64 */
             versao: number;
+        };
+        ListaCapturaAuditoria: {
+            dados: components["schemas"]["CapturaAuditoria"][] | null;
+            paginacao: components["schemas"]["Paginacao"];
+        };
+        ListaDiaVerificado: {
+            dados: components["schemas"]["DiaVerificado"][] | null;
+            paginacao: components["schemas"]["Paginacao"];
         };
         ListaFeriado: {
             dados: components["schemas"]["Feriado"][] | null;
@@ -1236,11 +1437,26 @@ export interface components {
             paginacao: components["schemas"]["Paginacao"];
         };
         NovaEmpresa: {
-            /** @description Com ou sem máscara; dígito verificador conferido */
-            cnpj: string;
-            /** @description IANA; ausente: America/Sao_Paulo */
+            /** @description IANA; ausente: o do país (America/Sao_Paulo, America/Argentina/Buenos_Aires, America/Asuncion) */
             fuso_horario?: string;
+            /** @description Com ou sem máscara; a forma e, no CNPJ, o dígito verificador são conferidos */
+            identificacao: string;
+            /**
+             * @description Só o tipo de pessoa jurídica do país: cnpj no BR, cuit na AR, ruc no PY
+             * @enum {string}
+             */
+            identificacao_tipo: "cnpj" | "cuit" | "ruc";
+            /**
+             * @description Ausente: o do país (pt-BR no BR, es-419 na AR e no PY)
+             * @enum {string}
+             */
+            idioma_padrao?: "pt-BR" | "es-419";
             nome_fantasia?: string;
+            /**
+             * @description Define a moeda (BRL, ARS, PYG), o idioma padrão sugerido e o tipo de identificação; não muda depois
+             * @enum {string}
+             */
+            pais: "BR" | "AR" | "PY";
             /**
              * @description Ausente só com srv_habilitado (conta do plano Serviços)
              * @enum {string}
@@ -1266,9 +1482,16 @@ export interface components {
             tem_mais: boolean;
         };
         PatchEmpresa: {
-            /** @description Com ou sem máscara */
-            cnpj?: string;
             fuso_horario?: string;
+            /** @description Com ou sem máscara; a forma e, no CNPJ, o dígito verificador são conferidos */
+            identificacao?: string;
+            /**
+             * @description Só o tipo do país da empresa
+             * @enum {string}
+             */
+            identificacao_tipo?: "cnpj" | "cuit" | "ruc";
+            /** @enum {string} */
+            idioma_padrao?: "pt-BR" | "es-419";
             /** @description Exige segundo fator de todos os usuários da empresa */
             mfa_obrigatorio?: boolean;
             nome_fantasia?: string | null;
@@ -1276,25 +1499,32 @@ export interface components {
         };
         PatchEndereco: {
             bairro?: string | null;
-            cep?: string | null;
+            codigo_postal?: string | null;
             complemento?: string | null;
             logradouro?: string | null;
             municipio?: string | null;
             numero?: string | null;
-            uf?: string | null;
+            subdivisao?: string | null;
         } | null;
         PatchEu: {
+            /**
+             * @description Só o próprio usuário altera o idioma
+             * @enum {string}
+             */
+            idioma?: "pt-BR" | "es-419";
             nome?: string;
             telefone?: string | null;
         };
         PatchPessoa: {
             cargo?: string | null;
-            cpf?: string | null;
             /** Format: date */
             data_nascimento?: string | null;
             email?: string | null;
             /** Format: uuid */
             fornecedor_id?: string | null;
+            identificacao?: string | null;
+            /** @description cpf, cuil, dni ou ci; vai junto com identificacao */
+            identificacao_tipo?: string | null;
             matricula?: string | null;
             nome?: string;
             registro_profissional?: string | null;
@@ -1312,11 +1542,13 @@ export interface components {
             nome?: string | null;
         };
         PatchUnidade: {
-            cnpj?: string | null;
             codigo?: string;
             /** @description Mesclado campo a campo; null apaga o endereço */
             endereco?: components["schemas"]["PatchEndereco"];
             fuso_horario?: string | null;
+            identificacao?: string | null;
+            /** @description cnpj, cuit ou ruc: o do país da empresa; vai junto com identificacao */
+            identificacao_tipo?: string | null;
             /** Format: double */
             latitude?: number | null;
             /** Format: double */
@@ -1370,8 +1602,6 @@ export interface components {
             /** Format: date-time */
             atualizado_em: string;
             cargo: string | null;
-            /** @description 11 dígitos, sem máscara */
-            cpf: string | null;
             /** Format: date-time */
             criado_em: string;
             /** Format: date */
@@ -1381,6 +1611,10 @@ export interface components {
             fornecedor_id: string;
             /** Format: uuid */
             id: string;
+            /** @description Normalizada, sem máscara; dado sensível */
+            identificacao: string | null;
+            /** @description cpf, cuil, dni ou ci */
+            identificacao_tipo: string | null;
             matricula: string | null;
             nome: string;
             registro_profissional: string | null;
@@ -1468,7 +1702,11 @@ export interface components {
             telefone?: string;
         };
         ResumoEvento: {
-            acao: string;
+            /**
+             * @description Tipo de operação (lista fechada, sumário 3.6)
+             * @enum {string}
+             */
+            acao: "login" | "logout" | "inclusao" | "alteracao" | "exclusao" | "delecao" | "visualizacao" | "impressao" | "extracao";
             /** @enum {string} */
             ator_tipo: "usuario" | "sistema" | "integracao" | "suporte_tenaz" | "link_execucao" | "sincronizacao_conexao";
             campos_alterados: string[] | null;
@@ -1483,6 +1721,8 @@ export interface components {
             /** Format: uuid */
             id: string;
             ip: string | null;
+            /** @description Código do módulo (sumário, seção 2), em minúsculas */
+            modulo: string | null;
             /** Format: date-time */
             ocorrido_em: string;
             /** Format: date-time */
@@ -1490,21 +1730,36 @@ export interface components {
             /** @enum {string|null} */
             origem: "web" | "app" | "api" | "job" | "importacao" | null;
             request_id: string | null;
+            /**
+             * @description falha só em login; o motivo está em depois do detalhe do evento
+             * @enum {string}
+             */
+            resultado: "sucesso" | "falha";
+            /** @description O registro mostrado, impresso ou extraído tem dado sensível */
+            sensivel: boolean;
+            /** @description Tela de origem, <modulo>.<tela> do catálogo fechado; nula em API, job e sincronização */
+            tela: string | null;
             /** Format: uuid */
             token_api_id: string;
             /** Format: uuid */
             usuario_id: string;
+            /** @description Nome do usuário no instante do evento; a troca de nome não reescreve o histórico */
+            usuario_nome: string | null;
         };
         ResumoPessoa: {
             cargo: string | null;
-            /** @example ***.***.789-01 */
-            cpf_mascarado: string | null;
             /** Format: date-time */
             criado_em: string;
             /** Format: uuid */
             fornecedor_id: string;
             /** Format: uuid */
             id: string;
+            /**
+             * @description CPF mostra o miolo; os demais tipos, os 3 últimos caracteres
+             * @example ***.982.247-**
+             */
+            identificacao_mascarada: string | null;
+            identificacao_tipo: string | null;
             matricula: string | null;
             nome: string;
             /** @enum {string} */
@@ -1521,7 +1776,6 @@ export interface components {
         ResumoUnidade: {
             /** Format: date-time */
             atualizado_em: string;
-            cnpj: string | null;
             codigo: string;
             /** Format: date-time */
             criado_em: string;
@@ -1530,6 +1784,9 @@ export interface components {
             fuso_horario: string | null;
             /** Format: uuid */
             id: string;
+            identificacao: string | null;
+            /** @description Só o tipo do país da empresa */
+            identificacao_tipo: string | null;
             /** Format: double */
             latitude: number | null;
             /** Format: double */
@@ -1665,7 +1922,6 @@ export interface components {
         Unidade: {
             /** Format: date-time */
             atualizado_em: string;
-            cnpj: string | null;
             codigo: string;
             /** Format: date-time */
             criado_em: string;
@@ -1674,6 +1930,9 @@ export interface components {
             fuso_horario: string | null;
             /** Format: uuid */
             id: string;
+            identificacao: string | null;
+            /** @description Só o tipo do país da empresa */
+            identificacao_tipo: string | null;
             /** Format: double */
             latitude: number | null;
             /** Format: double */
@@ -1691,7 +1950,7 @@ export interface components {
             /** Format: date-time */
             criado_em: string;
             /**
-             * @description Custo por hora, texto decimal
+             * @description Custo por hora: preço unitário em texto decimal, com ponto, no mínimo as casas da moeda e até 6; sem sinal
              * @example 125.50
              */
             custo_hora: string | null;
@@ -1702,9 +1961,24 @@ export interface components {
             fornecedor_id: string;
             /** Format: uuid */
             id: string;
+            /**
+             * @description Idioma do usuário; só ele o altera, em PATCH /v1/usuarios/eu
+             * @enum {string}
+             */
+            idioma: "pt-BR" | "es-419";
             /** Format: uuid */
             locatario_id: string;
+            /**
+             * @description Moeda de custo_hora: a da empresa; só leitura
+             * @enum {string}
+             */
+            moeda: "BRL" | "ARS" | "PYG";
             nome: string;
+            /**
+             * @description País da empresa; só leitura. A interface lê este campo e nunca o deriva da moeda
+             * @enum {string}
+             */
+            pais: "BR" | "AR" | "PY";
             perfis: components["schemas"]["PerfilAtribuido"][] | null;
             /** @description Permissões concedidas a este usuário além dos perfis, como os.encerrar */
             permissoes_avulsas: string[] | null;
@@ -1726,7 +2000,7 @@ export interface components {
             /** Format: date-time */
             criado_em: string;
             /**
-             * @description Custo por hora, texto decimal
+             * @description Custo por hora: preço unitário em texto decimal, com ponto, no mínimo as casas da moeda e até 6; sem sinal
              * @example 125.50
              */
             custo_hora: string | null;
@@ -1737,9 +2011,24 @@ export interface components {
             fornecedor_id: string;
             /** Format: uuid */
             id: string;
+            /**
+             * @description Idioma do usuário; só ele o altera, em PATCH /v1/usuarios/eu
+             * @enum {string}
+             */
+            idioma: "pt-BR" | "es-419";
             /** Format: uuid */
             locatario_id: string;
+            /**
+             * @description Moeda de custo_hora: a da empresa; só leitura
+             * @enum {string}
+             */
+            moeda: "BRL" | "ARS" | "PYG";
             nome: string;
+            /**
+             * @description País da empresa; só leitura. A interface lê este campo e nunca o deriva da moeda
+             * @enum {string}
+             */
+            pais: "BR" | "AR" | "PY";
             perfis: components["schemas"]["PerfilAtribuido"][] | null;
             /** @description Permissões concedidas a este usuário além dos perfis, como os.encerrar */
             permissoes_avulsas: string[] | null;
@@ -1758,6 +2047,11 @@ export interface components {
             email: string;
             /** Format: uuid */
             id: string;
+            /**
+             * @description Idioma do usuário (usuario.idioma); só leitura aqui, a troca é PATCH /v1/usuarios/eu
+             * @enum {string}
+             */
+            idioma: "pt-BR" | "es-419";
             /** @description Segundo fator por TOTP ativo */
             mfa_ativo: boolean;
             nome: string;
@@ -3094,6 +3388,165 @@ export interface operations {
             };
         };
     };
+    listarCapturasAuditoria: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Content-Language"?: string;
+                    Vary?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListaCapturaAuditoria"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+        };
+    };
+    alterarCapturaAuditoria: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description <modulo>.<tela> do catálogo fechado */
+                tela: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntradaCapturaAuditoria"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Content-Language"?: string;
+                    Vary?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CapturaAuditoria"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+        };
+    };
     obterEmpresa: {
         parameters: {
             query?: never;
@@ -3345,15 +3798,22 @@ export interface operations {
     listarEventosAuditoria: {
         parameters: {
             query?: {
+                /** @description Tipo de operação: login, logout, inclusao, alteracao, exclusao, delecao, visualizacao, impressao ou extracao */
                 acao?: string;
                 cursor?: string;
                 entidade?: string;
                 entidade_id?: string;
+                /** @description Endereço exato; exige ocorrido_em[gte] */
+                ip?: string;
                 limite?: number;
+                /** @description Código do módulo, em minúsculas */
+                modulo?: string;
                 /** @description A partir deste instante, inclusive */
                 "ocorrido_em[gte]"?: string;
                 /** @description Antes deste instante */
                 "ocorrido_em[lt]"?: string;
+                /** @description <modulo>.<tela> do catálogo fechado */
+                tela?: string;
                 usuario_id?: string;
             };
             header?: never;
@@ -3448,6 +3908,94 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Evento"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+        };
+    };
+    exportarEventosAuditoria: {
+        parameters: {
+            query?: {
+                acao?: string;
+                entidade?: string;
+                entidade_id?: string;
+                ip?: string;
+                modulo?: string;
+                /** @description Obrigatório */
+                "ocorrido_em[gte]"?: string;
+                /** @description Obrigatório */
+                "ocorrido_em[lt]"?: string;
+                tela?: string;
+                usuario_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Arquivo text/csv */
+            200: {
+                headers: {
+                    "Content-Disposition"?: string;
+                    "Content-Type"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
                 };
             };
             /** @description Bad Request */
@@ -6507,6 +7055,94 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+        };
+    };
+    verificarIntegridadeAuditoria: {
+        parameters: {
+            query?: {
+                /** @description Último dia UTC, inclusive; no máximo 400 dias depois de de */
+                ate?: string;
+                /** @description Primeiro dia UTC, inclusive */
+                de?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListaDiaVerificado"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problema"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

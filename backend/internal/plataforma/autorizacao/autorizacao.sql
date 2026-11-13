@@ -4,7 +4,7 @@
 -- explícita.
 
 -- name: AutzBuscarUsuario :one
-SELECT id, identidade_id, pessoa_id, fornecedor_id, locatario_id, nome, email, situacao
+SELECT id, identidade_id, pessoa_id, fornecedor_id, locatario_id, nome, email, situacao, idioma
 FROM app.usuario
 WHERE empresa_id = sqlc.arg(empresa_id) AND id = sqlc.arg(id) AND excluido_em IS NULL;
 
@@ -23,6 +23,6 @@ FROM app.usuario_permissao
 WHERE empresa_id = sqlc.arg(empresa_id) AND usuario_id = sqlc.arg(usuario_id) AND excluido_em IS NULL;
 
 -- name: AutzBuscarEmpresa :one
-SELECT id, razao_social, nome_fantasia, plano, srv_habilitado, mfa_obrigatorio, situacao
+SELECT id, razao_social, nome_fantasia, plano, srv_habilitado, mfa_obrigatorio, situacao, idioma_padrao, pais, moeda
 FROM app.empresa
 WHERE id = sqlc.arg(id) AND excluido_em IS NULL;

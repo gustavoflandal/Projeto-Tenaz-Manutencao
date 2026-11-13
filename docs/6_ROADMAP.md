@@ -1,12 +1,14 @@
 # Roadmap — Tenaz
 
-**Versão:** 0.5 · **Data:** 13/11/2026 · **Status:** Em elaboração
+**Versão:** 0.6 · **Data:** 13/11/2026 · **Status:** Em elaboração
 **Produto:** Tenaz · Gestão de Manutenção e Frota
-Alinhado ao sumário executivo 0.7.
+Alinhado ao sumário executivo 0.8.
+
+**Mudanças da versão 0.6:** o sumário 0.8 tornou a Tenaz **multipaís e bilíngue desde o MVP** (Brasil, Argentina e Paraguai; `pt-BR` e `es-419`; [etapa 014](etapas/014_2026-11-13_multipais-e-idiomas.md), ADR-013) e o documento 1 ganhou RNF-043 a RNF-046 (os não funcionais passam de 42 para **46**). A seção 2.3 estima o impacto no prazo e no time (cerca de 17 a 20 sprints-pessoa no MVP, além do que a E01 já gastou, e cerca de 10 a 13 na Fase 2) e apresenta as opções A a D para o MVP e três para a Fase 2. O roadmap **não decide** a pendência **P15** (preço, moeda de cobrança e impacto no prazo e no time): a tabela da seção 2 e as sprints **não mudam até a decisão do dono do produto**. Entram a tabela de onde o multipaís entra em cada etapa (seção 4), as atividades de apoio externo da Argentina e do Paraguai (seção 7), as dependências 26 e 27, a contingência do portão por país (seção 6), os riscos 29 a 34 e o critério do marco M5. Sem mudança de sprint, prazo, time ou escopo dos requisitos funcionais.
 
 **Mudanças da versão 0.5:** a Tenaz não guarda dado de saúde (sumário 0.7, seção 3.6, decisão do dono do produto em 13/11/2026); o risco 24 deixa de citar saúde entre os dados pessoais fora da lista fechada da conexão. Sem mudança de sprint, prazo ou escopo do cronograma.
 
-Este documento organiza a entrega das três fases definidas no [sumário executivo](0_SUMARIO_EXECUTIVO.md) (seção 4): MVP (meses 0 a 6), Fase 2 (meses 6 a 12) e Fase 3 (meses 12 a 24). O MVP está quebrado em sprints de 2 semanas; as Fases 2 e 3, em blocos mensais. Cada bloco lista os requisitos que entrega, com os IDs de [1_ESPECIFICACAO_REQUISITOS.md](1_ESPECIFICACAO_REQUISITOS.md) (versão 0.4).
+Este documento organiza a entrega das três fases definidas no [sumário executivo](0_SUMARIO_EXECUTIVO.md) (seção 4): MVP (meses 0 a 6), Fase 2 (meses 6 a 12) e Fase 3 (meses 12 a 24). O MVP está quebrado em sprints de 2 semanas; as Fases 2 e 3, em blocos mensais. Cada bloco lista os requisitos que entrega, com os IDs de [1_ESPECIFICACAO_REQUISITOS.md](1_ESPECIFICACAO_REQUISITOS.md) (versão 0.7).
 
 A sequência, a duração dos blocos, a equipe e as datas são **proposta**, salvo onde o texto indica a fonte. Nenhuma estimativa vem de velocidade medida: o time ainda não existe.
 
@@ -62,7 +64,7 @@ Marcos:
 | Fase 2 | Meses 7 a 12 (ver as opções da seção 2.2) | 75 (62 + 13 da configuração por segmento) | Sumário, seção 4 |
 | Fase 3 | Meses 13 a 24 | 16 | Sumário, seção 4 |
 
-Requisitos não funcionais: 42 (RNF-001 a RNF-042), verificados nos marcos da seção 3.2. RNF-041 e RNF-042 (conexão entre contas) valem desde o MVP.
+Requisitos não funcionais: 46 (RNF-001 a RNF-046), verificados nos marcos da seção 3.2. RNF-041 e RNF-042 (conexão entre contas) valem desde o MVP, assim como RNF-043 a RNF-046 (idiomas, países, dinheiro e conteúdo legal por país), que nascem na E01; RNF-046 só tem código a partir da E08.
 
 O mês 0 começa quando o núcleo do time (seção 2) estiver contratado. As datas de calendário serão fixadas nesse momento (proposta).
 
@@ -72,7 +74,7 @@ O mês 0 começa quando o núcleo do time (seção 2) estiver contratado. As dat
 
 **Os prazos deste roadmap só valem com o time abaixo.** É um time enxuto para o escopo: 14 pessoas em tempo integral no MVP e 15 a partir da Fase 2 (proposta). Em relação à versão 0.2, o quarto backend e o terceiro frontend, que entrariam na Fase 2, são antecipados para S1 por causa do SRV (seção 2.1); o time da Fase 2 não muda.
 
-A configuração por segmento (sumário 0.5) acrescenta trabalho ao MVP e à Fase 2 que este time cobre só com risco ou com mais prazo; as opções de reforço estão na seção 2.2. **A tabela abaixo não muda até a decisão do dono do produto sobre o tamanho do time.**
+A configuração por segmento (sumário 0.5) acrescenta trabalho ao MVP e à Fase 2 que este time cobre só com risco ou com mais prazo; as opções de reforço estão na seção 2.2. **A tabela abaixo não muda até a decisão do dono do produto sobre o tamanho do time.** O escopo multipaís e bilíngue (sumário 0.8) soma-se à configuração por segmento: as opções estão na seção 2.3.
 
 | Papel | MVP | Fase 2 | Fase 3 | Responsabilidade principal |
 |---|---|---|---|---|
@@ -87,7 +89,7 @@ A configuração por segmento (sumário 0.5) acrescenta trabalho ao MVP e à Fas
 | Engenharia de dados e IA | 0 | 1 | 1 | Telemática, RAG, IoT, KPIs avançados |
 | **Total em tempo integral** | **14** | **15** | **15** | |
 
-Apoio externo em tempo parcial (proposta): advogado (P1, P7, contratos, LGPD); consultor de SST para validar NR-12, NR-13 e LOTO; contador para NF-e, CBS e IBS e para os CFOPs de remessa, conserto e locação (P8); empresa de pentest; auditor SOC 2; encarregado de dados como serviço.
+Apoio externo em tempo parcial (proposta): advogado (P1, P7, contratos, LGPD) e, para a Argentina e o Paraguai, advogado local (P14); revisor de espanhol falante nativo (seção 2.3); consultor de SST para validar NR-12, NR-13 e LOTO; contador para NF-e, CBS e IBS e para os CFOPs de remessa, conserto e locação (P8), e contador de cada país para o fiscal da Argentina e do Paraguai (P13); consultor de SST de cada país (P12); empresa de pentest; auditor SOC 2; encarregado de dados como serviço.
 
 ### 2.1 O MVP cabe em 13 sprints?
 
@@ -206,6 +208,68 @@ Somam-se cerca de 1 a 1,5 sprint de QA, 1 de design (cronograma do projeto, pain
 | **2. Sem reforço, com mais prazo** | 15 pessoas | Fase 2 até o mês 13 ou 14; M6, a Fase 3 e o M8 deslizam o mesmo tanto | PRJ, CTR e pacotes divididos entre as trilhas A e D, na mesma ordem da seção 5; a janela do SOC 2 não muda, porque não depende desses módulos |
 | **3. Sem reforço e prazo fixo** | 15 pessoas | M6 no mês 12 | Exige mover requisitos da Fase 2 para a Fase 3 além da válvula do risco 19 (RF-LOC-007 e RF-LOC-009); qualquer mudança de fase é decisão do dono do produto |
 
+### 2.3 Multipaís e idiomas (sumário 0.8, ADR-013)
+
+O sumário 0.8 (seção 3.6, "Países e idiomas") torna a Tenaz **multipaís desde o MVP** (Brasil, Argentina e Paraguai) e **bilíngue desde a E01** (`pt-BR` e `es-419`), e a [etapa 014](etapas/014_2026-11-13_multipais-e-idiomas.md) os transforma nos requisitos RNF-043 a RNF-046 ([documento 1](1_ESPECIFICACAO_REQUISITOS.md), seção 5.12). Nenhum requisito funcional foi acrescentado nem mudou de fase: o multipaís é um custo **transversal**, pago em toda etapa que tem tela, texto, dinheiro ou conteúdo legal. Tudo nesta seção é **(proposta)**, estimativa sem velocidade medida, como nas seções 2.1 e 2.2. O roadmap mostra a estimativa e as opções e **não decide** o prazo nem o time: é a pendência **P15** do sumário, do dono do produto ([CLAUDE.md](../CLAUDE.md), seção 5).
+
+#### O que já foi feito na E01
+
+A base está no código e nos testes da E01 em andamento: país, identificação por tipo, moeda e dinheiro (Parte F do ADR-013), idioma por usuário e por empresa, textos do servidor e da interface nos dois idiomas, fuso e endereço por país, suíte de isolamento com empresas dos três países (rastreio em RNF-043 a RNF-045). Esse esforço foi real e **saiu da folga da E01**, que já não era grande (estimativa grosseira: cerca de 5 a 7 sprints-pessoa, quase todo em backend e frontend). O consumo real da E01 é o primeiro dado de velocidade do multipaís e deve ser registrado pelo gerente de produto antes da decisão abaixo.
+
+#### Acréscimo nas etapas E02 a E12
+
+| Bloco | Etapas | Backend | Frontend | Mobile |
+|---|---|---|---|---|
+| **Textos em dois idiomas** em toda tela, e-mail, notificação e erro novos: catálogo `es-419`, glossário, teste de paridade, revisão pelo glossário bilíngue; o espanhol ocupa mais espaço na tela e pede formulários por país | E02 a E12 | 1 | 2 | 1 |
+| **Dinheiro com moeda** em toda tabela e indicador novos (RNF-045): valor do ativo, custos da OS, estoque e compras, KPIs em dinheiro | E02, E04, E05, E07, E09 | 1 | 0,5 | 0,25 |
+| **Documentos gerados e notificações no idioma** (OS impressa, relatório da OS de serviço, exportação, push) | E05, E09, E10 | 1 | 0,25 | 0,25 |
+| **Prefixo `OS-` ou `OT-`, feriados nacionais e formatação no perfil de país** | E02, E04 | 0,5 | 0,25 | — |
+| **Conformidade por país** (RNF-046): `registro_conformidade` no lugar de `registro_nr12`, mecanismo de pacote de país aplicado na criação da conta, pacote `BR` com os prazos hoje em `CHECK` e comentários, jurisdição emissora no documento | E08 | 1,5 a 2 | 0,5 | 0,25 |
+| **Identificação de qualquer país** em fornecedor, cliente atendido, locatário e conexão entre contas; "mesma entidade" pelo perfil do país; teste de três contas com países diferentes | E07, E09, E10 | 0,75 | 0,25 | — |
+| **Cobrança em `ARS` e `PYG`** (RF-ADM-009; depende de **P15**) | E10 | 0 a 1,5 | 0 a 0,5 | — |
+| **Total** | | **cerca de 6 a 8** | **cerca de 4 a 4,5** | **cerca de 1,75 a 2** |
+
+Somam-se cerca de 2,5 a 3 sprints de QA (testes de ponta a ponta nos dois idiomas, vazamento com os três países em toda tabela nova, carga e pentest nos dois idiomas), cerca de 1 de design (formulários por país, espanhol mais longo, as telas de idioma), cerca de 0,5 de plataforma (tarefa `textos` no CI, sinais por país na observabilidade, aditivo por país) e cerca de 1 do gerente de produto (glossário, revisão, conteúdo dos pacotes). Total: **cerca de 17 a 20 sprints-pessoa**, mais que a configuração por segmento (9 a 10, seção 2.2) e na mesma ordem do acréscimo do SRV já descontado o reaproveitamento (cerca de 16, seção 2.1). O trabalho cai nos mesmos gargalos de sempre: os backends do núcleo, o QA e o mobile. Como a folga já foi consumida pela configuração por segmento, **nada deste acréscimo cabe de graça nas 13 sprints com 14 pessoas**.
+
+**Apoio externo novo (proposta, tempo parcial):** advogado com experiência na Argentina e no Paraguai (**P14**, aditivo de transferência de dados por país, termo da conexão entre contas de países diferentes); consultor de SST de cada país (**P12**, equivalentes da NR-12 e da NR-13, prazos por jurisdição); contador de cada país (**P13**, identificação fiscal e fatura eletrônica, antes do fiscal da Fase 2); revisor de espanhol **falante nativo** (um argentino e um paraguaio), por release, para os termos que o glossário bilíngue marcou. A Tenaz não tem hoje nenhum deles contratado; o prazo de contratação entra no cronograma (risco 29).
+
+**Opções para o MVP (a decidir pelo dono do produto, junto com a **P15**):**
+
+| Opção | Time | Prazo | Risco e custo |
+|---|---|---|---|
+| **A. Absorver nas sprints atuais** | 14 pessoas | 13 sprints, semana 26 | Não recomendável: a folga já é zero (seção 2.2). Só fecha se partes do multipaís e da configuração por segmento forem para a linha de corte, o que é decisão do dono do produto, e com QA e mobile além do limite. Sem aval, qualquer atraso cai na linha de corte da seção 2.1 |
+| **B. Somar sprints** | 14 pessoas | Mais **2 sprints** sobre a opção escolhida em 2.2: com a opção A de 2.2, 15 sprints (semana 30); com a B de 2.2, 16 sprints (semana 32) | Custo de quatro semanas do time inteiro. As 17 a 20 sprints-pessoa dariam cerca de 1,3 sprint se tudo corresse em paralelo; o gargalo do backend e do QA leva a 2. O que escorrega é decidido na revisão do fim de S6 (risco 2) |
+| **C. Somar 1 backend e 1 QA** | 16 pessoas no MVP (17 com a opção C de 2.2) | 13 sprints, semana 26 | O backend cobre cerca de 11 sprints-pessoa do núcleo (textos, dinheiro, conformidade por país); o QA dobra uma capacidade que hoje é de uma pessoa para dois idiomas e três países. Custo de duas pessoas por cerca de 5 meses, com entrada em S2 ou S3 e custo de integração. Decisão até o fim de S3, como a da configuração por segmento |
+| **D. Portão por país** (combina com A, B ou C) | O da opção escolhida | O Brasil lança em M5; Argentina e Paraguai saem à venda quando o portão do país fechar | O código multipaís e o espanhol, já decididos e feitos na E01, ficam inteiros; a **venda** em cada país só começa com: parecer jurídico da **P14**, o que couber da **P12** (documentos sem prazo legal preenchido, como o ADR-013 já prevê), preço e moeda da **P15**, e revisão por falante nativo concluída. Tira do caminho crítico de M5 os pacotes de país e a cobrança em `ARS` e `PYG` (itens 5 e 7 da tabela, cerca de 2 a 4 sprints-pessoa). **Contraria a leitura literal de "MVP já multipaís" na data de venda, não no código:** precisa de aval do dono do produto |
+
+As opções se combinam (por exemplo, C com D). Cortes parciais candidatos, sem aplicação automática: documento gerado e exportação em espanhol só na etapa seguinte ao M5; notificação por push só no idioma do usuário, sem texto específico do país; cobrança em `ARS` e `PYG` por fatura manual no lançamento. Tirar o idioma ou o país do MVP inteiro contraria a decisão do dono do produto e o roadmap não propõe.
+
+#### Acréscimo na Fase 2
+
+| Bloco | Requisitos | Backend | Frontend | Mobile |
+|---|---|---|---|---|
+| Fiscal da Argentina e do Paraguai: referência do documento fiscal do país no lugar de NF-e, CFOP e chave de 44 dígitos (**P13**) | RF-EST-009, RF-EST-015, RF-EST-019, RF-LOC-002, RF-LOC-009 | 1,5 a 2 | 0,5 | — |
+| Pacotes de país de AR e PY: documentos, normas, capacitações e prazos por jurisdição, só depois da **P12** | RF-CON-005 a RF-CON-013, RF-FRO-001 a RF-FRO-011 | 2 a 3 | 1 | 0,25 |
+| Textos em dois idiomas nas telas da Fase 2 | Toda a Fase 2 | 0,5 | 1,5 a 2 | 0,5 |
+| **Total** | | **cerca de 4 a 5,5** | **cerca de 3 a 3,5** | **cerca de 0,75** |
+
+Somam-se cerca de 1,5 a 2 sprints de QA e cerca de 1,5 do gerente de produto com os consultores dos países: **cerca de 10 a 13 sprints-pessoa**, sobre uma Fase 2 que já está apertada (risco 19). O conteúdo legal da Argentina e do Paraguai depende de pesquisa e parecer externo; sem eles, os pacotes nascem sem prazo preenchido (RNF-046). **Opções:** (1) um reforço de 1 backend e 0,5 de QA na Fase 2, dedicado aos países; (2) mais prazo (M6 no mês 13 ou 14), somando à opção 2 da seção 2.2; (3) Argentina e Paraguai entrarem na Fase 2 país a país, nos portões da opção D. A escolha é do dono do produto e anda junto com a do MVP.
+
+#### Onde entra cada parte do multipaís (proposta)
+
+| Etapa | O que o multipaís pede |
+|---|---|
+| E01 | Base entregue em parte (acima); fecha com o aceite do dono do produto, a revisão por falante nativo dos termos marcados e o app com o idioma do usuário |
+| E02 | Valor do ativo com moeda (RNF-045); feriados nacionais e formatação no perfil de país; telas em dois idiomas|
+| E04 | Prefixo `OS-` ou `OT-` do número da OS (RF-OS-001, ponto 49 do documento 1); custo da OS em moeda; solicitações e erros nos dois idiomas |
+| E05 | OS impressa e notificações no idioma de quem lê; app com os textos no bundle |
+| E07 | Fornecedor com identificação de qualquer país; estoque e compras em moeda; termo da conexão entre contas de países diferentes (**P14**) |
+| E08 | Conformidade por país (RNF-046): pacote `BR`, `registro_conformidade`, jurisdição emissora; consultor de SST do Brasil em S8, e os de AR e PY pelo portão por país |
+| E09 | Indicadores em dinheiro com a moeda; relatório da OS de serviço no idioma do cliente atendido |
+| E10 | Cobrança em `ARS` e `PYG` (**P15**); exportação e extração da trilha no idioma; documentação pública da API em espanhol **a decidir** (o pedido do dono do produto cobre telas, e-mails, notificações, documentos gerados e erros, não a documentação) |
+| E11 | Carga, acessibilidade, 7 dias offline e pentest com os dois idiomas e os três países; revisão final do espanhol |
+| E12 | Kit LGPD com aditivo por país (**P14**), página de preços por país (**P15**), base de conhecimento e suporte em espanhol **a decidir**, pilotos por país conforme o portão |
+
 ---
 
 ## 3. Critério de pronto
@@ -233,7 +297,7 @@ Um requisito só conta como entregue quando:
 | M2 Alpha interno | Fim de S6 (semana 14) | Ciclo completo solicitação → OS → execução offline → encerramento, com reconhecimento, `assumir`, desprogramação e liberação recusada; preventiva por tempo, medidor e "o que vencer primeiro" gerando OS `planejada`; app operando 72 horas offline sem perda; OS de serviço aberta com serviço a realizar, distribuída, reatribuída e executada offline por técnico de subcontratada, com horas por técnico; teste de três contas de RNF-041 rodando no CI desde S4 |
 | M3 Piloto fechado | Fim de S8 (semana 18) | Pelo menos 3 empresas piloto com dados reais; OS de máquina NR-12 com os sete campos e assinatura avançada; documentos com alertas D-60, D-30 e D-7 funcionando; reserva e baixa de peças em OS; pelo menos uma subcontratada piloto com conta própria registrando OS de serviço com componentes substituídos; convite, aceite e ativos sincronizados entre duas contas em homologação |
 | M4 MVP completo | Fim de S10 (semana 22; semana 24 na opção B da seção 2.2) | Os 129 requisitos do MVP entregues; ativo cadastrado `em_implantacao`, fora dos KPIs, posto em operação por `colocar_em_operacao` depois da OS `implantacao` encerrada; regra `bloquear_ativo_ate_documento` deixando o ativo `parado` e levantada sozinha pelo documento novo; campo extra obrigatório na conclusão impedindo `concluir` também no app offline; OS executada por usuário `prestador` e por link de uso único; teste de isolamento do prestador (RNF-037) no CI sem vazamento; relatório da OS em PDF com assinatura do cliente; ciclo completo entre contas (OS do cliente chega à subcontratada, execução offline, andamento de volta, liberação e recusa no cliente; OS aberta pela subcontratada nasce no cliente; encerramento da conexão sem perda de histórico); **portão da conexão:** teste de três contas de RNF-041 verde e atraso p95 < 60 s de RNF-042 medido em homologação; documentação pública da API; nenhum defeito crítico aberto |
-| M5 Lançamento | Fim de S12 (semana 26; semana 28 na opção B da seção 2.2) | Metas de RNF verificadas (carga, 7 dias offline, restauração de backup testada, atraso da sincronização entre contas sob carga); pentest sem achado crítico ou alto aberto, incluindo acesso do prestador, link de uso único e conexão entre contas; kit LGPD publicado, com o termo da conexão entre contas; página de status no ar; RPO e RTO publicados, com o RTO de região só depois da decisão de **P7**; preços publicados após P4; marca liberada (P5); release de produção `v1.0.0` conforme a seção 3.3 |
+| M5 Lançamento | Fim de S12 (semana 26; semana 28 na opção B da seção 2.2) | Metas de RNF verificadas (carga, 7 dias offline, restauração de backup testada, atraso da sincronização entre contas sob carga); pentest sem achado crítico ou alto aberto, incluindo acesso do prestador, link de uso único e conexão entre contas; kit LGPD publicado, com o termo da conexão entre contas e, para cada país liberado à venda, o aditivo de transferência de dados (**P14**); RNF-043 a RNF-046 verificados nos dois idiomas e nos três países, com a revisão por falante nativo dos termos marcados concluída e o portão do país fechado (seção 2.3, opção D, se for a escolhida); página de status no ar; RPO e RTO publicados, com o RTO de região só depois da decisão de **P7**; preços publicados após P4; marca liberada (P5); release de produção `v1.0.0` conforme a seção 3.3 |
 | M6 Fase 2 completa | Fim do mês 12 (mês 13 ou 14 na opção 2 da seção 2.2) | Os 75 requisitos da Fase 2 entregues; projeto de implantação concluído colocando os ativos em operação; medição mensal de contrato com cliente fechada com memória de cálculo; pacote de segmento aplicado sem sobrescrever o que a conta já tinha; testes de isolamento do locatário (RNF-038) e do almoxarifado em terceiro (RNF-037) no CI; pentest externo completo, incluindo portal do locatário; controles SOC 2 em operação e janela de observação iniciada |
 | M7 SOC 2 Type II | Mês 19 | Relatório Type II emitido pelo auditor |
 | M8 Fase 3 completa | Fim do mês 24 | Os 16 requisitos da Fase 3 entregues; preparação ISO 27001 iniciada |
@@ -292,6 +356,8 @@ As partes da Fase 2 do catálogo de RF-ADM-016 (`capacitacao_vencida`, `etapa_pr
 | OS de serviço e componentes | S5 (catálogo e abertura), S6 (horas, distribuição e app), S8 (componentes) | RF-SRV-006 a RF-SRV-011 |
 | Relatório PDF | S9 (assinatura do cliente e relatório da OS), S10 (relatório por cliente e indicadores) | RF-SRV-012, RF-SRV-013, RF-SRV-020, RF-SRV-021 |
 | Conexão entre contas | S4 (fundação e teste de três contas), S7 (convite), S8 (ativos), S9 (OS do cliente), S10 (OS da subcontratada, andamento, liberação, encerramento; portão) | RF-SRV-014 a RF-SRV-019, RNF-041, RNF-042 |
+
+**Onde entra cada parte do multipaís e dos idiomas (proposta; a decisão da P15 pode mudar o encaixe, seção 2.3):** E01 entrega a base (país, identificação, moeda, idioma, textos, fuso, endereço) e fecha com o aceite e a revisão por falante nativo; E02 e E04 acrescentam moeda, feriados, formatação e o prefixo `OS-` ou `OT-`; E05 e E09 levam o documento gerado e a notificação ao idioma de quem lê; E07 traz a identificação de qualquer país no fornecedor e o termo da conexão entre países; **E08** traz o conteúdo legal por país (RNF-046); E10 traz a cobrança em `ARS` e `PYG`; E11 e E12 verificam os dois idiomas e os três países e publicam o aditivo por país. O detalhe por etapa está na tabela "Onde entra cada parte do multipaís" da seção 2.3.
 
 ### 4.1 Por que esta ordem
 
@@ -379,6 +445,8 @@ Contingências:
 - Se **P9** não estiver resolvida até o mês 11, RF-ADM-017 sai com o pacote `fiscalizacao_eletronica` trazendo o tipo de documento "Verificação metrológica" com validade digitada e as regras metrológicas inativas, como prevê o requisito; as regras são ligadas por versão nova do pacote quando P9 fechar, sem sobrescrever o que a conta editou.
 - Se **P10** não estiver decidida até o mês 11, RF-CTR-005 sai como painel interno e a medição vai ao cliente final em PDF e XLSX (RF-CTR-004); acesso próprio do cliente final é escopo novo, com requisito, isolamento e preço próprios.
 - Se o dono do produto escolher a opção 2 da seção 2.2 para a Fase 2, a trilha E é dividida entre as trilhas A e D, M6 passa para o mês 13 ou 14 e os blocos da Fase 3 deslizam o mesmo tanto, exceto a janela do SOC 2.
+- Se o parecer da **P14** ou o mínimo da **P12** de um país não estiver pronto até o M5, o país **não é liberado à venda** (portão por país, opção D da seção 2.3, com aval do dono do produto): o código e o espanhol continuam no lançamento, e o cliente do país entra quando o portão fechar. Se a **P15** não estiver decidida até a semana 10, a página de preços (S10) sai só para o Brasil e a cobrança em `ARS` e `PYG` segue por fatura manual, sem mudar o código de moeda (RNF-045).
+- Se a **P13** não estiver resolvida até o mês 8, o fiscal da Argentina e do Paraguai (RF-EST-009, RF-EST-015, RF-EST-019) entra com a referência do documento fiscal digitada, sem validação do formato do país, como o ADR-013 prevê, e a validação vira correção posterior.
 - CDC para ClickHouse só entra se o volume de leituras e telemetria justificar, como recomenda o estudo; não há bloco reservado.
 
 ---
@@ -400,6 +468,12 @@ Contingências:
 | Termo da conexão entre contas (LGPD) | S4 | S7 (antes do primeiro convite) | Advogado e gerente de produto | Papéis de cada conta no compartilhamento (controlador e operador), base legal, aceite no convite e na aceitação, cláusula no DPA | RF-SRV-014, RNF-021 |
 | **P9** Leitura da portaria do Inmetro e da resolução do Contran vigentes sobre medidores de velocidade (periodicidade da verificação, reparo que exige nova verificação, controle de lacres) | Mês 7 | Mês 10 (antes de RF-ADM-017, mês 11) | Gerente de produto, com especialista em metrologia legal (proposta) | Validade sugerida da verificação metrológica e regras do pacote confirmadas; sem resposta, contingência da seção 6 | RF-ADM-016, RF-ADM-017, RF-CON-005 |
 | **P10** Decisão sobre o acesso próprio do cliente final de um contrato (ex.: prefeitura) para abrir chamados e ver a medição | Mês 7 | Mês 9 (antes do desenho de RF-CTR-005) | Dono do produto | Manter painel interno com medição em PDF e XLSX, ou abrir escopo novo com requisito, isolamento e preço | RF-CTR-004, RF-CTR-005 |
+| **P12** Pesquisa confirmada por consultor de SST de cada país: equivalentes da NR-12 e da NR-13, inspeção de vasos de pressão por jurisdição, documentos de veículo e de condutor, multas | S0 (pesquisa feita em 13/11/2026, a validar) | Mínimo antes de E08 (semana 14) para o desenho dos pacotes; parecer completo antes de liberar cada país | Gerente de produto e consultor de SST da Argentina e do Paraguai | Conteúdo dos pacotes de país confirmado, com a fonte; sem parecer, os pacotes nascem sem prazo legal (RNF-046) | RNF-046, RF-CON-001 a RF-CON-013, RF-FRO-001 a RF-FRO-011 |
+| **P13** Contador de cada país: identificação fiscal (CUIT, CUIL, DNI, RUC e CI) e fatura eletrônica no lugar da NF-e | Mês 7 (a regra do dígito do CUIT e do RUC antes, se o cadastro for validar) | Mês 8 | Contador da Argentina e do Paraguai e gerente de produto | Regra oficial do dígito verificador; tipo e referência do documento fiscal do país | RNF-044, RF-EST-009, RF-EST-015, RF-EST-019, RF-LOC-002, RF-LOC-009 |
+| **P14** Parecer jurídico sobre a proteção de dados da Argentina e do Paraguai e a transferência internacional para a nuvem em São Paulo | S4 | S11 (antes do lançamento) | Advogado local de cada país e gerente de produto | Aditivo de transferência por país, com a Tenaz como encarregada; termo da conexão entre contas de países diferentes; kit LGPD por país | RNF-006, RNF-021, RF-SRV-014 |
+| **P15** Decisão do dono do produto sobre preço, moeda de cobrança e meio de pagamento na Argentina e no Paraguai, e sobre as opções de prazo e time da seção 2.3 | S2 (junto com a análise do consumo real da E01) | Fim de S3 para time e prazo; semana 10 para preço (junto com P4) | Dono do produto, com o gerente de produto | Opção A a D da seção 2.3 escolhida; tabela de preços por país; moeda de cobrança | RF-ADM-009, RF-SRV-001, RNF-045 |
+| Revisão do espanhol por falante nativo (um argentino e um paraguaio) | E01, depois a cada release | Antes do piloto (S8) e do lançamento (S12) | Gerente de produto e revisor externo | Termos marcados no glossário bilíngue revisados; `es-419` neutro aceito nos dois países | RNF-043 |
+| Piloto por país (Argentina e Paraguai), se o dono do produto quiser | Recrutamento em S5 | Uso em S9 a S11 | Gerente de produto | Pelo menos uma empresa em cada país, para exercitar a identificação, a moeda e o espanhol com dado real (proposta; depende do portão por país) | RNF-043 a RNF-045 |
 | Conteúdo dos pacotes de segmento | Mês 9 | Mês 11 | Gerente de produto, com o domínio de manutenção e o consultor de SST nas partes de conformidade | Seis pacotes iniciais (proposta) revisados, com regras inativas por padrão | RF-ADM-017 |
 | Piloto de configuração por segmento (Fase 2) | Recrutamento no mês 8 | Mês 12 | Gerente de produto | Empresa com implantação em campo e contrato com meta de disponibilidade (por exemplo, o fornecedor de radares do caso de origem) usando projetos, contrato com cliente e o pacote do segmento (proposta) | RF-PRJ-001 a RF-PRJ-007, RF-CTR-001 a RF-CTR-005, RF-ADM-017 |
 | Piloto de frota (Fase 2) | Mês 8 | Mês 12 | Gerente de produto | Transportadora usando pneus, combustível e multas | RF-FRO-002 a RF-FRO-011 |
@@ -442,6 +516,8 @@ Contingências:
 23. **Paradas da OS → medição do contrato.** RF-CTR-004 calcula a disponibilidade contratual com os registros de parada (RF-OS-005) e a `causa_externa` (RF-OS-001, RF-CTR-003); sem marcos de parada confiáveis desde o MVP, a primeira medição não fecha.
 24. **Regras, campos extras e modelos de projeto → pacotes; P9 → `fiscalizacao_eletronica`.** RF-ADM-017 só empacota o que já existe; as regras metrológicas do pacote esperam P9 (contingência da seção 6).
 25. **Lista fechada da conexão → todo campo novo.** Os campos da configuração por segmento são classificados antes de fechar o requisito que os cria (critério de pronto 3.1, item 2); `causa_externa` ainda depende de classificação no sumário (seção 2.2).
+26. **Perfil de país e moeda → toda tela, tabela e documento novos.** RNF-043 a RNF-045 valem desde a E01: toda etapa seguinte nasce com texto nos dois idiomas, `moeda` ao lado de todo valor e o teste de vazamento com os três países; deixar para depois obrigaria a refazer telas e migrar colunas.
+27. **P12, P13 e P14 → liberar um país à venda.** O conteúdo legal (RNF-046), o fiscal e o aditivo de transferência de dados dependem de pesquisa e parecer externos; o código multipaís não depende deles, a **venda** no país sim (portão por país, seção 2.3).
 
 ---
 
@@ -477,6 +553,12 @@ Contingências:
 | 26 | **R7 do sumário:** a configuração cresce até virar um sistema "faça você mesmo", com estados e fluxos livres; indicadores deixam de ser comparáveis, os testes não cobrem as combinações e a implantação fica cara | Alto | Média | Catálogos fechados de condição e efeito e estados, fórmulas, regras do app offline, isolamento e lista da conexão fixos (sumário 3.7); condição ou efeito novo só por requisito em 1_ESPECIFICACAO_REQUISITOS.md, com teste, entrando na etapa seguinte e nunca no meio de uma sprint; limites de 50 regras ativas e 30 campos extras por combinação (RF-ADM-016, RF-OS-021); pacotes mantidos pela Tenaz, sem editor de pacotes para o cliente; pedido de piloto por "mais flexibilidade" tratado como mudança de escopo, levada ao dono do produto |
 | 27 | Configuração por segmento aumenta o escopo do MVP (3 requisitos, cerca de 9 a 10 sprints-pessoa) e da Fase 2 (13 requisitos, cerca de 13 a 15 sprints-pessoa) sem decisão sobre time e prazo | Alto | Alta | Encaixe depois do que cada requisito reaproveita (seção 4); opções A, B e C para o MVP e 1, 2 e 3 para a Fase 2 apresentadas ao dono do produto (seção 2.2); decisão até o fim de S3, para que um eventual backend a mais entre em S4; cortes parciais candidatos listados, sem aplicação automática |
 | 28 | **P9** ou **P10** sem resposta antes da trilha E | Médio | Média | P9 até o mês 10, com o pacote saindo com validade digitada e regras inativas; P10 até o mês 9, com painel interno e medição em PDF e XLSX (contingências da seção 6) |
+| 29 | **Multipaís e idiomas aumentam o escopo do MVP** (cerca de 17 a 20 sprints-pessoa além da E01) e da Fase 2 (cerca de 10 a 13), sobre uma folga que já foi consumida pela configuração por segmento e pelo SRV; a contratação do apoio externo de dois países leva tempo | Alto | Alta | Encaixe nas etapas em que cada parte aparece (seção 4); opções A a D para o MVP e três para a Fase 2 levadas ao dono do produto (seção 2.3, **P15**), com decisão até o fim de S3; consumo real da E01 registrado como primeiro dado de velocidade; cortes parciais listados, sem aplicação automática |
+| 30 | **Conteúdo legal da Argentina e do Paraguai sem parecer** (P12, P13): prazos provinciais, norma em disputa (revisão técnica de veículo no Paraguai), regra oficial do dígito do CUIT e do RUC não confirmada; um prazo errado no produto vira descumprimento atribuído à Tenaz | Alto | Alta | Nenhum prazo legal no código (RNF-046); prazo não confirmado nasce vazio e a empresa o preenche; CUIT e RUC só pela forma; consultor de cada país antes de liberar o país; portão por país |
+| 31 | **Qualidade do espanhol:** cada tela, e-mail e erro novo duplica o texto; deriva entre catálogos, termo errado do domínio, voseo, ou espanhol "neutro" que soa estranho num dos dois países | Médio | Média | Glossário bilíngue como fonte única; tarefa `textos` e teste de paridade quebram o build; revisão do `es-419` a cada mudança e por falante nativo (um argentino e um paraguaio) antes do piloto e do lançamento |
+| 32 | **Proteção de dados e transferência internacional** (P14): o Brasil não está na lista de países adequados da autoridade argentina e a lei paraguaia de 2025 entra em vigor por volta de novembro de 2027; sem parecer, não se vende no país | Alto | Média | Advogado local contratado em S4; aditivo por país no contrato; portão por país; hospedagem só em São Paulo com cláusulas modelo, como o ADR-013 descreve |
+| 33 | **Preço, moeda e meio de pagamento** (P15): inflação e câmbio do peso argentino, guarani sem casas decimais, provedor de pagamento nos dois países | Médio | Alta | Decisão da P15 junto com a P4, até a semana 10; fatura manual como contingência (seção 6); valor e moeda sempre juntos no código (RNF-045) |
+| 34 | **Erro de dinheiro entre Go e TypeScript** (arredondamento, rateio, casas da moeda) e **divergência de formatação** entre web, app e PDF (ponto 48 do documento 1) | Médio | Baixa | Os 266 casos compartilhados e o oráculo no CI (RNF-045); a divergência de formatação vai ao `tenaz-arquiteto` e ao `tenaz-design-sistema` antes de E02 |
 
 ---
 
@@ -487,3 +569,4 @@ Contingências:
 - v0.3 (12/11/2026): alinhada ao sumário executivo 0.4. SRV completo no MVP, com trilha SRV paralela desde S1 e a tabela de onde entra cada parte; MVP com 126 requisitos funcionais e 42 não funcionais; estimativa do acréscimo do SRV (cerca de 16 sprints-pessoa, já descontado o reaproveitamento); quarto backend e terceiro frontend antecipados para S1 (MVP com 14 pessoas, Fase 2 com 15), prazo mantido em 13 sprints; RF-TER-001 antecipado para S6; portão da conexão em M4 (RNF-041 e RNF-042); linha de corte com itens do SRV; marcos, dependências, piloto de subcontratada, termo LGPD da conexão e riscos R5, R6 e 23 a 25.
 - v0.4 (12/11/2026): alinhada ao sumário executivo 0.5. Configuração por segmento: RF-ADM-016, RF-ATV-013 (com o tipo de OS `implantacao`) e RF-OS-021 encaixados em S2 a S9, com a tabela de onde entra cada parte; MVP com 129 requisitos e Fase 2 com 75; estimativa do acréscimo (seção 2.2: cerca de 9 a 10 sprints-pessoa no MVP e 13 a 15 na Fase 2) e opções de time e prazo sem decisão (A absorver, B mais 1 sprint, C mais 1 backend; na Fase 2, 1 trilha E com reforço, 2 mais prazo, 3 requisitos movidos para a Fase 3); trilha E na Fase 2 com PRJ, CTR e pacotes de segmento, ordem e dependências; P9 e P10 nas atividades e nas contingências; classificação de `causa_externa` na lista da conexão apontada como pendente; marcos M4 a M6, dependências 20 a 25 e riscos 26 (R7), 27 e 28.
 - v0.5 (13/11/2026): alinhada ao sumário executivo 0.7. Risco 24 sem a menção a dados de saúde, que a Tenaz não guarda (decisão do dono do produto). Sem mudança de cronograma.
+- v0.6 (13/11/2026): alinhada ao sumário executivo 0.8 (etapa 014). Multipaís e bilíngue desde o MVP: seção 2.3 com a estimativa do impacto (cerca de 17 a 20 sprints-pessoa no MVP, além da E01, e 10 a 13 na Fase 2) e as opções A a D para o MVP e três para a Fase 2, sem decisão (pendência P15); tabela de onde entra cada parte por etapa; apoio externo da Argentina e do Paraguai; marco M5 com RNF-043 a RNF-046; atividades P12 a P15, revisão do espanhol e piloto por país; dependências 26 e 27; contingência do portão por país; riscos 29 a 34. Os não funcionais passam de 42 para 46. Sem mudança de sprint, prazo ou time da tabela da seção 2.

@@ -2,7 +2,7 @@
 name: tenaz-mobile-offline
 description: Use para o app de campo da Tenaz e para tudo que precise funcionar sem conexão - telas do técnico e do motorista, fila de comandos, sincronização, banco local, resolução de conflito, numeração provisória, cache filtrado por escopo, sessões de várias contas, câmera, QR code, foto, assinatura, notificação, build e atualização sem loja.
 tools: Read, Write, Edit, Glob, Grep, Bash
-model: opus
+model: sonnet
 ---
 
 # App de campo da Tenaz

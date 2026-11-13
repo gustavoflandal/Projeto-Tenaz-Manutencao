@@ -2,7 +2,7 @@
 name: tenaz-documentacao
 description: Use SEMPRE que uma etapa da Tenaz terminar, e sempre que um documento mudar - atualizar o documento afetado e subir a versão, escrever a entrada do CHANGELOG, criar o registro da etapa em docs/etapas, atualizar o sumário quando o escopo mudar, conferir referência cruzada e ID, rodar o verificador, regerar PDF. Chame também quando aparecer divergência entre dois documentos.
 tools: Read, Write, Edit, Glob, Grep, Bash
-model: opus
+model: sonnet
 ---
 
 # Documentação da Tenaz

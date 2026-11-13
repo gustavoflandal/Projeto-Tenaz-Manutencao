@@ -72,9 +72,9 @@ func (d *Idempotencia) reservar(escopo, hash string) (*respostaGravada, error) {
 	if r, ok := d.chaves[escopo]; ok {
 		switch {
 		case r.hashCorpo != hash:
-			return nil, erros.IdempotenciaConflito.Com("A chave de idempotência já foi usada com outro corpo; gere uma chave nova.")
+			return nil, erros.IdempotenciaConflito.ComChave("detalhe.idempotencia_conflito", nil)
 		case r.resposta == nil:
-			return nil, erros.IdempotenciaEmProcessamento.Com("A requisição com esta chave ainda está em processamento; tente de novo em 1 segundo.")
+			return nil, erros.IdempotenciaEmProcessamento.ComChave("detalhe.idempotencia_processando", nil)
 		default:
 			return r.resposta, nil
 		}
@@ -119,8 +119,8 @@ func (s *Servidor) mwIdempotencia(ctx huma.Context, next func(huma.Context)) {
 		return
 	}
 	if !chaveIdemValida(chave) {
-		s.falhar(ctx, erros.RequisicaoInvalida.Com("Idempotency-Key aceita até 64 caracteres visíveis, como um UUID.").
-			ComCampo("Idempotency-Key", erros.CampoFormatoInvalido, "Use um UUID ou texto de até 64 caracteres."))
+		s.falhar(ctx, erros.RequisicaoInvalida.ComChave("detalhe.idempotencia_formato", nil).
+			ComCampoChave("Idempotency-Key", erros.CampoFormatoInvalido, "campo.idempotencia_formato", nil))
 		return
 	}
 	ator, err := AtorDe(ctx.Context())
@@ -130,11 +130,11 @@ func (s *Servidor) mwIdempotencia(ctx huma.Context, next func(huma.Context)) {
 	}
 	corpo, err := io.ReadAll(io.LimitReader(ctx.BodyReader(), limiteCorpoIdem+1))
 	if err != nil {
-		s.falhar(ctx, erros.RequisicaoInvalida.Com("Não foi possível ler o corpo da requisição."))
+		s.falhar(ctx, erros.RequisicaoInvalida.ComChave("detalhe.corpo_ilegivel", nil))
 		return
 	}
 	if len(corpo) > limiteCorpoIdem {
-		s.falhar(ctx, erros.PayloadMuitoGrande.Com("O corpo passa do limite aceito pela rota."))
+		s.falhar(ctx, erros.PayloadMuitoGrande.ComChave("detalhe.corpo_grande", nil))
 		return
 	}
 	u := ctx.URL()

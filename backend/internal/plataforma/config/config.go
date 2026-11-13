@@ -36,6 +36,14 @@ type Config struct {
 
 	Autenticacao Autenticacao
 
+	// BancoURLJob: conexão do papel tenaz_job, dos subcomandos de job
+	// (TENAZ_BANCO_URL_JOB). Em desenvolvimento, vazia, usa TENAZ_BANCO_URL
+	// com SET ROLE tenaz_job.
+	BancoURLJob string
+
+	// Armazenamento é o S3 do selo da trilha de auditoria (ADR-012).
+	Armazenamento Armazenamento
+
 	// CookieSeguro: cookie de sessão __Host-tenaz_sessao com Secure
 	// (TENAZ_COOKIE_SEGURO, padrão verdadeiro). Falso só em desenvolvimento
 	// sobre http, em que o navegador recusa o prefixo __Host- sem Secure; aí
@@ -60,6 +68,25 @@ type Autenticacao struct {
 	SMTPUsuario         string
 	SMTPSenha           string
 	EmailRemetente      string // TENAZ_EMAIL_REMETENTE
+}
+
+// Armazenamento é a configuração do armazenamento de objetos compatível com
+// S3 (ADR-012, decisão 5): endpoint, região e estilo de caminho por
+// configuração, para que trocar de servidor seja trocar variáveis. Em
+// desenvolvimento é o SeaweedFS do compose, com a identidade tenaz_auditoria;
+// em produção, o S3 da AWS. Sem valor padrão de segredo.
+type Armazenamento struct {
+	Endpoint         string // TENAZ_S3_ENDPOINT; vazio: o endpoint da AWS para a região
+	Regiao           string // TENAZ_S3_REGIAO
+	CaminhoExplicito bool   // TENAZ_S3_CAMINHO_EXPLICITO (path-style): o SeaweedFS exige
+	BucketAuditoria  string // TENAZ_S3_BUCKET_AUDITORIA
+	ChaveAcesso      string // TENAZ_S3_CHAVE_ACESSO
+	ChaveSecreta     string // TENAZ_S3_CHAVE_SECRETA
+}
+
+// Configurado informa se há armazenamento configurado.
+func (a Armazenamento) Configurado() bool {
+	return a.Regiao != "" && a.BucketAuditoria != "" && a.ChaveAcesso != "" && a.ChaveSecreta != ""
 }
 
 // Ambientes aceitos. Produção tem regras próprias (ver Validar).
@@ -111,6 +138,22 @@ func DeAmbiente() (Config, error) {
 		SMTPUsuario:         os.Getenv("TENAZ_SMTP_USUARIO"),
 		SMTPSenha:           os.Getenv("TENAZ_SMTP_SENHA"),
 		EmailRemetente:      os.Getenv("TENAZ_EMAIL_REMETENTE"),
+	}
+
+	c.BancoURLJob = os.Getenv("TENAZ_BANCO_URL_JOB")
+	c.Armazenamento = Armazenamento{
+		Endpoint:        os.Getenv("TENAZ_S3_ENDPOINT"),
+		Regiao:          os.Getenv("TENAZ_S3_REGIAO"),
+		BucketAuditoria: os.Getenv("TENAZ_S3_BUCKET_AUDITORIA"),
+		ChaveAcesso:     os.Getenv("TENAZ_S3_CHAVE_ACESSO"),
+		ChaveSecreta:    os.Getenv("TENAZ_S3_CHAVE_SECRETA"),
+	}
+	switch v := strings.ToLower(strings.TrimSpace(os.Getenv("TENAZ_S3_CAMINHO_EXPLICITO"))); v {
+	case "", "0", "false", "nao", "não":
+	case "1", "true", "sim":
+		c.Armazenamento.CaminhoExplicito = true
+	default:
+		return Config{}, fmt.Errorf("TENAZ_S3_CAMINHO_EXPLICITO deve ser true ou false, recebeu %q", v)
 	}
 
 	c.CookieSeguro = true
@@ -175,6 +218,47 @@ func (c Config) BancoAutenticacao() (url, papel string, err error) {
 		return "", "", fmt.Errorf("conexão sem TLS não é aceita em produção (RNF-032)")
 	}
 	return c.BancoURLAutenticacao, "", nil
+}
+
+// BancoJob devolve a URL e o papel do pool dos jobs (tenaz_job). Em
+// homologação e produção a URL é obrigatória e diferente das demais; em
+// desenvolvimento, vazia, usa TENAZ_BANCO_URL com SET ROLE tenaz_job.
+func (c Config) BancoJob() (url, papel string, err error) {
+	if c.Ambiente == AmbienteDesenvolvimento {
+		if c.BancoURLJob == "" {
+			return c.BancoURL, "tenaz_job", nil
+		}
+		return c.BancoURLJob, "", nil
+	}
+	switch {
+	case c.BancoURLJob == "":
+		return "", "", fmt.Errorf("TENAZ_BANCO_URL_JOB não definida (obrigatória nos jobs)")
+	case c.BancoURLJob == c.BancoURL || c.BancoURLJob == c.BancoURLAutenticacao:
+		return "", "", fmt.Errorf("TENAZ_BANCO_URL_JOB não pode ser igual às URLs da aplicação nem da autenticação")
+	case c.Ambiente == AmbienteProducao && strings.Contains(c.BancoURLJob, "sslmode=disable"):
+		return "", "", fmt.Errorf("conexão sem TLS não é aceita em produção (RNF-032)")
+	}
+	return c.BancoURLJob, "", nil
+}
+
+// ExigeArmazenamento confere as variáveis do S3 do selo: sem elas o job do
+// selo não roda e a verificação responde servico_indisponivel.
+func (c Config) ExigeArmazenamento() error {
+	a := c.Armazenamento
+	var faltam []string
+	for nome, v := range map[string]string{
+		"TENAZ_S3_REGIAO": a.Regiao, "TENAZ_S3_BUCKET_AUDITORIA": a.BucketAuditoria,
+		"TENAZ_S3_CHAVE_ACESSO": a.ChaveAcesso, "TENAZ_S3_CHAVE_SECRETA": a.ChaveSecreta,
+	} {
+		if v == "" {
+			faltam = append(faltam, nome)
+		}
+	}
+	if len(faltam) > 0 {
+		sort.Strings(faltam)
+		return fmt.Errorf("variáveis do armazenamento não definidas: %s", strings.Join(faltam, ", "))
+	}
+	return nil
 }
 
 // ExigeAutenticacao confere os segredos do serviço de autenticação.

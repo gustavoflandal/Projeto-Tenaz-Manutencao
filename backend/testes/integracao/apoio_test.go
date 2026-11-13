@@ -34,6 +34,7 @@ import (
 
 	"tenaz/internal/modulos/adm"
 	"tenaz/internal/plataforma/api"
+	"tenaz/internal/plataforma/auditoria"
 	"tenaz/internal/plataforma/autenticacao"
 	"tenaz/internal/plataforma/db/dbteste"
 	"tenaz/internal/plataforma/email"
@@ -110,7 +111,12 @@ func TestMain(m *testing.M) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	modADM, err := adm.Novo(adm.Dependencias{Banco: amb.App, Autenticacao: aut})
+	capturas, err := auditoria.Novo(auditoria.Dependencias{Banco: amb.App})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	modADM, err := adm.Novo(adm.Dependencias{Banco: amb.App, Autenticacao: aut, Auditoria: capturas})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -310,7 +316,7 @@ func novaConta(t *testing.T, plano, emailAdm string) string {
 	}
 	c := anonimo(t)
 	c.post("/v1/empresas", map[string]any{
-		"cnpj": cnpjAleatorio(), "razao_social": "Transportes Teste Ltda", "plano": plano,
+		"pais": "BR", "identificacao_tipo": "cnpj", "identificacao": cnpjAleatorio(), "razao_social": "Transportes Teste Ltda", "plano": plano,
 		"responsavel": map[string]any{"nome": "Ana Administradora", "email": emailAdm},
 		"unidade":     map[string]any{"codigo": "MTZ", "nome": "Matriz", "turnos": turnoUtil},
 	}).ok(http.StatusCreated)

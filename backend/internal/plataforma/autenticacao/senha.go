@@ -16,6 +16,7 @@ import (
 	"golang.org/x/crypto/argon2"
 
 	"tenaz/internal/plataforma/erros"
+	"tenaz/internal/plataforma/textos"
 )
 
 // ParametrosArgon2 são os parâmetros do Argon2id (documento 9, seção 5.3).
@@ -189,25 +190,23 @@ func (p *Politica) Validar(senha, email string) error {
 	n := utf8.RuneCountInString(senha)
 	switch {
 	case !utf8.ValidString(senha):
-		return erros.SenhaFraca.ComCampo("senha", erros.CampoFormatoInvalido, "A senha tem caracteres inválidos.")
+		return erros.SenhaFraca.ComCampoChave("senha", erros.CampoFormatoInvalido, "campo.senha_caracteres", nil)
 	case n < SenhaMinimo:
-		return erros.SenhaFraca.ComCampo("senha", erros.CampoTamanhoMinimo,
-			fmt.Sprintf("Use pelo menos %d caracteres.", SenhaMinimo))
+		return erros.SenhaFraca.ComCampoChave("senha", erros.CampoTamanhoMinimo, "campo.senha_minimo",
+			textos.Parametros{"min": SenhaMinimo})
 	case n > SenhaMaximo:
-		return erros.SenhaFraca.ComCampo("senha", erros.CampoTamanhoMaximo,
-			fmt.Sprintf("Use no máximo %d caracteres.", SenhaMaximo))
+		return erros.SenhaFraca.ComCampoChave("senha", erros.CampoTamanhoMaximo, "campo.tamanho_maximo",
+			textos.Parametros{"max": SenhaMaximo})
 	}
 	normal := strings.ToLower(strings.TrimSpace(senha))
 	if _, comum := p.comuns[normal]; comum {
-		return erros.SenhaFraca.ComCampo("senha", erros.CampoValorInvalido,
-			"Esta senha aparece em listas de senhas vazadas. Escolha outra.")
+		return erros.SenhaFraca.ComCampoChave("senha", erros.CampoValorInvalido, "campo.senha_vazada", nil)
 	}
 	if repetitiva(normal) {
-		return erros.SenhaFraca.ComCampo("senha", erros.CampoValorInvalido,
-			"A senha não pode ser um único caractere repetido nem uma sequência.")
+		return erros.SenhaFraca.ComCampoChave("senha", erros.CampoValorInvalido, "campo.senha_sequencia", nil)
 	}
 	if local, _, ok := strings.Cut(strings.ToLower(email), "@"); ok && len(local) >= 4 && strings.Contains(normal, local) {
-		return erros.SenhaFraca.ComCampo("senha", erros.CampoValorInvalido, "A senha não pode conter o seu e-mail.")
+		return erros.SenhaFraca.ComCampoChave("senha", erros.CampoValorInvalido, "campo.senha_email", nil)
 	}
 	return nil
 }

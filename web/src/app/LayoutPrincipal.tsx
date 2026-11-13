@@ -6,10 +6,13 @@ import { useTranslation } from 'react-i18next';
 import { Outlet } from 'react-router';
 
 import { MenuTema } from '../componentes/MenuTema';
+import type { Sessao } from '../lib/tipos';
+import { useSessao } from '../modulos/adm/sessao';
 import { SeloVersao } from '../componentes/versao/SeloVersao';
 import { useAcimaDe } from '../lib/breakpoints';
 
 import { BarraLateral } from './BarraLateral';
+import { MenuUsuario } from './MenuUsuario';
 
 const CHAVE_MENU = 'tenaz.menu';
 
@@ -49,6 +52,12 @@ function useMenu(): { readonly expandido: boolean; readonly alternavel: boolean;
 }
 
 export function LayoutPrincipal() {
+  const { data: sessao } = useSessao();
+  // A guarda de rotas só monta a casca com sessão; sem ela, não há o que mostrar.
+  return sessao ? <Casca sessao={sessao} /> : null;
+}
+
+function Casca({ sessao }: { readonly sessao: Sessao }) {
   const { t } = useTranslation();
   const { expandido, alternavel, alternar } = useMenu();
 
@@ -61,11 +70,15 @@ export function LayoutPrincipal() {
         {t('layout.pularConteudo')}
       </a>
 
-      <BarraLateral expandido={expandido} aoAlternar={alternavel ? alternar : undefined} />
+      <BarraLateral sessao={sessao} expandido={expandido} aoAlternar={alternavel ? alternar : undefined} />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-(--tz-z-nav) flex h-14 shrink-0 items-center justify-end gap-2 border-b border-borda bg-superficie px-6">
-          <MenuTema />
+        <header className="sticky top-0 z-(--tz-z-nav) flex h-14 shrink-0 items-center justify-between gap-2 border-b border-borda bg-superficie px-6">
+          <p className="min-w-0 truncate texto-rotulo">{sessao.empresa.nome}</p>
+          <div className="flex items-center gap-2">
+            <MenuTema />
+            <MenuUsuario sessao={sessao} />
+          </div>
         </header>
 
         {/* Respiro inferior de 32 px para o selo nunca cobrir conteúdo (6.19). */}

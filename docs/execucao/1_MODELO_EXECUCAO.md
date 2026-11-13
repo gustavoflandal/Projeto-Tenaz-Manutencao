@@ -1,6 +1,6 @@
 # Modelo de Execução — Tenaz
 
-**Versão:** 0.2 · **Data:** 12/11/2026 · **Status:** Em elaboração
+**Versão:** 0.4 · **Data:** 13/11/2026 · **Status:** Em elaboração
 **Produto:** Tenaz · Gestão de Manutenção e Frota
 Alinhado ao sumário executivo 0.4 e ao roadmap 0.3.
 
@@ -24,7 +24,7 @@ Este documento define como o trabalho acontece. Quem decide o escopo é o [sumá
 
 ## 1. O problema que este modelo resolve
 
-A documentação da Tenaz especifica 220 requisitos funcionais e 42 não funcionais, com modelo de dados, contrato de API, 31 fluxos de negócio, 376 regras de negócio e 10 ADRs. O [roadmap](../6_ROADMAP.md) entrega isso com 15 pessoas em dedicação integral, sendo 129 requisitos funcionais no MVP (13 sprints na versão anterior do roadmap; o impacto da configuração por segmento está em aberto).
+A documentação da Tenaz especifica 220 requisitos funcionais e 46 não funcionais, com modelo de dados, contrato de API, 31 fluxos de negócio, 378 IDs no catálogo de regras do documento 4 e 13 ADRs (contagens de 13/11/2026; a fonte de cada número é o documento dono). O [roadmap](../6_ROADMAP.md) entrega isso com 14 pessoas em dedicação integral no MVP, sendo 129 requisitos funcionais no MVP (13 sprints na versão anterior do roadmap; o impacto da configuração por segmento está em aberto).
 
 A execução real não tem 15 pessoas. Tem o dono do produto e uma equipe de agentes. Isso muda três coisas e deixa duas intactas:
 
@@ -47,7 +47,7 @@ A execução real não tem 15 pessoas. Tem o dono do produto e uma equipe de age
 |---|---|---|
 | **Dono do produto** | Pessoa | Escopo, prioridade, aceite, pendências P1 a P8, preço, contratação de pilotos e de apoio externo. Escreve ou aprova o prompt de cada etapa. |
 | **Orquestrador** | Sessão principal de IA | Lê o prompt da etapa, decide quais agentes chamar e em que ordem, integra o resultado, roda a verificação, escreve o registro da etapa. Não implementa o que um agente especializado faz melhor. |
-| **Equipe de agentes** | 16 agentes | Cada um dono de uma especialidade e de um conjunto de documentos. Catálogo em [2_EQUIPE_AGENTES.md](2_EQUIPE_AGENTES.md). |
+| **Equipe de agentes** | 18 agentes | Cada um dono de uma especialidade e de um conjunto de documentos. Catálogo em [2_EQUIPE_AGENTES.md](2_EQUIPE_AGENTES.md). |
 | **Apoio externo** | Pessoas contratadas | Advogado (P1, P7, LGPD, termo da conexão), consultor de SST (NR-12, NR-13, LOTO, P2, P6), contador (NF-e, CFOPs, P8), empresa de pentest, auditor SOC 2, encarregado de dados. Previstos no [roadmap](../6_ROADMAP.md), seção 2. |
 
 A equipe de agentes cobre os papéis técnicos do roadmap. O mapeamento está em [2_EQUIPE_AGENTES.md](2_EQUIPE_AGENTES.md), seção 2.
@@ -95,9 +95,23 @@ flowchart LR
 | **4. Verificação** | Suíte de testes, suíte de vazamento, contrato de API, acessibilidade, verificador de documentação. O portão da etapa é conferido com a saída dos comandos, não por opinião. | `tenaz-qa-automacao`, `tenaz-isolamento` |
 | **5. Evidência** | Toda tela nova ou alterada gera screenshot em [../screenshots/](../screenshots/), nos dois temas quando houver. Procedimento na skill `tenaz-evidencia-visual`. | `tenaz-design-sistema`, `tenaz-frontend-web`, `tenaz-mobile-offline` |
 | **6. Registro** | Documentos afetados, `CHANGELOG.md`, registro em [../etapas/](../etapas/) e sumário quando couber, tudo no mesmo commit. Procedimento na skill `tenaz-fechar-etapa`. | `tenaz-documentacao` |
-| **7. Aceite** | O dono do produto confere a etapa em execução, com a evidência visual e a saída dos testes à vista. Recusa volta ao passo 2 com o motivo escrito no prompt. Aceita, a etapa ganha a entrega consolidada em [../entregas/](../entregas/README.md). | Dono do produto, com `tenaz-documentacao` |
+| **7. Aceite** | O dono do produto confere a etapa em execução, com a evidência visual e a saída dos testes à vista. Recusa volta ao passo 2 com o motivo escrito no prompt. Aceita, a etapa ganha a entrega consolidada em [../entregas/](../entregas/README.md) e o pull request do branch da etapa é integrado a `main`, com o CI verde (seção 4.1). | Dono do produto, com `tenaz-documentacao` |
 
 ---
+
+### 4.1 Branch e pull request da etapa
+
+Cada etapa tem um branch próprio, `etapa/eNN-titulo-curto` (ex.: `etapa/e01-conta-e-acesso`), saído de `main`. Os commits da etapa vão para esse branch; no fechamento abre-se um pull request para `main`, que só é integrado com o CI verde e a pedido do dono do produto. Nada vai direto para `main` (decisão do dono do produto, 13/11/2026, na etapa E01).
+
+| Momento | O que acontece |
+|---|---|
+| Passo 1, prompt | O branch `etapa/eNN-titulo-curto` é criado a partir de `main` atualizada |
+| Passos 3 a 6 | Os commits pedidos pelo dono do produto vão para o branch da etapa, com push para o branch remoto de mesmo nome. Cada commit já leva documentação, CHANGELOG e registro da etapa em dia ([CLAUDE.md](../../CLAUDE.md), seção 3.2) |
+| Primeiro push do branch | Abre-se o pull request para `main` como **rascunho**, com o resumo da etapa e o link do registro em [../etapas/](../etapas/). O CI (`.github/workflows/ci.yml`) só dispara em push para `main` e em pull request para `main`: sem o pull request aberto, os pushes do branch não seriam verificados. Com ele, todo push roda o CI, inclusive a verificação do CHANGELOG, que só se aplica a pull request (RNF-040) |
+| Antes do aceite | O pull request sai de rascunho e fica pronto para revisão, com o CI verde |
+| Passo 7, aceite | Com o CI verde e a pedido do dono do produto, o pull request é integrado. O branch é apagado depois da integração |
+
+Correção urgente fora de etapa usa um branch `correcao/<descricao-curta>`, com o mesmo fluxo de pull request.
 
 ## 5. Orquestração dos agentes
 
@@ -217,3 +231,5 @@ O efeito prático: as etapas de construção comprimem bem, e as de validação 
 
 - v0.1 (12/11/2026): primeira versão. Papéis, lista do que não se delega, ciclo de sete passos, regras de orquestração, revisão cruzada, seis portões e limites do modelo.
 - v0.2 (12/11/2026): entrega consolidada em `docs/entregas/` no aceite (passo 7) e na tabela de artefatos (seção 8), por pedido do dono do produto na etapa E01; contagem de regras de negócio atualizada.
+- v0.3 (13/11/2026): seção 4.1, um branch por etapa e integração a `main` só por pull request com o CI verde, por decisão do dono do produto na etapa E01.
+- v0.4 (13/11/2026): contagens da seção 1 atualizadas depois da etapa 014 (46 requisitos não funcionais, 378 IDs de regras, 13 ADRs, 14 pessoas no MVP, como no roadmap 0.6).

@@ -29,7 +29,7 @@ func uuidDoFiltro(campo, s string) (*uuid.UUID, error) {
 	}
 	id, err := uuid.Parse(s)
 	if err != nil {
-		return nil, erros.EntradaInvalida.ComCampo(campo, erros.CampoFormatoInvalido, "Use um identificador UUID.")
+		return nil, erros.EntradaInvalida.ComCampoChave(campo, erros.CampoFormatoInvalido, "validacao.uuid", nil)
 	}
 	return &id, nil
 }
@@ -41,7 +41,7 @@ func (r *rotas) registrarPessoas(s *api.Servidor) {
 	api.Registrar(s, rotaADM(api.Rota{
 		ID: "listarPessoas", Metodo: http.MethodGet, Caminho: "/v1/pessoas", Permissoes: ler,
 		Resumo:    "Listar pessoas",
-		Descricao: "Paginada por cursor, ordem -criado_em. O CPF sai mascarado; o inteiro só no detalhe.",
+		Descricao: "Paginada por cursor, ordem -criado_em. A identificação sai mascarada (identificacao_mascarada); a inteira só no detalhe.",
 	}), func(ctx context.Context, in *entradaListarPessoas) (*saidaLista[ResumoPessoa], error) {
 		svc, a, err := r.contexto(ctx)
 		if err != nil {
@@ -67,7 +67,7 @@ func (r *rotas) registrarPessoas(s *api.Servidor) {
 
 	api.Registrar(s, rotaADM(api.Rota{
 		ID: "criarPessoa", Metodo: http.MethodPost, Caminho: "/v1/pessoas", Status: http.StatusCreated, Permissoes: gerenciar,
-		Resumo: "Cadastrar pessoa", Descricao: "Com ou sem usuário (RF-ADM-015). 409 conflito em CPF repetido na empresa.",
+		Resumo: "Cadastrar pessoa", Descricao: "Com ou sem usuário (RF-ADM-015). 409 conflito em identificação repetida na empresa.",
 	}), func(ctx context.Context, in *entradaCorpo[EntradaPessoa]) (*saida[Pessoa], error) {
 		svc, a, err := r.contexto(ctx)
 		if err != nil {
@@ -91,7 +91,7 @@ func (r *rotas) registrarPessoas(s *api.Servidor) {
 	api.Registrar(s, rotaADM(api.Rota{
 		ID: "obterPessoa", Metodo: http.MethodGet, Caminho: "/v1/pessoas/{id}", Permissoes: ler, AlcanceNoServico: true,
 		Resumo: "Detalhar pessoa",
-		Descricao: "Com o CPF inteiro; a leitura é registrada na trilha. O titular lê a própria pessoa sem " +
+		Descricao: "Com a identificação inteira; a leitura é registrada na trilha como sensível. O titular lê a própria pessoa sem " +
 			"adm.ler_pessoas. Traz ETag.",
 	}), func(ctx context.Context, in *entradaID) (*saida[Pessoa], error) {
 		svc, a, err := r.contexto(ctx)
@@ -125,7 +125,7 @@ func (r *rotas) registrarPessoas(s *api.Servidor) {
 			return nil, err
 		}
 		base := camposPessoa{
-			Nome: atual.Nome, CPF: atual.CPF, DataNascimento: atual.DataNascimento, Matricula: atual.Matricula, Cargo: atual.Cargo,
+			Nome: atual.Nome, IdentificacaoTipo: atual.IdentificacaoTipo, Identificacao: atual.Identificacao, DataNascimento: atual.DataNascimento, Matricula: atual.Matricula, Cargo: atual.Cargo,
 			Telefone: atual.Telefone, Email: atual.Email, Vinculo: atual.Vinculo, FornecedorID: atual.FornecedorID,
 			UnidadeID: atual.UnidadeID, RegistroProfissional: atual.RegistroProfissional,
 		}
@@ -134,7 +134,7 @@ func (r *rotas) registrarPessoas(s *api.Servidor) {
 			return nil, err
 		}
 		p, err := svc.EditarPessoa(ctx, a, atual.ID, adm.EntradaPessoa{
-			Nome: n.Nome, CPF: n.CPF, DataNascimento: n.DataNascimento, Matricula: n.Matricula, Cargo: n.Cargo, Telefone: n.Telefone,
+			Nome: n.Nome, IdentificacaoTipo: n.IdentificacaoTipo, Identificacao: n.Identificacao, DataNascimento: n.DataNascimento, Matricula: n.Matricula, Cargo: n.Cargo, Telefone: n.Telefone,
 			Email: n.Email, Vinculo: n.Vinculo, FornecedorID: n.FornecedorID, UnidadeID: n.UnidadeID,
 			RegistroProfissional: n.RegistroProfissional, VersaoEsperada: &esperada,
 		})

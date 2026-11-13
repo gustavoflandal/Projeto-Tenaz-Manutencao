@@ -12,7 +12,7 @@ import (
 )
 
 const autzBuscarEmpresa = `-- name: AutzBuscarEmpresa :one
-SELECT id, razao_social, nome_fantasia, plano, srv_habilitado, mfa_obrigatorio, situacao
+SELECT id, razao_social, nome_fantasia, plano, srv_habilitado, mfa_obrigatorio, situacao, idioma_padrao, pais, moeda
 FROM app.empresa
 WHERE id = $1 AND excluido_em IS NULL
 `
@@ -25,6 +25,9 @@ type AutzBuscarEmpresaRow struct {
 	SrvHabilitado  bool      `json:"srv_habilitado"`
 	MfaObrigatorio bool      `json:"mfa_obrigatorio"`
 	Situacao       string    `json:"situacao"`
+	IdiomaPadrao   string    `json:"idioma_padrao"`
+	Pais           string    `json:"pais"`
+	Moeda          string    `json:"moeda"`
 }
 
 func (q *Queries) AutzBuscarEmpresa(ctx context.Context, id uuid.UUID) (AutzBuscarEmpresaRow, error) {
@@ -38,13 +41,16 @@ func (q *Queries) AutzBuscarEmpresa(ctx context.Context, id uuid.UUID) (AutzBusc
 		&i.SrvHabilitado,
 		&i.MfaObrigatorio,
 		&i.Situacao,
+		&i.IdiomaPadrao,
+		&i.Pais,
+		&i.Moeda,
 	)
 	return i, err
 }
 
 const autzBuscarUsuario = `-- name: AutzBuscarUsuario :one
 
-SELECT id, identidade_id, pessoa_id, fornecedor_id, locatario_id, nome, email, situacao
+SELECT id, identidade_id, pessoa_id, fornecedor_id, locatario_id, nome, email, situacao, idioma
 FROM app.usuario
 WHERE empresa_id = $1 AND id = $2 AND excluido_em IS NULL
 `
@@ -63,6 +69,7 @@ type AutzBuscarUsuarioRow struct {
 	Nome         string     `json:"nome"`
 	Email        *string    `json:"email"`
 	Situacao     string     `json:"situacao"`
+	Idioma       string     `json:"idioma"`
 }
 
 // Leitura das permissões efetivas e do escopo do usuário, a cada requisição
@@ -81,6 +88,7 @@ func (q *Queries) AutzBuscarUsuario(ctx context.Context, arg AutzBuscarUsuarioPa
 		&i.Nome,
 		&i.Email,
 		&i.Situacao,
+		&i.Idioma,
 	)
 	return i, err
 }

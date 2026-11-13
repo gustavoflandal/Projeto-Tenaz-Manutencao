@@ -85,6 +85,7 @@ Nenhuma trava esta etapa. A tabela de planos depende de **P4**, mas a cobrança 
 | Selo da auditoria em desenvolvimento (H10) | Por enquanto, tudo numa única máquina, no Docker |
 | Reforço da vedação de dado de saúde | Aviso fixo no cadastro da pessoa, no dossiê do motorista e na tela de anexo, e recusa de tipo de documento com nome ligado a saúde |
 | Detalhes do reforço contra dado de saúde (perguntas do `tenaz-produto`) | Texto do aviso aceito: "A Tenaz não guarda dado de saúde. Não registre nem anexe ASO, exames, atestados ou qualquer informação médica." Saem `clinica` e `exame` da lista de termos recusados. O nome do arquivo anexado não é verificado, só o aviso. O aviso no envio de anexo entra em E02; o da pessoa, em E01. Tipos de documento antigos com nome vedado ficam só listados para revisão, sem inativação automática |
+| Aviso de saúde em espanhol (13/11/2026) | "Não incluir. Fica como customização se o cliente pedir." O aviso aparece só com a interface em português |
 | Serviços pagos por natureza (H5 a H9: lojas, e-mail, SMS, IA, pagamento) | Decididos na etapa em que cada um entra |
 | Troca de CNPJ da empresa (proposta RN-ADM-031: só pelo suporte) | Recusada: o `administrador` altera o CNPJ. A conexão entre contas trata a troca na sua etapa |
 | Perfis do responsável pela conta (lacuna L-43) | `administrador` e `gestor` |

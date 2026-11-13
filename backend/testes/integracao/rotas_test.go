@@ -167,7 +167,7 @@ func TestRotasADMCaminhoFeliz(t *testing.T) {
 	if len(lista["dados"].([]any)) != 1 || lista["paginacao"].(map[string]any)["tem_mais"] != false {
 		t.Fatalf("lista de unidades: %v", lista)
 	}
-	cr := adm.post("/v1/unidades", map[string]any{"codigo": "FIL", "nome": "Filial", "endereco": map[string]any{"municipio": "Campinas", "uf": "SP"},
+	cr := adm.post("/v1/unidades", map[string]any{"codigo": "FIL", "nome": "Filial", "endereco": map[string]any{"municipio": "Campinas", "subdivisao": "BR-SP", "codigo_postal": "13010-000"},
 		"turnos": []any{map[string]any{"dia_semana": 1, "hora_inicio": "07:00", "hora_fim": "16:00"}}})
 	u := cr.ok(http.StatusCreated)
 	id := texto(u, "id")
@@ -179,6 +179,17 @@ func TestRotasADMCaminhoFeliz(t *testing.T) {
 	end := u["endereco"].(map[string]any)
 	if end["municipio"] != "Campinas" || end["bairro"] != "Centro" {
 		t.Fatalf("merge do endereço: %v", end)
+	}
+	if end["subdivisao"] != "BR-SP" || end["codigo_postal"] != "13010000" || end["uf"] != nil || end["cep"] != nil {
+		t.Fatalf("endereço multipaís (subdivisao e codigo_postal normalizado): %v", end)
+	}
+	r = adm.get("/v1/unidades/" + id)
+	inv := adm.req("PATCH", "/v1/unidades/"+id, map[string]any{"endereco": map[string]any{"subdivisao": "AR-C"}}, cab{"If-Match": r.etag()})
+	inv.problema(http.StatusUnprocessableEntity, "validacao_falhou")
+	r = adm.get("/v1/unidades/" + id)
+	u = adm.req("PATCH", "/v1/unidades/"+id, map[string]any{"endereco": map[string]any{"subdivisao": nil, "codigo_postal": nil}}, cab{"If-Match": r.etag()}).ok(http.StatusOK)
+	if end = u["endereco"].(map[string]any); end["subdivisao"] != nil || end["codigo_postal"] != nil || end["municipio"] != "Campinas" {
+		t.Fatalf("null apaga só a chave: %v", end)
 	}
 	tr := adm.post("/v1/unidades/"+id+"/turnos", map[string]any{"dia_semana": 2, "hora_inicio": "07:00", "hora_fim": "16:00"})
 	turno := tr.ok(http.StatusCreated)
@@ -207,16 +218,16 @@ func TestRotasADMCaminhoFeliz(t *testing.T) {
 	}
 
 	// Pessoas.
-	pr := adm.post("/v1/pessoas", map[string]any{"nome": "Joana Técnica", "cpf": "529.982.247-25", "vinculo": "empregado"})
+	pr := adm.post("/v1/pessoas", map[string]any{"nome": "Joana Técnica", "identificacao_tipo": "cpf", "identificacao": "529.982.247-25", "vinculo": "empregado"})
 	p := pr.ok(http.StatusCreated)
 	pid := texto(p, "id")
 	pl := adm.get("/v1/pessoas?busca=Joana&com_usuario=false&limite=10").ok(http.StatusOK)
 	pd := pl["dados"].([]any)
-	if len(pd) != 1 || strings.Contains(texto(pd[0].(map[string]any), "cpf_mascarado"), "529") {
+	if len(pd) != 1 || strings.Contains(texto(pd[0].(map[string]any), "identificacao_mascarada"), "529") {
 		t.Fatalf("lista de pessoas: %v", pl)
 	}
 	r = adm.get("/v1/pessoas/" + pid)
-	if p = r.ok(http.StatusOK); p["cpf"] != "52998224725" {
+	if p = r.ok(http.StatusOK); p["identificacao"] != "52998224725" || p["identificacao_tipo"] != "cpf" {
 		t.Fatalf("detalhe com CPF inteiro: %v", p)
 	}
 	p = adm.req("PATCH", "/v1/pessoas/"+pid, map[string]any{"cargo": "Eletricista"}, cab{"If-Match": r.etag()}).ok(http.StatusOK)

@@ -125,7 +125,7 @@ func TestConviteExpiradoReapresentadoERevogado(t *testing.T) {
 WHERE token_hash = $1`, hashDoSegredo(tok))
 		_, err := auth.LocalizarConvite(ctx, tok)
 		exigirErro(t, err, erros.LinkEmailInvalido)
-		_, err = svc.AceitarConvite(ctx, tok, senhaBoa)
+		_, err = svc.AceitarConvite(ctx, tok, senhaBoa, nil)
 		exigirErro(t, err, erros.LinkEmailInvalido)
 		if s := situacao(t, u); s != "convidado" {
 			t.Errorf("convite vencido não ativa: %s", s)
@@ -136,7 +136,7 @@ WHERE token_hash = $1`, hashDoSegredo(tok))
 		u, tok := novo(t)
 		executar(t, `UPDATE plataforma.token_email SET criado_em = now() - interval '7 days' + interval '1 minute',
   expira_em = now() + interval '1 minute' WHERE token_hash = $1`, hashDoSegredo(tok))
-		if _, err := svc.AceitarConvite(ctx, tok, senhaBoa); err != nil {
+		if _, err := svc.AceitarConvite(ctx, tok, senhaBoa, nil); err != nil {
 			t.Fatalf("convite a um minuto do fim: %v", err)
 		}
 		if s := situacao(t, u); s != "ativo" {
@@ -146,12 +146,12 @@ WHERE token_hash = $1`, hashDoSegredo(tok))
 
 	t.Run("reapresentado", func(t *testing.T) {
 		u, tok := novo(t)
-		if _, err := svc.AceitarConvite(ctx, tok, senhaBoa); err != nil {
+		if _, err := svc.AceitarConvite(ctx, tok, senhaBoa, nil); err != nil {
 			t.Fatal(err)
 		}
-		_, err := svc.AceitarConvite(ctx, tok, senhaBoa)
+		_, err := svc.AceitarConvite(ctx, tok, senhaBoa, nil)
 		exigirErro(t, err, erros.LinkEmailInvalido)
-		_, err = svc.AceitarConvite(ctx, tok, "")
+		_, err = svc.AceitarConvite(ctx, tok, "", nil)
 		exigirErro(t, err, erros.LinkEmailInvalido)
 		if s := situacao(t, u); s != "ativo" {
 			t.Errorf("situação: %s", s)
@@ -167,19 +167,19 @@ WHERE token_hash = $1`, hashDoSegredo(tok))
 		if atual == antigo {
 			t.Fatal("o reenvio gera link novo")
 		}
-		_, err := svc.AceitarConvite(ctx, antigo, senhaBoa)
+		_, err := svc.AceitarConvite(ctx, antigo, senhaBoa, nil)
 		exigirErro(t, err, erros.LinkEmailInvalido)
 		if s := situacao(t, u); s != "convidado" {
 			t.Fatalf("link revogado não ativa: %s", s)
 		}
-		if _, err := svc.AceitarConvite(ctx, atual, senhaBoa); err != nil {
+		if _, err := svc.AceitarConvite(ctx, atual, senhaBoa, nil); err != nil {
 			t.Fatalf("o link do reenvio vale: %v", err)
 		}
 	})
 
 	t.Run("malformado", func(t *testing.T) {
 		for _, tok := range []string{"", "curto", strings.Repeat("*", 43)} {
-			_, err := svc.AceitarConvite(ctx, tok, senhaBoa)
+			_, err := svc.AceitarConvite(ctx, tok, senhaBoa, nil)
 			exigirErro(t, err, erros.LinkEmailInvalido)
 		}
 	})

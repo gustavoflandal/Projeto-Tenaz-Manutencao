@@ -9,38 +9,105 @@ import (
 	"tenaz/internal/plataforma/autorizacao"
 	"tenaz/internal/plataforma/db"
 	"tenaz/internal/plataforma/erros"
+	"tenaz/internal/plataforma/pais"
 )
 
-func TestCPF(t *testing.T) {
-	casos := map[string]bool{
-		"52998224725": true, "11144477735": true,
-		"52998224724": false, "11111111111": false, "1234567890": false, "5299822472a": false, "": false,
+func TestIdentificacaoDaEmpresaSoAceitaOTipoDoPais(t *testing.T) {
+	br, _ := pais.Perfil(pais.BR)
+	ar, _ := pais.Perfil(pais.AR)
+	py, _ := pais.Perfil(pais.PY)
+	casos := []struct {
+		nome   string
+		perfil pais.PerfilPais
+		tipo   string
+		valor  string
+		campo  string // campo do erro; vazio: aceito
+		quer   string // valor normalizado
+	}{
+		{"cnpj no BR", br, "cnpj", "11.222.333/0001-81", "", "11222333000181"},
+		{"cnpj alfanumérico no BR", br, "cnpj", "12.ABC.345/01DE-35", "", "12ABC34501DE35"},
+		{"cuit no AR", ar, "cuit", "33-69345023-9", "", "33693450239"},
+		{"ruc no PY", py, "ruc", "80012345-6", "", "800123456"},
+		{"cuit no BR", br, "cuit", "33693450239", "identificacao_tipo", ""},
+		{"cnpj no PY", py, "cnpj", "11222333000181", "identificacao_tipo", ""},
+		{"cpf não é de empresa", br, "cpf", "52998224725", "identificacao_tipo", ""},
+		{"tipo desconhecido", br, "passaporte", "AB123456", "identificacao_tipo", ""},
+		{"dígito errado", br, "cnpj", "11222333000182", "identificacao", ""},
+		{"forma errada", ar, "cuit", "123", "identificacao", ""},
+		{"vazio", br, "", "", "identificacao_tipo", ""},
 	}
-	for cpf, ok := range casos {
-		if CPFValido(cpf) != ok {
-			t.Errorf("CPFValido(%q) = %v", cpf, !ok)
+	for _, c := range casos {
+		id, e := IdentificacaoDaEmpresa("", c.perfil, c.tipo, c.valor)
+		if c.campo == "" {
+			if e != nil || id.Valor != c.quer || id.Tipo != c.tipo {
+				t.Errorf("%s: %+v %v", c.nome, id, e)
+			}
+			continue
 		}
-	}
-	if d, e := NormalizarCPF("cpf", "529.982.247-25"); e != nil || d != "52998224725" {
-		t.Errorf("normalizar com máscara: %q %v", d, e)
-	}
-	if MascararCPF("52998224725") != "***.982.247-**" {
-		t.Errorf("máscara: %s", MascararCPF("52998224725"))
+		if e == nil || e.Codigo != "validacao_falhou" || e.Campos[0].Campo != c.campo {
+			t.Errorf("%s: esperado erro em %s, veio %v", c.nome, c.campo, e)
+		}
 	}
 }
 
-func TestCNPJ(t *testing.T) {
-	casos := map[string]bool{
-		"11222333000181": true, "45723174000110": true,
-		"11222333000180": false, "00000000000000": false, "1122233300018": false,
+func TestTipoRecusadoTrazOsValoresAceitos(t *testing.T) {
+	br, _ := pais.Perfil(pais.BR)
+	_, e := IdentificacaoDaEmpresa("unidade.", br, "ruc", "800123456")
+	if e == nil || e.Campos[0].Campo != "unidade.identificacao_tipo" || len(e.Campos[0].ValoresAceitos) != 1 || e.Campos[0].ValoresAceitos[0] != "cnpj" {
+		t.Errorf("%v", e)
 	}
-	for cnpj, ok := range casos {
-		if CNPJValido(cnpj) != ok {
-			t.Errorf("CNPJValido(%q) = %v", cnpj, !ok)
+}
+
+func TestParOpcionalDaUnidadeEDaPessoa(t *testing.T) {
+	ptr := func(s string) *string { return &s }
+	if id, e := IdentificacaoDaUnidade("", nil, nil); id != nil || e != nil {
+		t.Errorf("ausente: %v %v", id, e)
+	}
+	if _, e := IdentificacaoDaUnidade("", ptr("cnpj"), nil); e == nil || e.Campos[0].Campo != "identificacao" || e.Campos[0].Codigo != "obrigatorio" {
+		t.Errorf("tipo sem valor: %v", e)
+	}
+	if _, e := IdentificacaoDaUnidade("", nil, ptr("11222333000181")); e == nil || e.Campos[0].Campo != "identificacao_tipo" {
+		t.Errorf("valor sem tipo: %v", e)
+	}
+	if _, e := IdentificacaoDaUnidade("", ptr("cpf"), ptr("52998224725")); e == nil {
+		t.Error("unidade não aceita tipo de pessoa")
+	}
+	py, _ := pais.Perfil(pais.PY)
+	id, _ := IdentificacaoDaUnidade("", ptr("cnpj"), ptr("11222333000181"))
+	if e := ConferirTipoDaUnidade("", py, id); e == nil {
+		t.Error("unidade de empresa paraguaia só aceita ruc")
+	}
+	// A pessoa aceita o tipo de qualquer país.
+	for tipo, valor := range map[string]string{"cpf": "52998224725", "cuil": "20-12345678-6", "dni": "12.345.678", "ci": "1.234.567"} {
+		if id, e := IdentificacaoDaPessoa("", ptr(tipo), ptr(valor)); e != nil || id == nil || id.Tipo != tipo {
+			t.Errorf("pessoa %s: %v %v", tipo, id, e)
 		}
 	}
-	if _, e := NormalizarCNPJ("cnpj", "11.222.333/0001-81"); e != nil {
-		t.Errorf("CNPJ com máscara: %v", e)
+	if _, e := IdentificacaoDaPessoa("", ptr("cnpj"), ptr("11222333000181")); e == nil {
+		t.Error("pessoa não aceita cnpj")
+	}
+	if _, e := IdentificacaoDaPessoa("nova_pessoa.", ptr("cpf"), ptr("52998224726")); e == nil || e.Campos[0].Campo != "nova_pessoa.identificacao" {
+		t.Errorf("prefixo e dígito: %v", e)
+	}
+}
+
+func TestPerfilDoPaisEIdioma(t *testing.T) {
+	for cod, quer := range map[string][2]string{"BR": {"BRL", "pt-BR"}, "AR": {"ARS", "es-419"}, "PY": {"PYG", "es-419"}} {
+		p, e := PerfilDoPais("pais", cod)
+		if e != nil || p.Moeda.Codigo() != quer[0] || p.IdiomaPadrao != quer[1] {
+			t.Errorf("%s: %+v %v", cod, p, e)
+		}
+	}
+	for _, ruim := range []string{"", "US", "br"} {
+		if _, e := PerfilDoPais("pais", ruim); e == nil {
+			t.Errorf("país %q aceito", ruim)
+		}
+	}
+	if _, e := Idioma("idioma", "en"); e == nil {
+		t.Error("idioma en aceito")
+	}
+	if v, e := Idioma("idioma", " es-419 "); e != nil || v != "es-419" {
+		t.Errorf("%q %v", v, e)
 	}
 }
 
@@ -232,5 +299,28 @@ func TestAntiEscalada(t *testing.T) {
 	}
 	if e := ConferirConcessao(gestor, alvo, "int.gerenciar_tokens", ""); e == nil {
 		t.Error("gestor não concede o que não tem")
+	}
+}
+
+func TestSubdivisaoECodigoPostalDoPais(t *testing.T) {
+	ar, _ := pais.Perfil(pais.AR)
+	br, _ := pais.Perfil(pais.BR)
+	if n, e := SubdivisaoECodigoPostal("endereco.", ar, "AR-C", "c1425 dkf"); e != nil || n != "C1425DKF" {
+		t.Errorf("AR-C com CPA: %q %v", n, e)
+	}
+	if n, e := SubdivisaoECodigoPostal("endereco.", ar, "", ""); e != nil || n != "" {
+		t.Errorf("vazios são opcionais: %q %v", n, e)
+	}
+	_, e := SubdivisaoECodigoPostal("endereco.", br, "AR-C", "")
+	if e == nil || e.Campos[0].Campo != "endereco.subdivisao" || e.Campos[0].Codigo != "valor_invalido" || len(e.Campos[0].ValoresAceitos) != 27 {
+		t.Errorf("subdivisão de outro país: %v", e)
+	}
+	_, e = SubdivisaoECodigoPostal("endereco.", br, "BR-SP", "1310100")
+	if e == nil || e.Campos[0].Campo != "endereco.codigo_postal" || e.Campos[0].Codigo != "formato_invalido" {
+		t.Errorf("CEP curto: %v", e)
+	}
+	_, e = SubdivisaoECodigoPostal("endereco.", ar, "AR-B", "C1425DKF")
+	if e == nil || e.Campos[0].Campo != "endereco.codigo_postal" || e.Campos[0].Codigo != "valor_invalido" {
+		t.Errorf("CPA de outra jurisdição: %v", e)
 	}
 }

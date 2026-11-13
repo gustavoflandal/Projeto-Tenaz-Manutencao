@@ -72,11 +72,11 @@ func TestCriarConta(t *testing.T) {
 	}
 
 	// CNPJ repetido.
-	_, err = svc.CriarConta(ctx, adm.EntradaCriarConta{CNPJ: *emp.CNPJ, RazaoSocial: "Outra",
+	_, err = svc.CriarConta(ctx, adm.EntradaCriarConta{Pais: "BR", IdentificacaoTipo: "cnpj", Identificacao: *emp.Identificacao, RazaoSocial: "Outra",
 		Responsavel: adm.EntradaResponsavel{Nome: "B", Email: emailAleatorio("b")},
 		Unidade:     adm.EntradaUnidade{Codigo: "U", Nome: "U", Turnos: turnosComerciais()}})
 	exigirErro(t, err, erros.Duplicado)
-	_, err = svc.CriarConta(ctx, adm.EntradaCriarConta{CNPJ: "11222333000180", RazaoSocial: "X",
+	_, err = svc.CriarConta(ctx, adm.EntradaCriarConta{Pais: "BR", IdentificacaoTipo: "cnpj", Identificacao: "11222333000180", RazaoSocial: "X",
 		Responsavel: adm.EntradaResponsavel{Nome: "B", Email: emailAleatorio("b")}, Unidade: adm.EntradaUnidade{Codigo: "U", Nome: "U"}})
 	exigirErro(t, err, erros.EntradaInvalida)
 }
@@ -158,20 +158,20 @@ func TestPessoas(t *testing.T) {
 	c := novaConta(t, "")
 	ctx := ctxWeb()
 	cpf := cpfAleatorio()
-	_, err := svc.CriarPessoa(ctx, c.adm, adm.EntradaPessoa{Nome: "Carlos", CPF: ptr("123.456.789-00")})
+	_, err := svc.CriarPessoa(ctx, c.adm, adm.EntradaPessoa{Nome: "Carlos", IdentificacaoTipo: ptr("cpf"), Identificacao: ptr("123.456.789-00")})
 	exigirErro(t, err, erros.EntradaInvalida)
 
-	semUsuario, err := svc.CriarPessoa(ctx, c.adm, adm.EntradaPessoa{Nome: "Carlos Motorista", CPF: &cpf})
+	semUsuario, err := svc.CriarPessoa(ctx, c.adm, adm.EntradaPessoa{Nome: "Carlos Motorista", IdentificacaoTipo: ptr("cpf"), Identificacao: &cpf})
 	if err != nil || semUsuario.UsuarioID != nil {
 		t.Fatalf("pessoa sem usuário: %+v %v", semUsuario, err)
 	}
-	_, err = svc.CriarPessoa(ctx, c.adm, adm.EntradaPessoa{Nome: "Outro", CPF: &cpf})
+	_, err = svc.CriarPessoa(ctx, c.adm, adm.EntradaPessoa{Nome: "Outro", IdentificacaoTipo: ptr("cpf"), Identificacao: &cpf})
 	exigirErro(t, err, erros.Duplicado)
 
 	// Pessoa com usuário, nas duas direções: usuário criado junto com a
 	// pessoa, e usuário ligado a pessoa existente.
 	u1, _ := convidarEEntrar(t, c, adm.EntradaUsuario{Perfis: []string{"tecnico"},
-		NovaPessoa: &adm.EntradaPessoa{Nome: "Técnica Bia", CPF: ptr(cpfAleatorio())}})
+		NovaPessoa: &adm.EntradaPessoa{Nome: "Técnica Bia", IdentificacaoTipo: ptr("cpf"), Identificacao: ptr(cpfAleatorio())}})
 	if u1.PessoaID == nil {
 		t.Fatal("usuário criado com a pessoa")
 	}
@@ -185,18 +185,18 @@ func TestPessoas(t *testing.T) {
 	exigirErro(t, err, erros.Duplicado)
 
 	pag, err := svc.ListarPessoas(ctx, c.adm, adm.FiltroPessoas{Busca: ptr("carlos")})
-	if err != nil || len(pag.Dados) != 1 || pag.Dados[0].CPFMascarado == nil || strings.Contains(*pag.Dados[0].CPFMascarado, cpf[:3]) {
+	if err != nil || len(pag.Dados) != 1 || pag.Dados[0].IdentificacaoMascarada == nil || strings.Contains(*pag.Dados[0].IdentificacaoMascarada, cpf[:3]) {
 		t.Fatalf("lista com CPF mascarado: %+v %v", pag.Dados, err)
 	}
 	if pag.Dados[0].UsuarioID == nil {
 		t.Error("a lista mostra o usuário ligado")
 	}
 	det, err := svc.ObterPessoa(ctx, c.adm, semUsuario.ID)
-	if err != nil || det.CPF == nil || *det.CPF != cpf {
+	if err != nil || det.Identificacao == nil || *det.Identificacao != cpf {
 		t.Fatalf("detalhe com CPF: %v", err)
 	}
-	ev, err := svc.ListarEventosAuditoria(ctx, c.adm, adm.FiltroAuditoria{Acao: ptr("visualizacao_sensivel"), EntidadeID: &semUsuario.ID})
-	if err != nil || len(ev.Dados) != 1 {
+	ev, err := svc.ListarEventosAuditoria(ctx, c.adm, adm.FiltroAuditoria{Acao: ptr("visualizacao"), EntidadeID: &semUsuario.ID})
+	if err != nil || len(ev.Dados) != 1 || !ev.Dados[0].Sensivel {
 		t.Fatalf("visualização do CPF na trilha: %v %v", ev.Dados, err)
 	}
 
@@ -343,9 +343,15 @@ func TestLoginFalhasEBloqueio(t *testing.T) {
 	}
 	_, err = auth.Login(ctx, autenticacao.EntradaLogin{Email: c.email, Senha: senhaBoa})
 	exigirErro(t, err, erros.CredencialInvalida) // bloqueada por 15 min
-	ev, err := svc.ListarEventosAuditoria(ctx, c.adm, adm.FiltroAuditoria{Acao: ptr("login_falho")})
-	if err != nil || len(ev.Dados) < 6 {
-		t.Fatalf("falhas na trilha: %d %v", len(ev.Dados), err)
+	ev, err := svc.ListarEventosAuditoria(ctx, c.adm, adm.FiltroAuditoria{Acao: ptr("login")})
+	falhas := 0
+	for _, e := range ev.Dados {
+		if e.Resultado == "falha" {
+			falhas++
+		}
+	}
+	if err != nil || falhas < 6 {
+		t.Fatalf("falhas na trilha: %d %v", falhas, err)
 	}
 	// Desbloqueio pelo tempo (simulado no banco).
 	if _, err := amb.Migrador.Exec(context.Background(),
@@ -464,7 +470,7 @@ func TestTrocaDeEmpresa(t *testing.T) {
 	if _, err := svc.CriarUsuario(ctx, a.adm, adm.EntradaUsuario{Nome: "Consultor", Email: b.email, Perfis: []string{"visualizador"}}); err != nil {
 		t.Fatal(err)
 	}
-	aceito, err := svc.AceitarConvite(ctx, caixa.token(t, b.email), "")
+	aceito, err := svc.AceitarConvite(ctx, caixa.token(t, b.email), "", nil)
 	if err != nil || aceito.IdentidadeNova {
 		t.Fatalf("convite para e-mail que já entra noutra empresa não pede senha: %+v %v", aceito, err)
 	}

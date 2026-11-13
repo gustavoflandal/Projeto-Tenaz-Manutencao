@@ -7,6 +7,7 @@
 //	sincronizador  sincronização entre contas conectadas (SRV)
 //	ingestor       ingestão de telemática e IoT
 //	migrate        aplica as migrações do banco
+//	selar-auditoria  sela a trilha de auditoria do dia e copia o selo ao armazenamento imutável
 //	openapi        escreve o contrato gerado na saída padrão
 //	versao         imprime versão, commit e data do build
 package main
@@ -26,6 +27,8 @@ import (
 
 	"tenaz/internal/modulos/adm"
 	"tenaz/internal/plataforma/api"
+	"tenaz/internal/plataforma/armazenamento"
+	"tenaz/internal/plataforma/auditoria"
 	"tenaz/internal/plataforma/autenticacao"
 	"tenaz/internal/plataforma/config"
 	"tenaz/internal/plataforma/db"
@@ -95,6 +98,8 @@ func executar() error {
 		}
 		registro.Info("migrações aplicadas", "versao_esquema", v)
 		return nil
+	case "selar-auditoria":
+		return selarAuditoria(ctx, cfg)
 	case "migrate-status":
 		if err := cfg.ExigeBanco(); err != nil {
 			return err
@@ -115,6 +120,7 @@ func uso() {
   ingestor       ingestão de telemática e IoT
   migrate        aplica as migrações do banco
   migrate-status mostra o estado das migrações
+  selar-auditoria sela a trilha de auditoria dos dias pendentes e copia cada selo ao armazenamento imutável (job diário)
   openapi        escreve o contrato OpenAPI na saída padrão
   versao         imprime versão, commit e data do build
 `)
@@ -168,7 +174,27 @@ func servirAPI(ctx context.Context, cfg config.Config) error {
 		defer fechar()
 		registro.Info("autenticação pronta")
 
-		modADM, err := adm.Novo(adm.Dependencias{Banco: banco, Autenticacao: autent})
+		capturas, err := auditoria.Novo(auditoria.Dependencias{Banco: banco})
+		if err != nil {
+			return err
+		}
+		// Sem armazenamento configurado a API sobe, mas a verificação de
+		// integridade responde servico_indisponivel: sem a cópia imutável não
+		// se afirma que o período está íntegro.
+		var arm armazenamento.Armazenamento
+		if cfg.Armazenamento.Configurado() {
+			arm, err = novoArmazenamento(cfg)
+			if err != nil {
+				return err
+			}
+		} else {
+			registro.Warn("armazenamento S3 do selo não configurado: a verificação de integridade da trilha responde 503")
+		}
+		verificador, err := auditoria.NovoVerificador(banco, arm)
+		if err != nil {
+			return err
+		}
+		modADM, err := adm.Novo(adm.Dependencias{Banco: banco, Autenticacao: autent, Auditoria: capturas, Verificador: verificador})
 		if err != nil {
 			return err
 		}
@@ -293,4 +319,45 @@ func montarAutenticacao(ctx context.Context, cfg config.Config, banco *db.DB) (*
 		return falhar(err)
 	}
 	return s, func() { s.Aguardar(); pool.Close() }, nil
+}
+
+// novoArmazenamento monta o cliente S3 da configuração (ADR-012).
+func novoArmazenamento(cfg config.Config) (armazenamento.Armazenamento, error) {
+	a := cfg.Armazenamento
+	return armazenamento.NovoS3(armazenamento.ConfigS3{
+		Endpoint: a.Endpoint, Regiao: a.Regiao, CaminhoExplicito: a.CaminhoExplicito, Bucket: a.BucketAuditoria,
+		ChaveAcesso: a.ChaveAcesso, ChaveSecreta: a.ChaveSecreta,
+	})
+}
+
+// selarAuditoria é o job diário do selo da trilha (documento 2, seção 9.4):
+// roda como tenaz_job, sela os dias pendentes de cada empresa e copia cada
+// selo ao armazenamento imutável. O agendamento (uma vez por dia, depois de
+// 01:00 UTC) é da infraestrutura enquanto o worker (ADR-005) não existe.
+func selarAuditoria(ctx context.Context, cfg config.Config) error {
+	if err := cfg.ExigeBanco(); err != nil {
+		return err
+	}
+	if err := cfg.ExigeArmazenamento(); err != nil {
+		return err
+	}
+	url, papel, err := cfg.BancoJob()
+	if err != nil {
+		return err
+	}
+	banco, err := db.AbrirComOpcoes(ctx, db.Opcoes{URL: url, MaxConn: 4, Papel: papel})
+	if err != nil {
+		return err
+	}
+	defer banco.Fechar()
+	arm, err := novoArmazenamento(cfg)
+	if err != nil {
+		return err
+	}
+	selador, err := auditoria.NovoSelador(auditoria.DependenciasSelador{Banco: banco, Armazenamento: arm})
+	if err != nil {
+		return err
+	}
+	_, err = selador.Executar(ctx)
+	return err
 }

@@ -1,7 +1,9 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022"],
+    "lib": [
+      "ES2022"
+    ],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "strict": true,
@@ -12,8 +14,17 @@
     "exactOptionalPropertyTypes": false,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
-    "types": ["node"],
-    "noEmit": true
+    "types": [
+      "node"
+    ],
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "resolveJsonModule": true
   },
-  "include": ["src/**/*.ts", "*.ts"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "app/**/*.tsx",
+    "*.ts"
+  ]
 }

@@ -3,18 +3,23 @@ package adm
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
+	"tenaz/internal/plataforma/textos"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"tenaz/internal/modulos/adm/internal/dominio"
 	"tenaz/internal/modulos/adm/internal/repo"
 	"tenaz/internal/plataforma/autorizacao"
 	"tenaz/internal/plataforma/db"
 	"tenaz/internal/plataforma/db/consultas"
+	"tenaz/internal/plataforma/dinheiro"
 	"tenaz/internal/plataforma/erros"
 	"tenaz/internal/plataforma/paginacao"
+	"tenaz/internal/plataforma/pais"
 )
 
 // Usuários, perfis e permissões avulsas: RF-ADM-004 e RF-ADM-005.
@@ -41,10 +46,19 @@ func lerUsuario(ctx context.Context, empresaID, id uuid.UUID) (Usuario, error) {
 	if err != nil {
 		return Usuario{}, naoEncontrado(err)
 	}
+	custo, err := custoDoBanco(r.CustoHora, r.Moeda)
+	if err != nil {
+		return Usuario{}, err
+	}
+	paisDoUsuario, ok := pais.PaisDaMoeda(r.Moeda)
+	if !ok {
+		return Usuario{}, fmt.Errorf("usuário com moeda %q fora do perfil de país", r.Moeda)
+	}
 	u := Usuario{
-		ID: r.ID, IdentidadeLigada: r.IdentidadeID != nil, PessoaID: r.PessoaID, FornecedorID: r.FornecedorID,
+		Pais: paisDoUsuario,
+		ID:   r.ID, IdentidadeLigada: r.IdentidadeID != nil, PessoaID: r.PessoaID, FornecedorID: r.FornecedorID,
 		LocatarioID: r.LocatarioID, EscopoAcesso: escopoDoUsuario(r.FornecedorID, r.LocatarioID), Nome: r.Nome,
-		Email: r.Email, Telefone: r.Telefone, CustoHoraCentavos: centavos(r.CustoHora),
+		Email: r.Email, Telefone: r.Telefone, CustoHora: custo, Moeda: r.Moeda, Idioma: r.Idioma,
 		UnidadePadraoID: r.UnidadePadraoID, Situacao: r.Situacao, Versao: r.Versao, CriadoEm: r.CriadoEm,
 		AtualizadoEm: r.AtualizadoEm, Perfis: []PerfilAtribuido{}, PermissoesAvulsas: []string{},
 	}
@@ -79,7 +93,7 @@ func perfisPorCodigo(ctx context.Context, q *consultas.Queries, empresaID uuid.U
 	}
 	for i, c := range codigos {
 		if _, ok := m[c]; !ok {
-			return nil, erros.EntradaInvalida.ComCampo("perfis", erros.CampoNaoEncontrado, "Perfil não encontrado: "+codigos[i]+".")
+			return nil, erros.EntradaInvalida.ComCampoChave("perfis", erros.CampoNaoEncontrado, "campo.perfil_nao_encontrado", textos.Parametros{"perfil": codigos[i]})
 		}
 	}
 	return m, nil
@@ -107,27 +121,55 @@ func tipoDosPerfis(m map[string]consultas.AdmBuscarPerfisPorCodigosRow, codigos 
 func conferirPessoa(ctx context.Context, q *consultas.Queries, empresaID, pessoaID uuid.UUID, fornecedorUsuario *uuid.UUID) error {
 	p, err := q.AdmTravarPessoa(ctx, consultas.AdmTravarPessoaParams{EmpresaID: empresaID, ID: pessoaID})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return erros.EntradaInvalida.ComCampo("pessoa_id", erros.CampoNaoEncontrado, "Pessoa não encontrada.")
+		return erros.EntradaInvalida.ComCampoChave("pessoa_id", erros.CampoNaoEncontrado, "campo.pessoa_nao_encontrada", nil)
 	}
 	if err != nil {
 		return err
 	}
 	if p.Situacao != "ativa" {
-		return erros.EntradaInvalida.ComCampo("pessoa_id", erros.CampoInativo,
-			"A pessoa está inativa; reative-a antes de ligar um usuário.")
+		return erros.EntradaInvalida.ComCampoChave("pessoa_id", erros.CampoInativo, "campo.pessoa_inativa", nil)
 	}
 	if !mesmoID(p.FornecedorID, fornecedorUsuario) {
-		return erros.EntradaInvalida.ComCampo("pessoa_id", erros.CampoValorInvalido,
-			"Pessoa de fornecedor só se liga a usuário prestador do mesmo fornecedor, e vice-versa.")
+		return erros.EntradaInvalida.ComCampoChave("pessoa_id", erros.CampoValorInvalido, "campo.pessoa_fornecedor_prestador", nil)
 	}
 	return nil
 }
 
-func validarCusto(c *int64) error {
-	if c != nil && (*c < 0 || *c > 9_999_999_999) {
-		return erros.EntradaInvalida.ComCampo("custo_hora_centavos", erros.CampoForaDaFaixa, "Custo por hora de 0 a 99.999.999,99.")
+// custoDoBanco lê custo_hora (numeric(18,6), preço unitário) na moeda do
+// usuário, de modo exato: casas a mais ou fora da faixa seriam erro, nunca
+// truncamento. Nulo no banco é nulo.
+func custoDoBanco(n pgtype.Numeric, moeda string) (*dinheiro.PrecoUnitario, error) {
+	if !n.Valid {
+		return nil, nil
 	}
-	return nil
+	m, err := dinheiro.ParaMoeda(moeda)
+	if err != nil {
+		return nil, fmt.Errorf("moeda do usuário: %w", err)
+	}
+	p, err := dinheiro.PrecoDeNumeric(n, m)
+	if err != nil {
+		return nil, fmt.Errorf("custo_hora gravado: %w", err)
+	}
+	return &p, nil
+}
+
+// lerCustoHora lê o texto de custo_hora com a moeda da empresa: preço unitário,
+// até seis casas, sem sinal. Recusa, sem arredondar, o que não é exatamente
+// representável (validacao_falhou com formato_invalido no campo custo_hora).
+// Nulo é nulo.
+func lerCustoHora(texto *string, moedaEmpresa string) (pgtype.Numeric, error) {
+	if texto == nil {
+		return pgtype.Numeric{}, nil
+	}
+	m, err := dinheiro.ParaMoeda(moedaEmpresa)
+	if err != nil {
+		return pgtype.Numeric{}, fmt.Errorf("moeda da empresa: %w", err)
+	}
+	p, ee := dinheiro.LerPrecoUnitario("custo_hora", *texto, m, false)
+	if ee != nil {
+		return pgtype.Numeric{}, ee
+	}
+	return p.ParaNumeric(), nil
 }
 
 func (s *servico) CriarUsuario(ctx context.Context, a autorizacao.Ator, e EntradaUsuario) (UsuarioCriado, error) {
@@ -146,12 +188,8 @@ func (s *servico) CriarUsuario(ctx context.Context, a autorizacao.Ator, e Entrad
 	if ee != nil {
 		return UsuarioCriado{}, ee
 	}
-	if err := validarCusto(e.CustoHoraCentavos); err != nil {
-		return UsuarioCriado{}, err
-	}
 	if e.PessoaID != nil && e.NovaPessoa != nil {
-		return UsuarioCriado{}, erros.EntradaInvalida.ComCampo("nova_pessoa", erros.CampoValorInvalido,
-			"Informe pessoa_id ou nova_pessoa, não os dois.")
+		return UsuarioCriado{}, erros.EntradaInvalida.ComCampoChave("nova_pessoa", erros.CampoValorInvalido, "campo.pessoa_ou_nova", nil)
 	}
 	var novaPessoa *pessoaValida
 	if e.NovaPessoa != nil {
@@ -160,8 +198,7 @@ func (s *servico) CriarUsuario(ctx context.Context, a autorizacao.Ator, e Entrad
 		// fornecedor, com vínculo terceiro (RN-ADM-020).
 		if e.FornecedorID != nil {
 			if np.FornecedorID != nil && *np.FornecedorID != *e.FornecedorID {
-				return UsuarioCriado{}, erros.EntradaInvalida.ComCampo("nova_pessoa.fornecedor_id", erros.CampoValorInvalido,
-					"A pessoa de um prestador é do mesmo fornecedor do usuário.")
+				return UsuarioCriado{}, erros.EntradaInvalida.ComCampoChave("nova_pessoa.fornecedor_id", erros.CampoValorInvalido, "campo.nova_pessoa_fornecedor", nil)
 			}
 			np.FornecedorID, np.Vinculo = e.FornecedorID, VinculoTerceiro
 		}
@@ -175,6 +212,7 @@ func (s *servico) CriarUsuario(ctx context.Context, a autorizacao.Ator, e Entrad
 	var (
 		criado      Usuario
 		nomeEmpresa string
+		idioma      string
 	)
 	err := s.naEmpresa(ctx, a, func(ctx context.Context) error {
 		q, err := repo.Q(ctx)
@@ -188,6 +226,17 @@ func (s *servico) CriarUsuario(ctx context.Context, a autorizacao.Ator, e Entrad
 		if ee := dominio.ValidarPerfisDoUsuario(tipoDosPerfis(perfis, e.Perfis),
 			dominio.Vinculo{Fornecedor: e.FornecedorID != nil, Locatario: e.LocatarioID != nil}); ee != nil {
 			return ee
+		}
+		// O idioma do convite é o padrão da empresa e a moeda (a de custo_hora)
+		// é a dela: gravados explicitamente (ADR-013).
+		emp, err := q.AdmBuscarEmpresa(ctx, a.EmpresaID)
+		if err != nil {
+			return naoEncontrado(err)
+		}
+		idioma = emp.IdiomaPadrao
+		custo, err := lerCustoHora(e.CustoHora, emp.Moeda)
+		if err != nil {
+			return err
 		}
 		id := novoID()
 		novos := map[string][]string{}
@@ -211,7 +260,8 @@ func (s *servico) CriarUsuario(ctx context.Context, a autorizacao.Ator, e Entrad
 		}
 		err = q.AdmCriarUsuario(ctx, consultas.AdmCriarUsuarioParams{
 			EmpresaID: a.EmpresaID, ID: id, PessoaID: pessoaID, FornecedorID: e.FornecedorID, LocatarioID: e.LocatarioID,
-			Nome: nome, Email: &email, Telefone: tel, CustoHoraCentavos: e.CustoHoraCentavos, UnidadePadraoID: e.UnidadePadraoID,
+			Nome: nome, Email: &email, Telefone: tel, CustoHora: custo, Moeda: emp.Moeda, Idioma: emp.IdiomaPadrao,
+			UnidadePadraoID: e.UnidadePadraoID,
 		})
 		if err != nil {
 			return repo.Traduzir(err)
@@ -232,7 +282,7 @@ func (s *servico) CriarUsuario(ctx context.Context, a autorizacao.Ator, e Entrad
 	if err != nil {
 		return UsuarioCriado{}, err
 	}
-	enviado := s.convidar(ctx, a.EmpresaID, criado.ID, email, nomeEmpresa, nome) == nil
+	enviado := s.convidar(ctx, a.EmpresaID, criado.ID, email, nomeEmpresa, nome, idioma) == nil
 	return UsuarioCriado{Usuario: criado, ConviteEnviado: enviado}, nil
 }
 
@@ -244,7 +294,10 @@ func (s *servico) ObterUsuario(ctx context.Context, a autorizacao.Ator, id uuid.
 	err := s.naEmpresa(ctx, a, func(ctx context.Context) error {
 		var err error
 		u, err = lerUsuario(ctx, a.EmpresaID, id)
-		return err
+		if err != nil {
+			return err
+		}
+		return s.visualizou(ctx, a, "usuario", id, false)
 	})
 	return u, err
 }
@@ -271,7 +324,9 @@ func (s *servico) ObterEu(ctx context.Context, a autorizacao.Ator) (Usuario, err
 	return u, nil
 }
 
-// EditarEu altera só nome e telefone do próprio usuário (ISO-E01-01).
+// EditarEu altera só nome, telefone e idioma do próprio usuário (ISO-E01-01;
+// ADR-013). É a única via de mudança do idioma depois do convite: quem
+// administra usuários não o altera.
 func (s *servico) EditarEu(ctx context.Context, a autorizacao.Ator, e EntradaEu) (Usuario, error) {
 	nome, ee := dominio.Texto("nome", e.Nome, 200)
 	if ee != nil {
@@ -281,13 +336,21 @@ func (s *servico) EditarEu(ctx context.Context, a autorizacao.Ator, e EntradaEu)
 	if ee != nil {
 		return Usuario{}, ee
 	}
+	var idioma *string
+	if e.Idioma != nil {
+		v, ee := dominio.Idioma("idioma", *e.Idioma)
+		if ee != nil {
+			return Usuario{}, ee
+		}
+		idioma = &v
+	}
 	err := s.naEmpresa(ctx, a, func(ctx context.Context) error {
 		q, err := repo.Q(ctx)
 		if err != nil {
 			return err
 		}
 		return repo.Traduzir(q.AdmAtualizarEu(ctx, consultas.AdmAtualizarEuParams{
-			EmpresaID: a.EmpresaID, ID: a.UsuarioID, Nome: nome, Telefone: tel,
+			EmpresaID: a.EmpresaID, ID: a.UsuarioID, Nome: nome, Telefone: tel, Idioma: idioma,
 		}))
 	})
 	if err != nil {
@@ -307,9 +370,6 @@ func (s *servico) EditarUsuario(ctx context.Context, a autorizacao.Ator, id uuid
 	tel, ee := dominio.TextoOpcional("telefone", e.Telefone, 30)
 	if ee != nil {
 		return Usuario{}, ee
-	}
-	if err := validarCusto(e.CustoHoraCentavos); err != nil {
-		return Usuario{}, err
 	}
 	var u Usuario
 	err := s.naEmpresa(ctx, a, func(ctx context.Context) error {
@@ -332,8 +392,16 @@ func (s *servico) EditarUsuario(ctx context.Context, a autorizacao.Ator, id uuid
 				return err
 			}
 		}
+		emp, err := q.AdmBuscarEmpresa(ctx, a.EmpresaID)
+		if err != nil {
+			return naoEncontrado(err)
+		}
+		custo, err := lerCustoHora(e.CustoHora, emp.Moeda)
+		if err != nil {
+			return err
+		}
 		err = q.AdmAtualizarUsuario(ctx, consultas.AdmAtualizarUsuarioParams{
-			EmpresaID: a.EmpresaID, ID: id, Nome: nome, Telefone: tel, CustoHoraCentavos: e.CustoHoraCentavos,
+			EmpresaID: a.EmpresaID, ID: id, Nome: nome, Telefone: tel, CustoHora: custo,
 			UnidadePadraoID: e.UnidadePadraoID, PessoaID: e.PessoaID,
 		})
 		if err != nil {
@@ -368,7 +436,7 @@ func soAdministradorAlteraAdministrador(ctx context.Context, q *consultas.Querie
 		return err
 	}
 	if adm {
-		return erros.SemPermissao.Com("só administrador altera administrador")
+		return erros.SemPermissao.ComChave("detalhe.so_administrador_altera", nil)
 	}
 	return nil
 }
@@ -387,7 +455,7 @@ func garantirOutroAdministrador(ctx context.Context, q *consultas.Queries, empre
 		return err
 	}
 	if n == 0 {
-		return ErrUltimoAdministrador.Com("a empresa precisa de pelo menos um administrador ativo")
+		return ErrUltimoAdministrador.ComChave("detalhe.ultimo_administrador", nil)
 	}
 	return nil
 }
@@ -484,7 +552,7 @@ func (s *servico) InativarUsuario(ctx context.Context, a autorizacao.Ator, id uu
 			return naoEncontrado(err)
 		}
 		if alvo.Situacao == dominio.UsuarioInativo {
-			return erros.TransicaoInvalida.Com("o usuário já está inativo").ComDado("estado_atual", alvo.Situacao)
+			return erros.TransicaoInvalida.ComChave("detalhe.usuario_ja_inativo", nil).ComDado("estado_atual", alvo.Situacao)
 		}
 		if err := soAdministradorAlteraAdministrador(ctx, q, a, id); err != nil {
 			return err
@@ -530,7 +598,7 @@ func (s *servico) ReativarUsuario(ctx context.Context, a autorizacao.Ator, id uu
 			return naoEncontrado(err)
 		}
 		if alvo.Situacao != dominio.UsuarioInativo {
-			return erros.TransicaoInvalida.Com("só usuário inativo é reativado").ComDado("estado_atual", alvo.Situacao)
+			return erros.TransicaoInvalida.ComChave("detalhe.so_inativo_reativa", nil).ComDado("estado_atual", alvo.Situacao)
 		}
 		if err := soAdministradorAlteraAdministrador(ctx, q, a, id); err != nil {
 			return err
@@ -555,7 +623,7 @@ func (s *servico) ReativarUsuario(ctx context.Context, a autorizacao.Ator, id uu
 	}
 	res := UsuarioCriado{Usuario: u}
 	if reconvidar && u.Email != nil {
-		res.ConviteEnviado = s.convidar(ctx, a.EmpresaID, id, *u.Email, nomeEmpresa, u.Nome) == nil
+		res.ConviteEnviado = s.convidar(ctx, a.EmpresaID, id, *u.Email, nomeEmpresa, u.Nome, u.Idioma) == nil
 	}
 	return res, nil
 }
@@ -576,7 +644,7 @@ func (s *servico) ReenviarConvite(ctx context.Context, a autorizacao.Ator, id uu
 			return err
 		}
 		if u.Situacao != dominio.UsuarioConvidado || u.Email == nil {
-			return erros.TransicaoInvalida.Com("só usuário convidado recebe convite").ComDado("estado_atual", u.Situacao)
+			return erros.TransicaoInvalida.ComChave("detalhe.so_convidado_convite", nil).ComDado("estado_atual", u.Situacao)
 		}
 		nomeEmpresa, err = autorizacao.NomeEmpresa(ctx, a.EmpresaID)
 		return err
@@ -584,7 +652,7 @@ func (s *servico) ReenviarConvite(ctx context.Context, a autorizacao.Ator, id uu
 	if err != nil {
 		return err
 	}
-	return s.convidar(ctx, a.EmpresaID, id, *u.Email, nomeEmpresa, u.Nome)
+	return s.convidar(ctx, a.EmpresaID, id, *u.Email, nomeEmpresa, u.Nome, u.Idioma)
 }
 
 // EncerrarSessoes revoga as sessões e os dispositivos do usuário (POST
@@ -661,13 +729,13 @@ func (s *servico) RetirarPermissao(ctx context.Context, a autorizacao.Ator, id u
 		return Usuario{}, err
 	}
 	if id == a.UsuarioID {
-		return Usuario{}, erros.SemPermissao.Com("ninguém altera as próprias permissões")
+		return Usuario{}, erros.SemPermissao.ComChave("detalhe.ninguem_altera_proprias_permissoes", nil)
 	}
 	if autorizacao.IsencaoAdministrador(permissao) && !a.TemPerfil(autorizacao.PerfilAdministrador) {
-		return Usuario{}, erros.SemPermissao.Com("só o administrador retira %s", permissao)
+		return Usuario{}, erros.SemPermissao.ComChave("detalhe.so_admin_retira", textos.Parametros{"permissao": permissao})
 	}
 	if !a.PodeConceder(permissao) {
-		return Usuario{}, erros.SemPermissao.Com("você não tem a permissão %s", permissao)
+		return Usuario{}, erros.SemPermissao.ComChave("detalhe.sem_a_permissao", textos.Parametros{"permissao": permissao})
 	}
 	var u Usuario
 	err := s.naEmpresa(ctx, a, func(ctx context.Context) error {
@@ -683,7 +751,7 @@ func (s *servico) RetirarPermissao(ctx context.Context, a autorizacao.Ator, id u
 			return err
 		}
 		if n == 0 {
-			return erros.NaoEncontrado.Com("o usuário não tem a permissão avulsa %s", permissao)
+			return erros.NaoEncontrado.ComChave("detalhe.usuario_sem_permissao_avulsa", textos.Parametros{"permissao": permissao})
 		}
 		u, err = lerUsuario(ctx, a.EmpresaID, id)
 		return err

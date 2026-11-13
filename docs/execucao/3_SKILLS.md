@@ -1,6 +1,6 @@
 # Skills do Projeto — Tenaz
 
-**Versão:** 0.2 · **Data:** 12/11/2026 · **Status:** Em elaboração
+**Versão:** 0.3 · **Data:** 13/11/2026 · **Status:** Em elaboração
 **Produto:** Tenaz · Gestão de Manutenção e Frota
 
 Uma skill é o procedimento obrigatório de uma tarefa recorrente deste projeto. Ela existe para que o mesmo trabalho seja feito do mesmo jeito, com os mesmos portões, independentemente de quem o faça e de quando. A definição executável de cada skill está em [../../.claude/skills/](../../.claude/skills/).
@@ -94,3 +94,4 @@ Fecha uma versão em produção conforme RNF-039 e RNF-040 e a seção 3.3 do [r
 
 - v0.1 (12/11/2026): primeira versão. Doze skills, com gatilho, finalidade e as cinco regras de manutenção.
 - v0.2 (12/11/2026): `tenaz-fechar-etapa` passa a escrever a entrega consolidada em `docs/entregas/` quando a etapa é aceita (pedido do dono do produto na etapa E01).
+- v0.3 (13/11/2026): `tenaz-fechar-etapa` passa a fazer o commit no branch da etapa e a abrir o pull request para `main` (modelo de execução, seção 4.1).

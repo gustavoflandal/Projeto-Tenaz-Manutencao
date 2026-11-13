@@ -2,7 +2,9 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
-import { apiForaDoAr, apiRespondeVersao, renderizarRota } from '../../testes/renderizar';
+import { simularAPI } from '../../testes/api-simulada';
+import { sessao } from '../../testes/dados';
+import { apiForaDoAr, apiRespondeVersao, renderizarRota, rotaDaSessao } from '../../testes/renderizar';
 
 // Nos testes, o vite.config.ts injeta a versão 0.0.0-dev, sem commit nem data
 // de build, no ambiente de desenvolvimento.
@@ -20,15 +22,18 @@ function focaveis(): HTMLElement[] {
 }
 
 describe.each(['/entrar', '/'])('selo de versão em %s (RNF-039)', (caminho) => {
-  it('aparece com o texto e o nome acessível do componente 6.19', () => {
+  it('aparece com o texto e o nome acessível do componente 6.19', async () => {
+    simularAPI(rotaDaSessao(sessao()));
     renderizarRota(caminho);
-    const selo = screen.getByRole('button', { name: NOME_DO_SELO });
+    const selo = await screen.findByRole('button', { name: NOME_DO_SELO });
     expect(selo).toHaveTextContent('v0.0.0-dev · Desenvolvimento');
   });
 
-  it('é o último elemento focável da página', () => {
+  it('é o último elemento focável da página', async () => {
+    simularAPI(rotaDaSessao(sessao()));
     renderizarRota(caminho);
-    expect(focaveis().at(-1)).toBe(screen.getByRole('button', { name: NOME_DO_SELO }));
+    const selo = await screen.findByRole('button', { name: NOME_DO_SELO });
+    expect(focaveis().at(-1)).toBe(selo);
   });
 });
 
@@ -38,7 +43,7 @@ describe('diálogo Sobre', () => {
     const usuario = userEvent.setup();
     renderizarRota('/');
 
-    screen.getByRole('button', { name: NOME_DO_SELO }).focus();
+    (await screen.findByRole('button', { name: NOME_DO_SELO })).focus();
     await usuario.keyboard('{Enter}');
 
     const dialogo = await screen.findByRole('dialog', { name: 'Sobre a Tenaz' });
@@ -56,7 +61,7 @@ describe('diálogo Sobre', () => {
     const usuario = userEvent.setup();
     renderizarRota('/entrar');
 
-    await usuario.click(screen.getByRole('button', { name: NOME_DO_SELO }));
+    await usuario.click((await screen.findByRole('button', { name: NOME_DO_SELO })));
 
     const dialogo = await screen.findByRole('dialog', { name: 'Sobre a Tenaz' });
     await waitFor(() =>
@@ -70,7 +75,7 @@ describe('diálogo Sobre', () => {
     const usuario = userEvent.setup();
     renderizarRota('/');
 
-    await usuario.click(screen.getByRole('button', { name: NOME_DO_SELO }));
+    await usuario.click((await screen.findByRole('button', { name: NOME_DO_SELO })));
 
     const dialogo = await screen.findByRole('dialog', { name: 'Sobre a Tenaz' });
     expect(
@@ -83,7 +88,7 @@ describe('diálogo Sobre', () => {
     apiRespondeVersao(API_NA_MESMA_VERSAO);
     const usuario = userEvent.setup();
     renderizarRota('/');
-    const selo = screen.getByRole('button', { name: NOME_DO_SELO });
+    const selo = await screen.findByRole('button', { name: NOME_DO_SELO });
 
     await usuario.click(selo);
     await screen.findByRole('dialog', { name: 'Sobre a Tenaz' });
@@ -99,7 +104,7 @@ describe('diálogo Sobre', () => {
     const escrever = vi.spyOn(globalThis.navigator.clipboard, 'writeText').mockResolvedValue();
     renderizarRota('/');
 
-    await usuario.click(screen.getByRole('button', { name: NOME_DO_SELO }));
+    await usuario.click((await screen.findByRole('button', { name: NOME_DO_SELO })));
     const dialogo = await screen.findByRole('dialog', { name: 'Sobre a Tenaz' });
     await waitFor(() => expect(linha(dialogo, 'api')).toBe('v0.0.0-dev'));
     await usuario.click(within(dialogo).getByRole('button', { name: 'Copiar informações' }));

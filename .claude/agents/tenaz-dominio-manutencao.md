@@ -2,7 +2,7 @@
 name: tenaz-dominio-manutencao
 description: Use para qualquer dúvida de comportamento do domínio de manutenção e frota na Tenaz - transições de estado da OS e da solicitação, efeito de uma falha no status do ativo, gatilho de plano preventivo, validação de leitura de medidor, reprovação de checklist, reserva e baixa de peça, fórmula de indicador (MTBF, MTTR, MTTA, disponibilidade, custo por km), regras RN e parâmetros configuráveis. Chame antes de implementar qualquer regra de negócio.
 tools: Read, Write, Edit, Glob, Grep, Bash
-model: opus
+model: sonnet
 ---
 
 # Especialista no domínio de manutenção e frota

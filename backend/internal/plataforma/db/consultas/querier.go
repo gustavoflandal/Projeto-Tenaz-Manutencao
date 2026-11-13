@@ -8,15 +8,20 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
-	// O convite aceito liga a identidade e ativa o usuário, numa única escrita.
+	// O convite aceito liga a identidade, ativa o usuário e grava o idioma em que a
+	// pessoa aceitou (nulo mantém o do convite), numa única escrita.
 	AdmAceitarConviteUsuario(ctx context.Context, arg AdmAceitarConviteUsuarioParams) (int64, error)
+	// pais e moeda não entram: não mudam pela API (o banco também recusa).
 	AdmAtualizarEmpresa(ctx context.Context, arg AdmAtualizarEmpresaParams) error
-	// O próprio usuário (PATCH /v1/usuarios/eu) muda só nome e telefone, inclusive
-	// o externo, que não pode tocar nas demais colunas da própria linha
-	// (ISO-E01-01).
+	// O próprio usuário (PATCH /v1/usuarios/eu) muda só nome, telefone e idioma,
+	// inclusive o externo, que não pode tocar nas demais colunas da própria linha
+	// (ISO-E01-01; 00009). Idioma nulo mantém o atual. É a única escrita de
+	// usuario.idioma depois do convite: nenhum outro usuário altera o idioma de
+	// alguém.
 	AdmAtualizarEu(ctx context.Context, arg AdmAtualizarEuParams) error
 	AdmAtualizarPessoa(ctx context.Context, arg AdmAtualizarPessoaParams) error
 	AdmAtualizarTurno(ctx context.Context, arg AdmAtualizarTurnoParams) error
@@ -53,6 +58,8 @@ type Querier interface {
 	// quando nula) e coordenadas em float8. Dinheiro entra em centavos (bigint) e
 	// sai como numeric exato, convertido para centavos no Go.
 	// ------------------------------------------------------------------- empresa
+	// pais, moeda e idioma_padrao são gravados explicitamente a partir do perfil de
+	// país (os defaults do banco só dão valor às empresas anteriores à 00009).
 	AdmCriarEmpresa(ctx context.Context, arg AdmCriarEmpresaParams) error
 	AdmCriarFeriado(ctx context.Context, arg AdmCriarFeriadoParams) error
 	// -------------------------------------------------------------------- perfil
@@ -64,6 +71,9 @@ type Querier interface {
 	// ------------------------------------------------------------------- unidade
 	AdmCriarUnidade(ctx context.Context, arg AdmCriarUnidadeParams) error
 	// ------------------------------------------------------------------- usuario
+	// idioma é o padrão da empresa no convite; moeda é a da empresa (a de custo_hora).
+	// custo_hora é preço unitário, numeric(18,6): entra e sai por pgtype.Numeric, convertido
+	// pelo pacote dinheiro, sem float, bigint nem divisão por 100.
 	AdmCriarUsuario(ctx context.Context, arg AdmCriarUsuarioParams) error
 	AdmDefinirSituacaoPessoa(ctx context.Context, arg AdmDefinirSituacaoPessoaParams) error
 	AdmDefinirSituacaoUnidade(ctx context.Context, arg AdmDefinirSituacaoUnidadeParams) error
@@ -95,6 +105,24 @@ type Querier interface {
 	AdmTravarPessoa(ctx context.Context, arg AdmTravarPessoaParams) (AdmTravarPessoaRow, error)
 	AdmTravarUnidade(ctx context.Context, arg AdmTravarUnidadeParams) (AdmTravarUnidadeRow, error)
 	AdmTravarUsuario(ctx context.Context, arg AdmTravarUsuarioParams) (AdmTravarUsuarioRow, error)
+	// As três chaves em cada gravação: o UPDATE do upsert não pode devolver a
+	// outra chave ao padrão.
+	AudGravarCaptura(ctx context.Context, arg AudGravarCapturaParams) error
+	// ------------------------------------------------------------------ captura
+	// Sem linha vale o padrão: impressão e extração ligadas, visualização
+	// desligada (documento 2, seção 9.2.2). Só o escopo interno lê.
+	AudListarCapturas(ctx context.Context, empresaID uuid.UUID) ([]AudListarCapturasRow, error)
+	// Selos de um período, para enviar ao armazenamento e para a verificação.
+	AudListarSelos(ctx context.Context, arg AudListarSelosParams) ([]AudListarSelosRow, error)
+	// app.verificar_integridade_auditoria(de, ate) devolve TABLE: o sqlc não
+	// resolve as colunas de função que retorna tabela, e a chamada fica em
+	// verificacao.go, com pgx e parâmetros.
+	// Retenção da empresa, para o retain-until do selo.
+	AudRetencaoEmpresa(ctx context.Context, empresaID uuid.UUID) (int32, error)
+	// ---------------------------------------------------------------------- selo
+	// Job do selo, como tenaz_job, na transação da empresa: sela os dias pendentes
+	// e devolve os dias selados.
+	AudSelarDiasPendentes(ctx context.Context) ([]pgtype.Date, error)
 	AutzBuscarEmpresa(ctx context.Context, id uuid.UUID) (AutzBuscarEmpresaRow, error)
 	// Leitura das permissões efetivas e do escopo do usuário, a cada requisição
 	// (seção 2.9.2 do documento 2). Roda em NaEmpresa com escopo interno e sem
@@ -106,15 +134,17 @@ type Querier interface {
 	AutzPerfisDoUsuario(ctx context.Context, arg AutzPerfisDoUsuarioParams) ([]AutzPerfisDoUsuarioRow, error)
 	AutzPermissoesAvulsas(ctx context.Context, arg AutzPermissoesAvulsasParams) ([]string, error)
 	// Eventos de auditoria gravados pelo serviço (seção 9.1 do documento 2), e
-	// não pelo trg_auditoria: login, falha de login, logout, troca de senha,
-	// ativação de MFA, visualização de dado sensível.
+	// não pelo trg_auditoria: visualização, impressão, extração, alteração no
+	// nível do fato. Login, logout e falha de login são do papel da autenticação
+	// (ADR-011), com consulta própria.
 	//
 	// O contexto técnico (origem, IP, dispositivo, user agent, request_id,
 	// token de API, instante do aparelho) vem das mesmas variáveis da transação
 	// que app.tg_auditar() lê, fixadas por NaEmpresa: um evento gravado pelo
 	// serviço e um gravado pelo trigger na mesma requisição ficam iguais nesses
-	// campos. A empresa é a da transação; a policy auditoria_insercao recusa
-	// qualquer outra.
+	// campos. O módulo, a tela e o nome do usuário também vêm de lá, pelo trigger
+	// app.tg_evento_auditoria_preparar(), que ainda calcula o hash. A empresa é a
+	// da transação; a policy auditoria_insercao recusa qualquer outra.
 	InserirEventoAuditoria(ctx context.Context, arg InserirEventoAuditoriaParams) error
 }
 

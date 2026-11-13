@@ -137,7 +137,7 @@ FROM app.evento_auditoria WHERE empresa_id = $1 AND entidade_id = $2 ORDER BY oc
 		alvo := uuid.Must(uuid.NewV7())
 		err := amb.App.NaEmpresa(ctx, empresa, db.Interno(nil), func(ctx context.Context) error {
 			return auditoria.Registrar(ctx, auditoria.Evento{
-				EmpresaID: empresa, Acao: auditoria.AcaoVisualizacaoSensivel, Entidade: "pessoa", EntidadeID: &alvo,
+				EmpresaID: empresa, Acao: auditoria.AcaoVisualizacao, Sensivel: true, Entidade: "pessoa", EntidadeID: &alvo,
 			})
 		})
 		if err != nil {

@@ -263,14 +263,30 @@ func TestDetectorAcusaPapelDeAutenticacaoMalformado(t *testing.T) {
 
 // --------------------------------------------------- molde da auditoria
 
-// eventoIdentidade monta o INSERT de evento que o serviço de autenticação faz.
+// Nomes dos usuários das fixtures que gravam evento de identidade: a
+// restritiva autenticacao_identidade confere usuario_nome com o nome que
+// acesso_empresa guarda para aquele usuário naquela empresa (00007).
+const (
+	nomeInterno     = "Interno"
+	nomePrestadorF1 = "Prestador F1"
+)
+
+// eventoIdentidade monta o INSERT de evento que o serviço de autenticação faz:
+// login com sucesso, logout ou alteração, com o nome do usuário.
 func eventoIdentidade(empresa, usuario, identidade, ator, acao, entidade string) tentativa {
+	return eventoIdentidadeCom(empresa, usuario, nomeInterno, identidade, ator, acao, "sucesso", entidade)
+}
+
+// eventoIdentidadeCom é eventoIdentidade com o nome e o resultado explícitos
+// (a falha de login é acao login com resultado falha, desde a 00007).
+func eventoIdentidadeCom(empresa, usuario, nome, identidade, ator, acao, resultado, entidade string) tentativa {
 	return tentativa{
-		fmt.Sprintf("empresa=%.8s usuario=%.8s identidade=%.8s ator=%s acao=%s entidade=%s",
-			empresa, usuario, identidade, ator, acao, entidade),
-		`INSERT INTO app.evento_auditoria (empresa_id, ator_tipo, usuario_id, acao, entidade, entidade_id, origem)
-		 VALUES ($1, $2, $3, $4, $5, $6, 'web')`,
-		[]any{empresa, ator, usuario, acao, entidade, identidade},
+		fmt.Sprintf("empresa=%.8s usuario=%.8s nome=%q identidade=%.8s ator=%s acao=%s resultado=%s entidade=%s",
+			empresa, usuario, nome, identidade, ator, acao, resultado, entidade),
+		`INSERT INTO app.evento_auditoria (empresa_id, ator_tipo, usuario_id, usuario_nome, acao, resultado, entidade,
+		                                   entidade_id, origem, tela)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'web', 'adm.login')`,
+		[]any{empresa, ator, usuario, nome, acao, resultado, entidade, identidade},
 	}
 }
 
@@ -283,14 +299,15 @@ func problemasDoMolde(t *testing.T, ctx context.Context, tx pgx.Tx, papel string
 	a, b := f.A, f.B
 	var problemas []string
 
-	// Permitidos: login, falha, logout e alteração da identidade, com o usuário
-	// que acesso_empresa liga àquela identidade naquela empresa — em A e em B.
+	// Permitidos: login (sucesso ou falha), logout e alteração da identidade,
+	// com o usuário e o nome que acesso_empresa liga àquela identidade naquela
+	// empresa — em A e em B.
 	for _, ok := range []struct {
 		c contexto
 		e tentativa
 	}{
 		{ctxA, eventoIdentidade(a.ID, a.UsuarioInterno, a.Identidade, "usuario", "login", "identidade")},
-		{ctxA, eventoIdentidade(a.ID, a.UsuarioInterno, a.Identidade, "usuario", "login_falho", "identidade")},
+		{ctxA, eventoIdentidadeCom(a.ID, a.UsuarioInterno, nomeInterno, a.Identidade, "usuario", "login", "falha", "identidade")},
 		{ctxA, eventoIdentidade(a.ID, a.UsuarioInterno, a.Identidade, "usuario", "logout", "identidade")},
 		{ctxA, eventoIdentidade(a.ID, a.UsuarioInterno, a.Identidade, "usuario", "alteracao", "identidade")},
 		{ctxB, eventoIdentidade(b.ID, b.UsuarioInterno, b.Identidade, "usuario", "login", "identidade")},
@@ -307,7 +324,10 @@ func problemasDoMolde(t *testing.T, ctx context.Context, tx pgx.Tx, papel string
 	}{
 		{ctxA, eventoIdentidade(a.ID, a.UsuarioInterno, a.Identidade, "usuario", "login", "usuario")},
 		{ctxA, eventoIdentidade(a.ID, a.UsuarioInterno, a.Identidade, "usuario", "exclusao", "identidade")},
-		{ctxA, eventoIdentidade(a.ID, a.UsuarioInterno, a.Identidade, "usuario", "exportacao", "identidade")},
+		{ctxA, eventoIdentidade(a.ID, a.UsuarioInterno, a.Identidade, "usuario", "extracao", "identidade")},
+		// nome que não é o do usuário naquela empresa: o evento mentiria quem agiu
+		{ctxA, eventoIdentidadeCom(a.ID, a.UsuarioInterno, "Nome forjado", a.Identidade, "usuario", "login", "sucesso", "identidade")},
+		{ctxA, eventoIdentidadeCom(a.ID, a.UsuarioInterno, nomePrestadorF1, a.Identidade, "usuario", "login", "sucesso", "identidade")},
 		{ctxA, eventoIdentidade(a.ID, a.UsuarioInterno, a.Identidade, "sistema", "login", "identidade")},
 		// usuário de B, identidade de A, empresa A
 		{ctxA, eventoIdentidade(a.ID, b.UsuarioInterno, a.Identidade, "usuario", "login", "identidade")},
@@ -360,7 +380,7 @@ func TestDetectorAcusaMoldeDeAuditoriaSemARestritiva(t *testing.T) {
 	emTransacaoDesfeita(t, ctx, func(tx pgx.Tx) {
 		estragar(t, ctx, tx, "DROP POLICY autenticacao_identidade ON app.evento_auditoria")
 		p := strings.Join(problemasDoMolde(t, ctx, tx, papelAutenticacao, f), " | ")
-		for _, esperado := range []string{"entidade=usuario", "acao=exclusao", "ator=sistema"} {
+		for _, esperado := range []string{"entidade=usuario", "acao=exclusao", "ator=sistema", `nome="Nome forjado"`} {
 			if !strings.Contains(p, "não recusado com 42501: ") || !strings.Contains(p, esperado) {
 				t.Errorf("sem a restritiva autenticacao_identidade, o verificador não acusou o evento com %s; acusou: %s",
 					esperado, p)
@@ -401,11 +421,11 @@ func problemasDaRevogacao(t *testing.T, ctx context.Context, tx pgx.Tx, f *fixtu
 	passo("identidade", papelAutenticacao, contexto{}, `INSERT INTO plataforma.identidade (email) VALUES ($1) RETURNING id`,
 		&identidade, "duas-empresas-"+novoID()+"@teste.tenaz")
 	passo("usuário em A", papelApp, f.internoA(),
-		`INSERT INTO app.usuario (empresa_id, nome, identidade_id) VALUES ($1, 'Duas empresas', $2) RETURNING id`,
-		&usuarioA, f.A.ID, identidade)
+		`INSERT INTO app.usuario (empresa_id, nome, identidade_id, moeda) VALUES ($1, 'Duas empresas', $2, $3) RETURNING id`,
+		&usuarioA, f.A.ID, identidade, f.A.Moeda)
 	passo("usuário em B", papelApp, contexto{Empresa: f.B.ID, Escopo: "interno"},
-		`INSERT INTO app.usuario (empresa_id, nome, identidade_id) VALUES ($1, 'Duas empresas', $2) RETURNING id`,
-		&usuarioB, f.B.ID, identidade)
+		`INSERT INTO app.usuario (empresa_id, nome, identidade_id, moeda) VALUES ($1, 'Duas empresas', $2, $3) RETURNING id`,
+		&usuarioB, f.B.ID, identidade, f.B.Moeda)
 	for _, e := range []struct{ rotulo, empresa, usuario string }{{"A", f.A.ID, usuarioA}, {"B", f.B.ID, usuarioB}} {
 		var web, app, token string
 		passo("sessão web "+e.rotulo, papelAutenticacao, contexto{},
@@ -491,8 +511,8 @@ func TestDetectorAcusaRevogacaoQueAtravessaEmpresas(t *testing.T) {
 			  LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp
 			AS $$
 			BEGIN
-			  INSERT INTO plataforma.acesso_empresa (identidade_id, empresa_id, usuario_id, habilitado)
-			  VALUES (NEW.identidade_id, NEW.empresa_id, NEW.id, NEW.situacao = 'ativo' AND NEW.excluido_em IS NULL)
+			  INSERT INTO plataforma.acesso_empresa (identidade_id, empresa_id, usuario_id, usuario_nome, habilitado)
+			  VALUES (NEW.identidade_id, NEW.empresa_id, NEW.id, NEW.nome, NEW.situacao = 'ativo' AND NEW.excluido_em IS NULL)
 			  ON CONFLICT (identidade_id, empresa_id) DO UPDATE SET habilitado = EXCLUDED.habilitado;
 			  IF NOT (NEW.situacao = 'ativo' AND NEW.excluido_em IS NULL) THEN
 			    UPDATE plataforma.sessao SET revogada_em = pg_catalog.now() WHERE identidade_id = NEW.identidade_id;

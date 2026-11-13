@@ -42,6 +42,11 @@ jobs:
       - name: Verificador de documentação
         run: python ferramentas/verificar_docs.py
 
+      # Casos compartilhados Go/TypeScript gerados por oráculo de aritmética
+      # exata (ADR-013, Parte F): o JSON não é editado à mão.
+      - name: Casos compartilhados em dia com o gerador
+        run: bash ferramentas/tarefas.sh conferir-casos
+
       # O Git no Windows não rastreia o bit de executável por padrão, e a
       # primeira execução deste CI falhou com "Permission denied" por isso.
       # Os passos passaram a invocar os scripts por `bash`, o que os torna
@@ -132,6 +137,13 @@ jobs:
       - name: Testes unitários
         working-directory: backend
         run: go test ./internal/... -count=1
+
+      # Fluxos HTTP de ponta a ponta no backend e testes de conversão e de
+      # recusa das migrações de dados (documento 2, seção 14.2). Até a E01
+      # rodavam só em `tarefas.sh tudo`, fora do CI.
+      - name: Testes de integração e de migração
+        working-directory: backend
+        run: go test ./testes/integracao/ ./testes/migracoes/ -count=1
 
       # BLOQUEIA merge e deploy. Falha aqui é incidente de segurança de
       # severidade alta, mesmo acontecendo só no CI.

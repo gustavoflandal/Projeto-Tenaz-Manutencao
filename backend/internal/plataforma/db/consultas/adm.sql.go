@@ -15,20 +15,27 @@ import (
 
 const admAceitarConviteUsuario = `-- name: AdmAceitarConviteUsuario :execrows
 UPDATE app.usuario
-SET identidade_id = $1, situacao = 'ativo'
-WHERE empresa_id = $2 AND id = $3 AND situacao = 'convidado'
+SET identidade_id = $1, situacao = 'ativo', idioma = coalesce($2::text, idioma)
+WHERE empresa_id = $3 AND id = $4 AND situacao = 'convidado'
   AND identidade_id IS NULL AND excluido_em IS NULL
 `
 
 type AdmAceitarConviteUsuarioParams struct {
 	IdentidadeID *uuid.UUID `json:"identidade_id"`
+	Idioma       *string    `json:"idioma"`
 	EmpresaID    uuid.UUID  `json:"empresa_id"`
 	ID           uuid.UUID  `json:"id"`
 }
 
-// O convite aceito liga a identidade e ativa o usuário, numa única escrita.
+// O convite aceito liga a identidade, ativa o usuário e grava o idioma em que a
+// pessoa aceitou (nulo mantém o do convite), numa única escrita.
 func (q *Queries) AdmAceitarConviteUsuario(ctx context.Context, arg AdmAceitarConviteUsuarioParams) (int64, error) {
-	result, err := q.db.Exec(ctx, admAceitarConviteUsuario, arg.IdentidadeID, arg.EmpresaID, arg.ID)
+	result, err := q.db.Exec(ctx, admAceitarConviteUsuario,
+		arg.IdentidadeID,
+		arg.Idioma,
+		arg.EmpresaID,
+		arg.ID,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -37,25 +44,32 @@ func (q *Queries) AdmAceitarConviteUsuario(ctx context.Context, arg AdmAceitarCo
 
 const admAtualizarEmpresa = `-- name: AdmAtualizarEmpresa :exec
 UPDATE app.empresa
-SET razao_social = $1, nome_fantasia = $2, cnpj = $3,
-    fuso_horario = $4, mfa_obrigatorio = $5
-WHERE id = $6 AND excluido_em IS NULL
+SET razao_social = $1, nome_fantasia = $2,
+    identificacao_tipo = $3, identificacao = $4,
+    idioma_padrao = $5,
+    fuso_horario = $6, mfa_obrigatorio = $7
+WHERE id = $8 AND excluido_em IS NULL
 `
 
 type AdmAtualizarEmpresaParams struct {
-	RazaoSocial    string    `json:"razao_social"`
-	NomeFantasia   *string   `json:"nome_fantasia"`
-	Cnpj           *string   `json:"cnpj"`
-	FusoHorario    string    `json:"fuso_horario"`
-	MfaObrigatorio bool      `json:"mfa_obrigatorio"`
-	ID             uuid.UUID `json:"id"`
+	RazaoSocial       string    `json:"razao_social"`
+	NomeFantasia      *string   `json:"nome_fantasia"`
+	IdentificacaoTipo *string   `json:"identificacao_tipo"`
+	Identificacao     *string   `json:"identificacao"`
+	IdiomaPadrao      string    `json:"idioma_padrao"`
+	FusoHorario       string    `json:"fuso_horario"`
+	MfaObrigatorio    bool      `json:"mfa_obrigatorio"`
+	ID                uuid.UUID `json:"id"`
 }
 
+// pais e moeda não entram: não mudam pela API (o banco também recusa).
 func (q *Queries) AdmAtualizarEmpresa(ctx context.Context, arg AdmAtualizarEmpresaParams) error {
 	_, err := q.db.Exec(ctx, admAtualizarEmpresa,
 		arg.RazaoSocial,
 		arg.NomeFantasia,
-		arg.Cnpj,
+		arg.IdentificacaoTipo,
+		arg.Identificacao,
+		arg.IdiomaPadrao,
 		arg.FusoHorario,
 		arg.MfaObrigatorio,
 		arg.ID,
@@ -65,24 +79,28 @@ func (q *Queries) AdmAtualizarEmpresa(ctx context.Context, arg AdmAtualizarEmpre
 
 const admAtualizarEu = `-- name: AdmAtualizarEu :exec
 UPDATE app.usuario
-SET nome = $1, telefone = $2
-WHERE empresa_id = $3 AND id = $4 AND excluido_em IS NULL
+SET nome = $1, telefone = $2, idioma = coalesce($3::text, idioma)
+WHERE empresa_id = $4 AND id = $5 AND excluido_em IS NULL
 `
 
 type AdmAtualizarEuParams struct {
 	Nome      string    `json:"nome"`
 	Telefone  *string   `json:"telefone"`
+	Idioma    *string   `json:"idioma"`
 	EmpresaID uuid.UUID `json:"empresa_id"`
 	ID        uuid.UUID `json:"id"`
 }
 
-// O próprio usuário (PATCH /v1/usuarios/eu) muda só nome e telefone, inclusive
-// o externo, que não pode tocar nas demais colunas da própria linha
-// (ISO-E01-01).
+// O próprio usuário (PATCH /v1/usuarios/eu) muda só nome, telefone e idioma,
+// inclusive o externo, que não pode tocar nas demais colunas da própria linha
+// (ISO-E01-01; 00009). Idioma nulo mantém o atual. É a única escrita de
+// usuario.idioma depois do convite: nenhum outro usuário altera o idioma de
+// alguém.
 func (q *Queries) AdmAtualizarEu(ctx context.Context, arg AdmAtualizarEuParams) error {
 	_, err := q.db.Exec(ctx, admAtualizarEu,
 		arg.Nome,
 		arg.Telefone,
+		arg.Idioma,
 		arg.EmpresaID,
 		arg.ID,
 	)
@@ -91,16 +109,18 @@ func (q *Queries) AdmAtualizarEu(ctx context.Context, arg AdmAtualizarEuParams) 
 
 const admAtualizarPessoa = `-- name: AdmAtualizarPessoa :exec
 UPDATE app.pessoa
-SET nome = $1, cpf = $2, data_nascimento = $3::text::date,
-    matricula = $4, cargo = $5, telefone = $6,
-    email = $7, vinculo = $8, fornecedor_id = $9,
-    unidade_id = $10, registro_profissional = $11
-WHERE empresa_id = $12 AND id = $13 AND excluido_em IS NULL
+SET nome = $1, identificacao_tipo = $2,
+    identificacao = $3, data_nascimento = $4::text::date,
+    matricula = $5, cargo = $6, telefone = $7,
+    email = $8, vinculo = $9, fornecedor_id = $10,
+    unidade_id = $11, registro_profissional = $12
+WHERE empresa_id = $13 AND id = $14 AND excluido_em IS NULL
 `
 
 type AdmAtualizarPessoaParams struct {
 	Nome                 string     `json:"nome"`
-	Cpf                  *string    `json:"cpf"`
+	IdentificacaoTipo    *string    `json:"identificacao_tipo"`
+	Identificacao        *string    `json:"identificacao"`
 	DataNascimento       *string    `json:"data_nascimento"`
 	Matricula            *string    `json:"matricula"`
 	Cargo                *string    `json:"cargo"`
@@ -117,7 +137,8 @@ type AdmAtualizarPessoaParams struct {
 func (q *Queries) AdmAtualizarPessoa(ctx context.Context, arg AdmAtualizarPessoaParams) error {
 	_, err := q.db.Exec(ctx, admAtualizarPessoa,
 		arg.Nome,
-		arg.Cpf,
+		arg.IdentificacaoTipo,
+		arg.Identificacao,
 		arg.DataNascimento,
 		arg.Matricula,
 		arg.Cargo,
@@ -163,29 +184,32 @@ func (q *Queries) AdmAtualizarTurno(ctx context.Context, arg AdmAtualizarTurnoPa
 
 const admAtualizarUnidade = `-- name: AdmAtualizarUnidade :exec
 UPDATE app.unidade
-SET codigo = $1, nome = $2, cnpj = $3, endereco = $4,
-    fuso_horario = $5, latitude = $6::float8,
-    longitude = $7::float8
-WHERE empresa_id = $8 AND id = $9 AND excluido_em IS NULL
+SET codigo = $1, nome = $2, identificacao_tipo = $3,
+    identificacao = $4, endereco = $5,
+    fuso_horario = $6, latitude = $7::float8,
+    longitude = $8::float8
+WHERE empresa_id = $9 AND id = $10 AND excluido_em IS NULL
 `
 
 type AdmAtualizarUnidadeParams struct {
-	Codigo      string    `json:"codigo"`
-	Nome        string    `json:"nome"`
-	Cnpj        *string   `json:"cnpj"`
-	Endereco    []byte    `json:"endereco"`
-	FusoHorario *string   `json:"fuso_horario"`
-	Latitude    *float64  `json:"latitude"`
-	Longitude   *float64  `json:"longitude"`
-	EmpresaID   uuid.UUID `json:"empresa_id"`
-	ID          uuid.UUID `json:"id"`
+	Codigo            string    `json:"codigo"`
+	Nome              string    `json:"nome"`
+	IdentificacaoTipo *string   `json:"identificacao_tipo"`
+	Identificacao     *string   `json:"identificacao"`
+	Endereco          []byte    `json:"endereco"`
+	FusoHorario       *string   `json:"fuso_horario"`
+	Latitude          *float64  `json:"latitude"`
+	Longitude         *float64  `json:"longitude"`
+	EmpresaID         uuid.UUID `json:"empresa_id"`
+	ID                uuid.UUID `json:"id"`
 }
 
 func (q *Queries) AdmAtualizarUnidade(ctx context.Context, arg AdmAtualizarUnidadeParams) error {
 	_, err := q.db.Exec(ctx, admAtualizarUnidade,
 		arg.Codigo,
 		arg.Nome,
-		arg.Cnpj,
+		arg.IdentificacaoTipo,
+		arg.Identificacao,
 		arg.Endereco,
 		arg.FusoHorario,
 		arg.Latitude,
@@ -199,26 +223,26 @@ func (q *Queries) AdmAtualizarUnidade(ctx context.Context, arg AdmAtualizarUnida
 const admAtualizarUsuario = `-- name: AdmAtualizarUsuario :exec
 UPDATE app.usuario
 SET nome = $1, telefone = $2,
-    custo_hora = ($3::bigint / 100.0)::numeric(12,2),
+    custo_hora = $3,
     unidade_padrao_id = $4, pessoa_id = $5
 WHERE empresa_id = $6 AND id = $7 AND excluido_em IS NULL
 `
 
 type AdmAtualizarUsuarioParams struct {
-	Nome              string     `json:"nome"`
-	Telefone          *string    `json:"telefone"`
-	CustoHoraCentavos *int64     `json:"custo_hora_centavos"`
-	UnidadePadraoID   *uuid.UUID `json:"unidade_padrao_id"`
-	PessoaID          *uuid.UUID `json:"pessoa_id"`
-	EmpresaID         uuid.UUID  `json:"empresa_id"`
-	ID                uuid.UUID  `json:"id"`
+	Nome            string         `json:"nome"`
+	Telefone        *string        `json:"telefone"`
+	CustoHora       pgtype.Numeric `json:"custo_hora"`
+	UnidadePadraoID *uuid.UUID     `json:"unidade_padrao_id"`
+	PessoaID        *uuid.UUID     `json:"pessoa_id"`
+	EmpresaID       uuid.UUID      `json:"empresa_id"`
+	ID              uuid.UUID      `json:"id"`
 }
 
 func (q *Queries) AdmAtualizarUsuario(ctx context.Context, arg AdmAtualizarUsuarioParams) error {
 	_, err := q.db.Exec(ctx, admAtualizarUsuario,
 		arg.Nome,
 		arg.Telefone,
-		arg.CustoHoraCentavos,
+		arg.CustoHora,
 		arg.UnidadePadraoID,
 		arg.PessoaID,
 		arg.EmpresaID,
@@ -228,7 +252,8 @@ func (q *Queries) AdmAtualizarUsuario(ctx context.Context, arg AdmAtualizarUsuar
 }
 
 const admBuscarEmpresa = `-- name: AdmBuscarEmpresa :one
-SELECT id, razao_social, nome_fantasia, cnpj, plano, srv_habilitado, mfa_obrigatorio, situacao, fuso_horario,
+SELECT id, razao_social, nome_fantasia, pais, moeda, idioma_padrao, identificacao_tipo, identificacao,
+       plano, srv_habilitado, mfa_obrigatorio, situacao, fuso_horario,
        retencao_auditoria_anos, coalesce(to_char(teste_ate, 'YYYY-MM-DD'), '')::text AS teste_ate, versao, criado_em, atualizado_em
 FROM app.empresa
 WHERE id = $1 AND excluido_em IS NULL
@@ -238,7 +263,11 @@ type AdmBuscarEmpresaRow struct {
 	ID                    uuid.UUID `json:"id"`
 	RazaoSocial           string    `json:"razao_social"`
 	NomeFantasia          *string   `json:"nome_fantasia"`
-	Cnpj                  *string   `json:"cnpj"`
+	Pais                  string    `json:"pais"`
+	Moeda                 string    `json:"moeda"`
+	IdiomaPadrao          string    `json:"idioma_padrao"`
+	IdentificacaoTipo     *string   `json:"identificacao_tipo"`
+	Identificacao         *string   `json:"identificacao"`
 	Plano                 *string   `json:"plano"`
 	SrvHabilitado         bool      `json:"srv_habilitado"`
 	MfaObrigatorio        bool      `json:"mfa_obrigatorio"`
@@ -258,7 +287,11 @@ func (q *Queries) AdmBuscarEmpresa(ctx context.Context, id uuid.UUID) (AdmBuscar
 		&i.ID,
 		&i.RazaoSocial,
 		&i.NomeFantasia,
-		&i.Cnpj,
+		&i.Pais,
+		&i.Moeda,
+		&i.IdiomaPadrao,
+		&i.IdentificacaoTipo,
+		&i.Identificacao,
 		&i.Plano,
 		&i.SrvHabilitado,
 		&i.MfaObrigatorio,
@@ -274,9 +307,10 @@ func (q *Queries) AdmBuscarEmpresa(ctx context.Context, id uuid.UUID) (AdmBuscar
 }
 
 const admBuscarEventoAuditoria = `-- name: AdmBuscarEventoAuditoria :one
-SELECT id, ocorrido_em, ator_tipo, usuario_id, token_api_id, acao, entidade, entidade_id, entidade_chave,
-       antes, depois, campos_alterados, origem, coalesce(host(ip), '')::text AS ip, dispositivo_id, user_agent, request_id,
-       conexao_empresa_id, ocorrido_no_dispositivo_em
+SELECT id, ocorrido_em, ator_tipo, usuario_id, usuario_nome, token_api_id, acao, resultado, entidade, entidade_id,
+       entidade_chave, antes, depois, campos_alterados, modulo, tela, sensivel, detalhe, origem,
+       coalesce(host(ip), '')::text AS ip, dispositivo_id, user_agent, request_id, conexao_empresa_id,
+       ocorrido_no_dispositivo_em, hash
 FROM app.evento_auditoria
 WHERE empresa_id = $1 AND id = $2
 `
@@ -291,14 +325,20 @@ type AdmBuscarEventoAuditoriaRow struct {
 	OcorridoEm              time.Time  `json:"ocorrido_em"`
 	AtorTipo                string     `json:"ator_tipo"`
 	UsuarioID               *uuid.UUID `json:"usuario_id"`
+	UsuarioNome             *string    `json:"usuario_nome"`
 	TokenApiID              *uuid.UUID `json:"token_api_id"`
 	Acao                    string     `json:"acao"`
+	Resultado               string     `json:"resultado"`
 	Entidade                string     `json:"entidade"`
 	EntidadeID              *uuid.UUID `json:"entidade_id"`
 	EntidadeChave           *string    `json:"entidade_chave"`
 	Antes                   []byte     `json:"antes"`
 	Depois                  []byte     `json:"depois"`
 	CamposAlterados         []string   `json:"campos_alterados"`
+	Modulo                  *string    `json:"modulo"`
+	Tela                    *string    `json:"tela"`
+	Sensivel                bool       `json:"sensivel"`
+	Detalhe                 []byte     `json:"detalhe"`
 	Origem                  *string    `json:"origem"`
 	Ip                      string     `json:"ip"`
 	DispositivoID           *uuid.UUID `json:"dispositivo_id"`
@@ -306,6 +346,7 @@ type AdmBuscarEventoAuditoriaRow struct {
 	RequestID               *string    `json:"request_id"`
 	ConexaoEmpresaID        *uuid.UUID `json:"conexao_empresa_id"`
 	OcorridoNoDispositivoEm *time.Time `json:"ocorrido_no_dispositivo_em"`
+	Hash                    []byte     `json:"hash"`
 }
 
 func (q *Queries) AdmBuscarEventoAuditoria(ctx context.Context, arg AdmBuscarEventoAuditoriaParams) (AdmBuscarEventoAuditoriaRow, error) {
@@ -316,14 +357,20 @@ func (q *Queries) AdmBuscarEventoAuditoria(ctx context.Context, arg AdmBuscarEve
 		&i.OcorridoEm,
 		&i.AtorTipo,
 		&i.UsuarioID,
+		&i.UsuarioNome,
 		&i.TokenApiID,
 		&i.Acao,
+		&i.Resultado,
 		&i.Entidade,
 		&i.EntidadeID,
 		&i.EntidadeChave,
 		&i.Antes,
 		&i.Depois,
 		&i.CamposAlterados,
+		&i.Modulo,
+		&i.Tela,
+		&i.Sensivel,
+		&i.Detalhe,
 		&i.Origem,
 		&i.Ip,
 		&i.DispositivoID,
@@ -331,6 +378,7 @@ func (q *Queries) AdmBuscarEventoAuditoria(ctx context.Context, arg AdmBuscarEve
 		&i.RequestID,
 		&i.ConexaoEmpresaID,
 		&i.OcorridoNoDispositivoEm,
+		&i.Hash,
 	)
 	return i, err
 }
@@ -434,7 +482,7 @@ func (q *Queries) AdmBuscarPerfisPorIDs(ctx context.Context, arg AdmBuscarPerfis
 }
 
 const admBuscarPessoa = `-- name: AdmBuscarPessoa :one
-SELECT p.id, p.nome, p.cpf, coalesce(to_char(p.data_nascimento, 'YYYY-MM-DD'), '')::text AS data_nascimento,
+SELECT p.id, p.nome, p.identificacao_tipo, p.identificacao, coalesce(to_char(p.data_nascimento, 'YYYY-MM-DD'), '')::text AS data_nascimento,
        p.matricula, p.cargo, p.telefone, p.email, p.vinculo, p.fornecedor_id, p.unidade_id,
        p.registro_profissional, p.situacao, p.versao, p.criado_em, p.atualizado_em,
        u.id AS usuario_id
@@ -451,7 +499,8 @@ type AdmBuscarPessoaParams struct {
 type AdmBuscarPessoaRow struct {
 	ID                   uuid.UUID  `json:"id"`
 	Nome                 string     `json:"nome"`
-	Cpf                  *string    `json:"cpf"`
+	IdentificacaoTipo    *string    `json:"identificacao_tipo"`
+	Identificacao        *string    `json:"identificacao"`
 	DataNascimento       string     `json:"data_nascimento"`
 	Matricula            *string    `json:"matricula"`
 	Cargo                *string    `json:"cargo"`
@@ -474,7 +523,8 @@ func (q *Queries) AdmBuscarPessoa(ctx context.Context, arg AdmBuscarPessoaParams
 	err := row.Scan(
 		&i.ID,
 		&i.Nome,
-		&i.Cpf,
+		&i.IdentificacaoTipo,
+		&i.Identificacao,
 		&i.DataNascimento,
 		&i.Matricula,
 		&i.Cargo,
@@ -531,7 +581,7 @@ func (q *Queries) AdmBuscarTurno(ctx context.Context, arg AdmBuscarTurnoParams) 
 }
 
 const admBuscarUnidade = `-- name: AdmBuscarUnidade :one
-SELECT id, codigo, nome, cnpj, endereco, fuso_horario, latitude, longitude, situacao, versao, criado_em, atualizado_em
+SELECT id, codigo, nome, identificacao_tipo, identificacao, endereco, fuso_horario, latitude, longitude, situacao, versao, criado_em, atualizado_em
 FROM app.unidade
 WHERE empresa_id = $1 AND id = $2 AND excluido_em IS NULL
 `
@@ -542,18 +592,19 @@ type AdmBuscarUnidadeParams struct {
 }
 
 type AdmBuscarUnidadeRow struct {
-	ID           uuid.UUID      `json:"id"`
-	Codigo       string         `json:"codigo"`
-	Nome         string         `json:"nome"`
-	Cnpj         *string        `json:"cnpj"`
-	Endereco     []byte         `json:"endereco"`
-	FusoHorario  *string        `json:"fuso_horario"`
-	Latitude     pgtype.Numeric `json:"latitude"`
-	Longitude    pgtype.Numeric `json:"longitude"`
-	Situacao     string         `json:"situacao"`
-	Versao       int64          `json:"versao"`
-	CriadoEm     time.Time      `json:"criado_em"`
-	AtualizadoEm time.Time      `json:"atualizado_em"`
+	ID                uuid.UUID      `json:"id"`
+	Codigo            string         `json:"codigo"`
+	Nome              string         `json:"nome"`
+	IdentificacaoTipo *string        `json:"identificacao_tipo"`
+	Identificacao     *string        `json:"identificacao"`
+	Endereco          []byte         `json:"endereco"`
+	FusoHorario       *string        `json:"fuso_horario"`
+	Latitude          pgtype.Numeric `json:"latitude"`
+	Longitude         pgtype.Numeric `json:"longitude"`
+	Situacao          string         `json:"situacao"`
+	Versao            int64          `json:"versao"`
+	CriadoEm          time.Time      `json:"criado_em"`
+	AtualizadoEm      time.Time      `json:"atualizado_em"`
 }
 
 func (q *Queries) AdmBuscarUnidade(ctx context.Context, arg AdmBuscarUnidadeParams) (AdmBuscarUnidadeRow, error) {
@@ -563,7 +614,8 @@ func (q *Queries) AdmBuscarUnidade(ctx context.Context, arg AdmBuscarUnidadePara
 		&i.ID,
 		&i.Codigo,
 		&i.Nome,
-		&i.Cnpj,
+		&i.IdentificacaoTipo,
+		&i.Identificacao,
 		&i.Endereco,
 		&i.FusoHorario,
 		&i.Latitude,
@@ -578,7 +630,7 @@ func (q *Queries) AdmBuscarUnidade(ctx context.Context, arg AdmBuscarUnidadePara
 
 const admBuscarUsuario = `-- name: AdmBuscarUsuario :one
 SELECT id, identidade_id, pessoa_id, fornecedor_id, locatario_id, nome, email, telefone,
-       custo_hora, unidade_padrao_id, situacao, versao, criado_em,
+       custo_hora, moeda, idioma, unidade_padrao_id, situacao, versao, criado_em,
        atualizado_em
 FROM app.usuario
 WHERE empresa_id = $1 AND id = $2 AND excluido_em IS NULL
@@ -599,6 +651,8 @@ type AdmBuscarUsuarioRow struct {
 	Email           *string        `json:"email"`
 	Telefone        *string        `json:"telefone"`
 	CustoHora       pgtype.Numeric `json:"custo_hora"`
+	Moeda           string         `json:"moeda"`
+	Idioma          string         `json:"idioma"`
 	UnidadePadraoID *uuid.UUID     `json:"unidade_padrao_id"`
 	Situacao        string         `json:"situacao"`
 	Versao          int64          `json:"versao"`
@@ -619,6 +673,8 @@ func (q *Queries) AdmBuscarUsuario(ctx context.Context, arg AdmBuscarUsuarioPara
 		&i.Email,
 		&i.Telefone,
 		&i.CustoHora,
+		&i.Moeda,
+		&i.Idioma,
 		&i.UnidadePadraoID,
 		&i.Situacao,
 		&i.Versao,
@@ -775,19 +831,25 @@ func (q *Queries) AdmContarUnidadesAtivas(ctx context.Context, empresaID uuid.UU
 const admCriarEmpresa = `-- name: AdmCriarEmpresa :exec
 
 
-INSERT INTO app.empresa (id, razao_social, nome_fantasia, cnpj, plano, srv_habilitado, fuso_horario)
+INSERT INTO app.empresa (id, razao_social, nome_fantasia, pais, moeda, idioma_padrao, identificacao_tipo,
+                         identificacao, plano, srv_habilitado, fuso_horario)
 VALUES ($1, $2, $3, $4, $5,
-        $6, $7)
+        $6, $7, $8, $9,
+        $10, $11)
 `
 
 type AdmCriarEmpresaParams struct {
-	ID            uuid.UUID `json:"id"`
-	RazaoSocial   string    `json:"razao_social"`
-	NomeFantasia  *string   `json:"nome_fantasia"`
-	Cnpj          *string   `json:"cnpj"`
-	Plano         *string   `json:"plano"`
-	SrvHabilitado bool      `json:"srv_habilitado"`
-	FusoHorario   string    `json:"fuso_horario"`
+	ID                uuid.UUID `json:"id"`
+	RazaoSocial       string    `json:"razao_social"`
+	NomeFantasia      *string   `json:"nome_fantasia"`
+	Pais              string    `json:"pais"`
+	Moeda             string    `json:"moeda"`
+	IdiomaPadrao      string    `json:"idioma_padrao"`
+	IdentificacaoTipo *string   `json:"identificacao_tipo"`
+	Identificacao     *string   `json:"identificacao"`
+	Plano             *string   `json:"plano"`
+	SrvHabilitado     bool      `json:"srv_habilitado"`
+	FusoHorario       string    `json:"fuso_horario"`
 }
 
 // Consultas do módulo ADM (RF-ADM-001, 002, 004, 005, 011, 015).
@@ -800,12 +862,18 @@ type AdmCriarEmpresaParams struct {
 // quando nula) e coordenadas em float8. Dinheiro entra em centavos (bigint) e
 // sai como numeric exato, convertido para centavos no Go.
 // ------------------------------------------------------------------- empresa
+// pais, moeda e idioma_padrao são gravados explicitamente a partir do perfil de
+// país (os defaults do banco só dão valor às empresas anteriores à 00009).
 func (q *Queries) AdmCriarEmpresa(ctx context.Context, arg AdmCriarEmpresaParams) error {
 	_, err := q.db.Exec(ctx, admCriarEmpresa,
 		arg.ID,
 		arg.RazaoSocial,
 		arg.NomeFantasia,
-		arg.Cnpj,
+		arg.Pais,
+		arg.Moeda,
+		arg.IdiomaPadrao,
+		arg.IdentificacaoTipo,
+		arg.Identificacao,
 		arg.Plano,
 		arg.SrvHabilitado,
 		arg.FusoHorario,
@@ -871,18 +939,20 @@ func (q *Queries) AdmCriarPerfil(ctx context.Context, arg AdmCriarPerfilParams) 
 
 const admCriarPessoa = `-- name: AdmCriarPessoa :exec
 
-INSERT INTO app.pessoa (empresa_id, id, nome, cpf, data_nascimento, matricula, cargo, telefone, email, vinculo,
+INSERT INTO app.pessoa (empresa_id, id, nome, identificacao_tipo, identificacao, data_nascimento, matricula, cargo, telefone, email, vinculo,
                         fornecedor_id, unidade_id, registro_profissional)
-VALUES ($1, $2, $3, $4, $5::text::date,
-        $6, $7, $8, $9, $10,
-        $11, $12, $13)
+VALUES ($1, $2, $3, $4, $5,
+        $6::text::date,
+        $7, $8, $9, $10, $11,
+        $12, $13, $14)
 `
 
 type AdmCriarPessoaParams struct {
 	EmpresaID            uuid.UUID  `json:"empresa_id"`
 	ID                   uuid.UUID  `json:"id"`
 	Nome                 string     `json:"nome"`
-	Cpf                  *string    `json:"cpf"`
+	IdentificacaoTipo    *string    `json:"identificacao_tipo"`
+	Identificacao        *string    `json:"identificacao"`
 	DataNascimento       *string    `json:"data_nascimento"`
 	Matricula            *string    `json:"matricula"`
 	Cargo                *string    `json:"cargo"`
@@ -900,7 +970,8 @@ func (q *Queries) AdmCriarPessoa(ctx context.Context, arg AdmCriarPessoaParams) 
 		arg.EmpresaID,
 		arg.ID,
 		arg.Nome,
-		arg.Cpf,
+		arg.IdentificacaoTipo,
+		arg.Identificacao,
 		arg.DataNascimento,
 		arg.Matricula,
 		arg.Cargo,
@@ -947,21 +1018,24 @@ func (q *Queries) AdmCriarTurno(ctx context.Context, arg AdmCriarTurnoParams) er
 
 const admCriarUnidade = `-- name: AdmCriarUnidade :exec
 
-INSERT INTO app.unidade (empresa_id, id, codigo, nome, cnpj, endereco, fuso_horario, latitude, longitude)
-VALUES ($1, $2, $3, $4, $5, $6,
-        $7, $8::float8, $9::float8)
+INSERT INTO app.unidade (empresa_id, id, codigo, nome, identificacao_tipo, identificacao, endereco, fuso_horario,
+                         latitude, longitude)
+VALUES ($1, $2, $3, $4, $5,
+        $6, $7,
+        $8, $9::float8, $10::float8)
 `
 
 type AdmCriarUnidadeParams struct {
-	EmpresaID   uuid.UUID `json:"empresa_id"`
-	ID          uuid.UUID `json:"id"`
-	Codigo      string    `json:"codigo"`
-	Nome        string    `json:"nome"`
-	Cnpj        *string   `json:"cnpj"`
-	Endereco    []byte    `json:"endereco"`
-	FusoHorario *string   `json:"fuso_horario"`
-	Latitude    *float64  `json:"latitude"`
-	Longitude   *float64  `json:"longitude"`
+	EmpresaID         uuid.UUID `json:"empresa_id"`
+	ID                uuid.UUID `json:"id"`
+	Codigo            string    `json:"codigo"`
+	Nome              string    `json:"nome"`
+	IdentificacaoTipo *string   `json:"identificacao_tipo"`
+	Identificacao     *string   `json:"identificacao"`
+	Endereco          []byte    `json:"endereco"`
+	FusoHorario       *string   `json:"fuso_horario"`
+	Latitude          *float64  `json:"latitude"`
+	Longitude         *float64  `json:"longitude"`
 }
 
 // ------------------------------------------------------------------- unidade
@@ -971,7 +1045,8 @@ func (q *Queries) AdmCriarUnidade(ctx context.Context, arg AdmCriarUnidadeParams
 		arg.ID,
 		arg.Codigo,
 		arg.Nome,
-		arg.Cnpj,
+		arg.IdentificacaoTipo,
+		arg.Identificacao,
 		arg.Endereco,
 		arg.FusoHorario,
 		arg.Latitude,
@@ -983,27 +1058,32 @@ func (q *Queries) AdmCriarUnidade(ctx context.Context, arg AdmCriarUnidadeParams
 const admCriarUsuario = `-- name: AdmCriarUsuario :exec
 
 INSERT INTO app.usuario (empresa_id, id, pessoa_id, fornecedor_id, locatario_id, nome, email, telefone,
-                         custo_hora, unidade_padrao_id, situacao)
+                         custo_hora, moeda, idioma, unidade_padrao_id, situacao)
 VALUES ($1, $2, $3, $4, $5,
         $6, $7, $8,
-        ($9::bigint / 100.0)::numeric(12,2), $10,
-        'convidado')
+        $9, $10, $11,
+        $12, 'convidado')
 `
 
 type AdmCriarUsuarioParams struct {
-	EmpresaID         uuid.UUID  `json:"empresa_id"`
-	ID                uuid.UUID  `json:"id"`
-	PessoaID          *uuid.UUID `json:"pessoa_id"`
-	FornecedorID      *uuid.UUID `json:"fornecedor_id"`
-	LocatarioID       *uuid.UUID `json:"locatario_id"`
-	Nome              string     `json:"nome"`
-	Email             *string    `json:"email"`
-	Telefone          *string    `json:"telefone"`
-	CustoHoraCentavos *int64     `json:"custo_hora_centavos"`
-	UnidadePadraoID   *uuid.UUID `json:"unidade_padrao_id"`
+	EmpresaID       uuid.UUID      `json:"empresa_id"`
+	ID              uuid.UUID      `json:"id"`
+	PessoaID        *uuid.UUID     `json:"pessoa_id"`
+	FornecedorID    *uuid.UUID     `json:"fornecedor_id"`
+	LocatarioID     *uuid.UUID     `json:"locatario_id"`
+	Nome            string         `json:"nome"`
+	Email           *string        `json:"email"`
+	Telefone        *string        `json:"telefone"`
+	CustoHora       pgtype.Numeric `json:"custo_hora"`
+	Moeda           string         `json:"moeda"`
+	Idioma          string         `json:"idioma"`
+	UnidadePadraoID *uuid.UUID     `json:"unidade_padrao_id"`
 }
 
 // ------------------------------------------------------------------- usuario
+// idioma é o padrão da empresa no convite; moeda é a da empresa (a de custo_hora).
+// custo_hora é preço unitário, numeric(18,6): entra e sai por pgtype.Numeric, convertido
+// pelo pacote dinheiro, sem float, bigint nem divisão por 100.
 func (q *Queries) AdmCriarUsuario(ctx context.Context, arg AdmCriarUsuarioParams) error {
 	_, err := q.db.Exec(ctx, admCriarUsuario,
 		arg.EmpresaID,
@@ -1014,7 +1094,9 @@ func (q *Queries) AdmCriarUsuario(ctx context.Context, arg AdmCriarUsuarioParams
 		arg.Nome,
 		arg.Email,
 		arg.Telefone,
-		arg.CustoHoraCentavos,
+		arg.CustoHora,
+		arg.Moeda,
+		arg.Idioma,
 		arg.UnidadePadraoID,
 	)
 	return err
@@ -1073,21 +1155,24 @@ func (q *Queries) AdmDefinirSituacaoUsuario(ctx context.Context, arg AdmDefinirS
 
 const admListarEventosAuditoria = `-- name: AdmListarEventosAuditoria :many
 
-SELECT id, ocorrido_em, ator_tipo, usuario_id, token_api_id, acao, entidade, entidade_id, entidade_chave,
-       campos_alterados, origem, coalesce(host(ip), '')::text AS ip, dispositivo_id, request_id, conexao_empresa_id,
-       ocorrido_no_dispositivo_em
+SELECT id, ocorrido_em, ator_tipo, usuario_id, usuario_nome, token_api_id, acao, resultado, entidade, entidade_id,
+       entidade_chave, campos_alterados, modulo, tela, sensivel, origem, coalesce(host(ip), '')::text AS ip,
+       dispositivo_id, request_id, conexao_empresa_id, ocorrido_no_dispositivo_em, hash
 FROM app.evento_auditoria
 WHERE empresa_id = $1
   AND ($2::text IS NULL OR entidade = $2::text)
   AND ($3::uuid IS NULL OR entidade_id = $3::uuid)
   AND ($4::uuid IS NULL OR usuario_id = $4::uuid)
   AND ($5::text IS NULL OR acao = $5::text)
-  AND ($6::timestamptz IS NULL OR ocorrido_em >= $6::timestamptz)
-  AND ($7::timestamptz IS NULL OR ocorrido_em < $7::timestamptz)
-  AND ($8::timestamptz IS NULL
-       OR (ocorrido_em, id) < ($8::timestamptz, $9::uuid))
+  AND ($6::text IS NULL OR modulo = $6::text)
+  AND ($7::text IS NULL OR tela = $7::text)
+  AND ($8::text IS NULL OR host(ip) = $8::text)
+  AND ($9::timestamptz IS NULL OR ocorrido_em >= $9::timestamptz)
+  AND ($10::timestamptz IS NULL OR ocorrido_em < $10::timestamptz)
+  AND ($11::timestamptz IS NULL
+       OR (ocorrido_em, id) < ($11::timestamptz, $12::uuid))
 ORDER BY ocorrido_em DESC, id DESC
-LIMIT $10
+LIMIT $13
 `
 
 type AdmListarEventosAuditoriaParams struct {
@@ -1096,6 +1181,9 @@ type AdmListarEventosAuditoriaParams struct {
 	EntidadeID       *uuid.UUID `json:"entidade_id"`
 	UsuarioID        *uuid.UUID `json:"usuario_id"`
 	Acao             *string    `json:"acao"`
+	Modulo           *string    `json:"modulo"`
+	Tela             *string    `json:"tela"`
+	Ip               *string    `json:"ip"`
 	De               *time.Time `json:"de"`
 	Ate              *time.Time `json:"ate"`
 	CursorOcorridoEm *time.Time `json:"cursor_ocorrido_em"`
@@ -1108,18 +1196,24 @@ type AdmListarEventosAuditoriaRow struct {
 	OcorridoEm              time.Time  `json:"ocorrido_em"`
 	AtorTipo                string     `json:"ator_tipo"`
 	UsuarioID               *uuid.UUID `json:"usuario_id"`
+	UsuarioNome             *string    `json:"usuario_nome"`
 	TokenApiID              *uuid.UUID `json:"token_api_id"`
 	Acao                    string     `json:"acao"`
+	Resultado               string     `json:"resultado"`
 	Entidade                string     `json:"entidade"`
 	EntidadeID              *uuid.UUID `json:"entidade_id"`
 	EntidadeChave           *string    `json:"entidade_chave"`
 	CamposAlterados         []string   `json:"campos_alterados"`
+	Modulo                  *string    `json:"modulo"`
+	Tela                    *string    `json:"tela"`
+	Sensivel                bool       `json:"sensivel"`
 	Origem                  *string    `json:"origem"`
 	Ip                      string     `json:"ip"`
 	DispositivoID           *uuid.UUID `json:"dispositivo_id"`
 	RequestID               *string    `json:"request_id"`
 	ConexaoEmpresaID        *uuid.UUID `json:"conexao_empresa_id"`
 	OcorridoNoDispositivoEm *time.Time `json:"ocorrido_no_dispositivo_em"`
+	Hash                    []byte     `json:"hash"`
 }
 
 // --------------------------------------------------------------- auditoria
@@ -1133,6 +1227,9 @@ func (q *Queries) AdmListarEventosAuditoria(ctx context.Context, arg AdmListarEv
 		arg.EntidadeID,
 		arg.UsuarioID,
 		arg.Acao,
+		arg.Modulo,
+		arg.Tela,
+		arg.Ip,
 		arg.De,
 		arg.Ate,
 		arg.CursorOcorridoEm,
@@ -1151,18 +1248,24 @@ func (q *Queries) AdmListarEventosAuditoria(ctx context.Context, arg AdmListarEv
 			&i.OcorridoEm,
 			&i.AtorTipo,
 			&i.UsuarioID,
+			&i.UsuarioNome,
 			&i.TokenApiID,
 			&i.Acao,
+			&i.Resultado,
 			&i.Entidade,
 			&i.EntidadeID,
 			&i.EntidadeChave,
 			&i.CamposAlterados,
+			&i.Modulo,
+			&i.Tela,
+			&i.Sensivel,
 			&i.Origem,
 			&i.Ip,
 			&i.DispositivoID,
 			&i.RequestID,
 			&i.ConexaoEmpresaID,
 			&i.OcorridoNoDispositivoEm,
+			&i.Hash,
 		); err != nil {
 			return nil, err
 		}
@@ -1275,7 +1378,7 @@ func (q *Queries) AdmListarPerfis(ctx context.Context, empresaID uuid.UUID) ([]A
 }
 
 const admListarPessoas = `-- name: AdmListarPessoas :many
-SELECT p.id, p.nome, p.cpf, p.matricula, p.cargo, p.vinculo, p.fornecedor_id, p.unidade_id, p.situacao,
+SELECT p.id, p.nome, p.identificacao_tipo, p.identificacao, p.matricula, p.cargo, p.vinculo, p.fornecedor_id, p.unidade_id, p.situacao,
        p.versao, p.criado_em,
        u.id AS usuario_id
 FROM app.pessoa p
@@ -1305,18 +1408,19 @@ type AdmListarPessoasParams struct {
 }
 
 type AdmListarPessoasRow struct {
-	ID           uuid.UUID  `json:"id"`
-	Nome         string     `json:"nome"`
-	Cpf          *string    `json:"cpf"`
-	Matricula    *string    `json:"matricula"`
-	Cargo        *string    `json:"cargo"`
-	Vinculo      string     `json:"vinculo"`
-	FornecedorID *uuid.UUID `json:"fornecedor_id"`
-	UnidadeID    *uuid.UUID `json:"unidade_id"`
-	Situacao     string     `json:"situacao"`
-	Versao       int64      `json:"versao"`
-	CriadoEm     time.Time  `json:"criado_em"`
-	UsuarioID    *uuid.UUID `json:"usuario_id"`
+	ID                uuid.UUID  `json:"id"`
+	Nome              string     `json:"nome"`
+	IdentificacaoTipo *string    `json:"identificacao_tipo"`
+	Identificacao     *string    `json:"identificacao"`
+	Matricula         *string    `json:"matricula"`
+	Cargo             *string    `json:"cargo"`
+	Vinculo           string     `json:"vinculo"`
+	FornecedorID      *uuid.UUID `json:"fornecedor_id"`
+	UnidadeID         *uuid.UUID `json:"unidade_id"`
+	Situacao          string     `json:"situacao"`
+	Versao            int64      `json:"versao"`
+	CriadoEm          time.Time  `json:"criado_em"`
+	UsuarioID         *uuid.UUID `json:"usuario_id"`
 }
 
 // Lista por cursor (criado_em, id), do mais novo para o mais antigo. A busca
@@ -1343,7 +1447,8 @@ func (q *Queries) AdmListarPessoas(ctx context.Context, arg AdmListarPessoasPara
 		if err := rows.Scan(
 			&i.ID,
 			&i.Nome,
-			&i.Cpf,
+			&i.IdentificacaoTipo,
+			&i.Identificacao,
 			&i.Matricula,
 			&i.Cargo,
 			&i.Vinculo,
@@ -1416,25 +1521,26 @@ func (q *Queries) AdmListarTurnos(ctx context.Context, arg AdmListarTurnosParams
 }
 
 const admListarUnidades = `-- name: AdmListarUnidades :many
-SELECT id, codigo, nome, cnpj, endereco, fuso_horario, latitude, longitude, situacao, versao, criado_em, atualizado_em
+SELECT id, codigo, nome, identificacao_tipo, identificacao, endereco, fuso_horario, latitude, longitude, situacao, versao, criado_em, atualizado_em
 FROM app.unidade
 WHERE empresa_id = $1 AND excluido_em IS NULL
 ORDER BY nome, id
 `
 
 type AdmListarUnidadesRow struct {
-	ID           uuid.UUID      `json:"id"`
-	Codigo       string         `json:"codigo"`
-	Nome         string         `json:"nome"`
-	Cnpj         *string        `json:"cnpj"`
-	Endereco     []byte         `json:"endereco"`
-	FusoHorario  *string        `json:"fuso_horario"`
-	Latitude     pgtype.Numeric `json:"latitude"`
-	Longitude    pgtype.Numeric `json:"longitude"`
-	Situacao     string         `json:"situacao"`
-	Versao       int64          `json:"versao"`
-	CriadoEm     time.Time      `json:"criado_em"`
-	AtualizadoEm time.Time      `json:"atualizado_em"`
+	ID                uuid.UUID      `json:"id"`
+	Codigo            string         `json:"codigo"`
+	Nome              string         `json:"nome"`
+	IdentificacaoTipo *string        `json:"identificacao_tipo"`
+	Identificacao     *string        `json:"identificacao"`
+	Endereco          []byte         `json:"endereco"`
+	FusoHorario       *string        `json:"fuso_horario"`
+	Latitude          pgtype.Numeric `json:"latitude"`
+	Longitude         pgtype.Numeric `json:"longitude"`
+	Situacao          string         `json:"situacao"`
+	Versao            int64          `json:"versao"`
+	CriadoEm          time.Time      `json:"criado_em"`
+	AtualizadoEm      time.Time      `json:"atualizado_em"`
 }
 
 func (q *Queries) AdmListarUnidades(ctx context.Context, empresaID uuid.UUID) ([]AdmListarUnidadesRow, error) {
@@ -1450,7 +1556,8 @@ func (q *Queries) AdmListarUnidades(ctx context.Context, empresaID uuid.UUID) ([
 			&i.ID,
 			&i.Codigo,
 			&i.Nome,
-			&i.Cnpj,
+			&i.IdentificacaoTipo,
+			&i.Identificacao,
 			&i.Endereco,
 			&i.FusoHorario,
 			&i.Latitude,
@@ -1733,7 +1840,7 @@ func (q *Queries) AdmRetirarPermissao(ctx context.Context, arg AdmRetirarPermiss
 }
 
 const admTravarEmpresa = `-- name: AdmTravarEmpresa :one
-SELECT id, plano, srv_habilitado, versao
+SELECT id, pais, moeda, idioma_padrao, plano, srv_habilitado, versao
 FROM app.empresa
 WHERE id = $1 AND excluido_em IS NULL
 FOR UPDATE
@@ -1741,6 +1848,9 @@ FOR UPDATE
 
 type AdmTravarEmpresaRow struct {
 	ID            uuid.UUID `json:"id"`
+	Pais          string    `json:"pais"`
+	Moeda         string    `json:"moeda"`
+	IdiomaPadrao  string    `json:"idioma_padrao"`
 	Plano         *string   `json:"plano"`
 	SrvHabilitado bool      `json:"srv_habilitado"`
 	Versao        int64     `json:"versao"`
@@ -1751,6 +1861,9 @@ func (q *Queries) AdmTravarEmpresa(ctx context.Context, id uuid.UUID) (AdmTravar
 	var i AdmTravarEmpresaRow
 	err := row.Scan(
 		&i.ID,
+		&i.Pais,
+		&i.Moeda,
+		&i.IdiomaPadrao,
 		&i.Plano,
 		&i.SrvHabilitado,
 		&i.Versao,

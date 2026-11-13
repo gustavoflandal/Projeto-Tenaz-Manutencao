@@ -9,6 +9,7 @@
 package dbteste
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -18,11 +19,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	"tenaz/internal/plataforma/armazenamento"
+	"tenaz/internal/plataforma/auditoria"
 	"tenaz/internal/plataforma/db"
 	"tenaz/internal/plataforma/migracao"
 )
@@ -38,6 +42,7 @@ type Ambiente struct {
 	URL      string        // migrador
 	App      *db.DB        // tenaz_app, só NaEmpresa
 	Auth     *pgxpool.Pool // tenaz_autenticacao
+	Job      *db.DB        // tenaz_job: jobs (selo da trilha), só NaEmpresa e a listagem de empresas
 	Migrador *pgxpool.Pool // superusuário: só para preparar e inspecionar o cenário
 	encerrar func()
 }
@@ -49,6 +54,9 @@ func (a *Ambiente) Encerrar() {
 	}
 	if a.Auth != nil {
 		a.Auth.Close()
+	}
+	if a.Job != nil {
+		a.Job.Fechar()
 	}
 	if a.Migrador != nil {
 		a.Migrador.Close()
@@ -76,6 +84,10 @@ func Preparar(ctx context.Context) (*Ambiente, error) {
 	if amb.App, err = db.AbrirComOpcoes(ctx, db.Opcoes{URL: url, MaxConn: 8, Papel: "tenaz_app"}); err != nil {
 		amb.Encerrar()
 		return nil, err
+	}
+	if amb.Job, err = db.AbrirComOpcoes(ctx, db.Opcoes{URL: url, MaxConn: 4, Papel: "tenaz_job"}); err != nil {
+		amb.Encerrar()
+		return nil, fmt.Errorf("pool do job (o papel tenaz_job existe?): %w", err)
 	}
 	if amb.Auth, err = db.AbrirPool(ctx, db.Opcoes{URL: url, MaxConn: 4, Papel: "tenaz_autenticacao"}); err != nil {
 		amb.Encerrar()
@@ -154,4 +166,72 @@ func travarSubida(ctx context.Context) (func(), error) {
 		case <-time.After(250 * time.Millisecond):
 		}
 	}
+}
+
+// ArmazenamentoS3 devolve o cliente S3 do selo para os testes: o SeaweedFS do
+// compose (ferramentas/tarefas.sh infra), com a identidade tenaz_auditoria e
+// o bucket tenaz-auditoria, ou o que TENAZ_TESTE_S3_ENDPOINT,
+// TENAZ_TESTE_S3_CHAVE_ACESSO e TENAZ_TESTE_S3_CHAVE_SECRETA indicarem.
+// Devolve nil e o motivo quando o armazenamento não responde: o teste que o
+// exige se pula, dizendo como subir a infraestrutura.
+func ArmazenamentoS3(ctx context.Context) (*armazenamento.S3, armazenamento.ConfigS3, error) {
+	cfg := armazenamento.ConfigS3{
+		Endpoint: valorOu("TENAZ_TESTE_S3_ENDPOINT", "http://127.0.0.1:8333"), Regiao: "us-east-1",
+		CaminhoExplicito: true, Bucket: valorOu("TENAZ_TESTE_S3_BUCKET", "tenaz-auditoria"),
+		ChaveAcesso:  valorOu("TENAZ_TESTE_S3_CHAVE_ACESSO", "tenaz_auditoria"),
+		ChaveSecreta: valorOu("TENAZ_TESTE_S3_CHAVE_SECRETA", "tenaz_auditoria_dev_secreto"),
+	}
+	s3, err := armazenamento.NovoS3(cfg)
+	if err != nil {
+		return nil, cfg, err
+	}
+	ctxT, cancelar := context.WithTimeout(ctx, 5*time.Second)
+	defer cancelar()
+	if _, err := s3.Existe(ctxT, "selos/_ping"); err != nil {
+		return nil, cfg, fmt.Errorf("armazenamento S3 de teste fora do ar em %s (rode: bash ferramentas/tarefas.sh infra): %w", cfg.Endpoint, err)
+	}
+	return s3, cfg, nil
+}
+
+func valorOu(chave, padrao string) string {
+	if v := os.Getenv(chave); v != "" {
+		return v
+	}
+	return padrao
+}
+
+// ConferirHashesDaTrilha recalcula no Go, pelo formato 1 do documento 2
+// (seção 9.2.1), o hash de todo evento da empresa e o compara com o que
+// app.hash_evento_auditoria gravou. Devolve quantos conferiu e uma descrição
+// de cada divergência. Lê como migrador: é o verificador externo, que recebe
+// os campos como texto do banco.
+func ConferirHashesDaTrilha(ctx context.Context, pool *pgxpool.Pool, empresaID uuid.UUID) (conferidos int, divergencias []string, err error) {
+	linhas, err := pool.Query(ctx, `SELECT id::text, empresa_id::text, ocorrido_em, ator_tipo, usuario_id::text, usuario_nome,
+  token_api_id::text, acao, resultado, sensivel, entidade, entidade_id::text, entidade_chave, antes::text, depois::text,
+  detalhe::text, to_jsonb(campos_alterados)::text, modulo, tela, origem, ip::text, dispositivo_id::text, user_agent,
+  request_id, conexao_empresa_id::text, ocorrido_no_dispositivo_em, escopo, transacao::text, hash
+FROM app.evento_auditoria WHERE empresa_id = $1 ORDER BY ocorrido_em, id`, empresaID)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer linhas.Close()
+	for linhas.Next() {
+		var (
+			e    auditoria.ConteudoEvento
+			hash []byte
+		)
+		if err := linhas.Scan(&e.ID, &e.EmpresaID, &e.OcorridoEm, &e.AtorTipo, &e.UsuarioID, &e.UsuarioNome,
+			&e.TokenAPIID, &e.Acao, &e.Resultado, &e.Sensivel, &e.Entidade, &e.EntidadeID, &e.EntidadeChave, &e.Antes,
+			&e.Depois, &e.Detalhe, &e.CamposAlterados, &e.Modulo, &e.Tela, &e.Origem, &e.IP, &e.DispositivoID,
+			&e.UserAgent, &e.RequestID, &e.ConexaoEmpresaID, &e.OcorridoNoDispositivoEm, &e.Escopo, &e.Transacao,
+			&hash); err != nil {
+			return conferidos, divergencias, err
+		}
+		conferidos++
+		if h := e.Hash(); !bytes.Equal(h[:], hash) {
+			divergencias = append(divergencias, fmt.Sprintf("evento %s (%s/%s): banco %x, Go %x sobre %s",
+				e.ID, e.Entidade, e.Acao, hash, h, e.Serializar()))
+		}
+	}
+	return conferidos, divergencias, linhas.Err()
 }

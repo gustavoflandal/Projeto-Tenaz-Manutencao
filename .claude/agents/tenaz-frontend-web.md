@@ -2,7 +2,7 @@
 name: tenaz-frontend-web
 description: Use para implementar a web da Tenaz - telas de gestão, listas, fichas, formulários, painéis de indicadores, portal de solicitação, portal restrito do prestador e do locatário, página do link de uso único, tela Sobre e selo de versão. Chame depois de o contrato da API e o desenho da tela estarem prontos.
 tools: Read, Write, Edit, Glob, Grep, Bash
-model: opus
+model: sonnet
 ---
 
 # Web da Tenaz

@@ -11,6 +11,7 @@ package autorizacao
 import (
 	"slices"
 	"strings"
+	"tenaz/internal/plataforma/textos"
 
 	"github.com/google/uuid"
 
@@ -65,6 +66,7 @@ const (
 	AdmGerenciarUsuarios     = "adm.gerenciar_usuarios"
 	AdmGerenciarPerfis       = "adm.gerenciar_perfis"
 	AdmLerAuditoria          = "adm.ler_auditoria"
+	AdmGerenciarParametros   = "adm.gerenciar_parametros"
 	OsEncerrar               = "os.encerrar"
 	EstDecidirDestino        = "est.decidir_destino"
 	TerManterCatalogoProprio = "ter.manter_catalogo_proprio"
@@ -244,6 +246,16 @@ type Ator struct {
 	Plano         *string // nulo: conta só do plano Serviços
 	SrvHabilitado bool
 
+	// Idioma é usuario.idioma e IdiomaEmpresa é empresa.idioma_padrao: entram
+	// na negociação do idioma da resposta (ADR-013).
+	Idioma        string
+	IdiomaEmpresa string
+
+	// Pais e Moeda são os da empresa (empresa.pais, empresa.moeda), só leitura:
+	// a sessão os devolve ao cliente (documento 3, 2.17).
+	Pais  string
+	Moeda string
+
 	// MFAObrigatorio: a empresa exige segundo fator (empresa.mfa_obrigatorio).
 	MFAObrigatorio bool
 	// SomenteAtivarMFA: a empresa exige MFA e a identidade ainda não o
@@ -280,7 +292,7 @@ func (a Ator) Exigir(codigos ...string) error {
 			if a.Externo() {
 				return erros.NaoEncontrado
 			}
-			return erros.SemPermissao.Com("falta a permissão %s", c)
+			return erros.SemPermissao.ComChave("detalhe.falta_permissao", textos.Parametros{"permissao": c})
 		}
 	}
 	return nil
@@ -296,7 +308,7 @@ func (a Ator) ExigirAlguma(codigos ...string) error {
 	if a.Externo() {
 		return erros.NaoEncontrado
 	}
-	return erros.SemPermissao.Com("falta uma das permissões %s", strings.Join(codigos, ", "))
+	return erros.SemPermissao.ComChave("detalhe.falta_uma_permissao", textos.Parametros{"permissoes": strings.Join(codigos, ", ")})
 }
 
 // PodeConceder aplica a regra anti-escalada (documento 9, seção 5.4): só

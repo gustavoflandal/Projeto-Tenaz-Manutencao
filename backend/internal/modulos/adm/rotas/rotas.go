@@ -18,6 +18,7 @@ import (
 	"tenaz/internal/plataforma/autenticacao"
 	"tenaz/internal/plataforma/autorizacao"
 	"tenaz/internal/plataforma/erros"
+	"tenaz/internal/plataforma/textos"
 )
 
 // Convites é o que as rotas de convite usam do serviço de autenticação.
@@ -32,7 +33,7 @@ type rotas struct {
 
 func (r *rotas) servico() (adm.Servico, error) {
 	if r.svc == nil {
-		return nil, erros.ServicoIndisponivel.Com("O módulo ADM não está configurado neste servidor.")
+		return nil, erros.ServicoIndisponivel.ComChave("detalhe.adm_nao_configurado", nil)
 	}
 	return r.svc, nil
 }
@@ -119,6 +120,18 @@ type saida[T any] struct {
 	Body     T
 }
 
+// saidaIdioma é a resposta que leva texto traduzido pelo catálogo do servidor:
+// Content-Language e Vary: Accept-Language (ADR-013).
+type saidaIdioma[T any] struct {
+	ContentLanguage string `header:"Content-Language"`
+	Vary            string `header:"Vary"`
+	Body            T
+}
+
+func comIdioma[T any](ctx context.Context, corpo T) *saidaIdioma[T] {
+	return &saidaIdioma[T]{ContentLanguage: string(textos.DoContexto(ctx)), Vary: textos.CabecalhoVary, Body: corpo}
+}
+
 type saidaLista[T any] struct {
 	Body api.Lista[T]
 }
@@ -170,6 +183,8 @@ type entradaConviteAceitar struct {
 	Body struct {
 		Token string `json:"token" minLength:"43" maxLength:"43"`
 		Senha string `json:"senha,omitempty" maxLength:"1024" doc:"Obrigatória quando pede_senha; ignorada quando o e-mail já tem login"`
+		// Idioma em que a pessoa aceitou (o da tela, do navegador ou do aparelho).
+		Idioma *string `json:"idioma,omitempty" enum:"pt-BR,es-419" doc:"Idioma em que a pessoa aceitou; passa a ser o dela. Ausente: o do convite (padrão da empresa)"`
 	}
 }
 
@@ -184,15 +199,18 @@ func (r *rotas) registrarConta(s *api.Servidor) {
 		Resumo: "Criar a conta da empresa (cadastro pelo site)",
 		Descricao: "Cria a empresa com a unidade inicial, os 12 perfis padrão com a matriz de RF-ADM-005 e o responsável " +
 			"como administrador convidado, e envia o convite, que confirma o e-mail antes do primeiro acesso " +
-			"(RF-ADM-001; RF-SRV-001 com srv_habilitado). 409 conflito em CNPJ já cadastrado.",
+			"(RF-ADM-001; RF-SRV-001 com srv_habilitado). O pais define a moeda e o idioma padrão. 409 conflito em identificação já cadastrada.",
 	}), func(ctx context.Context, in *entradaCorpo[NovaEmpresa]) (*saida[ContaCriada], error) {
 		svc, err := r.servico()
 		if err != nil {
 			return nil, err
 		}
 		b := in.Body
+		// O responsável fica com o idioma da tela de cadastro (Accept-Language).
+		idiomaResp, _ := textos.DeAcceptLanguage(textos.PreferenciasDe(ctx).AcceptLanguage)
 		c, err := svc.CriarConta(ctx, adm.EntradaCriarConta{
-			CNPJ: b.CNPJ, RazaoSocial: b.RazaoSocial, NomeFantasia: b.NomeFantasia, FusoHorario: b.FusoHorario, Plano: b.Plano,
+			Pais: b.Pais, IdentificacaoTipo: b.IdentificacaoTipo, Identificacao: b.Identificacao,
+			IdiomaPadrao: b.IdiomaPadrao, IdiomaResponsavel: string(idiomaResp), RazaoSocial: b.RazaoSocial, NomeFantasia: b.NomeFantasia, FusoHorario: b.FusoHorario, Plano: b.Plano,
 			SrvHabilitado: b.SrvHabilitado,
 			Responsavel:   adm.EntradaResponsavel{Nome: b.Responsavel.Nome, Email: b.Responsavel.Email, Telefone: b.Responsavel.Telefone},
 			Unidade:       deUnidade(b.Unidade),
@@ -229,7 +247,7 @@ func (r *rotas) registrarConta(s *api.Servidor) {
 		if err != nil {
 			return nil, err
 		}
-		c, err := svc.AceitarConvite(ctx, in.Body.Token, in.Body.Senha)
+		c, err := svc.AceitarConvite(ctx, in.Body.Token, in.Body.Senha, in.Body.Idioma)
 		if err != nil {
 			return nil, err
 		}
@@ -254,9 +272,10 @@ func (r *rotas) registrarConta(s *api.Servidor) {
 	api.Registrar(s, rotaADM(api.Rota{
 		ID: "alterarEmpresa", Metodo: http.MethodPatch, Caminho: "/v1/empresa", Permissoes: []string{autorizacao.AdmGerenciarEmpresa},
 		Resumo: "Alterar dados cadastrais",
-		Descricao: "JSON Merge Patch com If-Match. Plano e módulo SRV mudam pela cobrança (RF-ADM-009), não aqui: " +
-			"422 campo_somente_leitura. mfa_obrigatorio liga o segundo fator obrigatório: quem não o tem passa a entrar " +
-			"com sessão restrita à ativação (RN-ADM-027).",
+		Descricao: "JSON Merge Patch com If-Match. Plano e módulo SRV mudam pela cobrança (RF-ADM-009), não aqui; país e " +
+			"moeda não mudam pela API: 422 campo_somente_leitura. A identificação é a do tipo do país da empresa e " +
+			"idioma_padrao é o que o usuário convidado recebe. mfa_obrigatorio liga o segundo fator obrigatório: quem " +
+			"não o tem passa a entrar com sessão restrita à ativação (RN-ADM-027).",
 	}), func(ctx context.Context, in *entradaPatch[PatchEmpresa]) (*saida[Empresa], error) {
 		svc, a, err := r.contexto(ctx)
 		if err != nil {
@@ -275,15 +294,20 @@ func (r *rotas) registrarConta(s *api.Servidor) {
 		}
 		base := camposEmpresa{RazaoSocial: atual.RazaoSocial, NomeFantasia: atual.NomeFantasia, FusoHorario: atual.FusoHorario,
 			MFAObrigatorio: atual.MFAObrigatorio}
-		if atual.CNPJ != nil {
-			base.CNPJ = *atual.CNPJ
+		base.IdiomaPadrao = atual.IdiomaPadrao
+		if atual.IdentificacaoTipo != nil {
+			base.IdentificacaoTipo = *atual.IdentificacaoTipo
+		}
+		if atual.Identificacao != nil {
+			base.Identificacao = *atual.Identificacao
 		}
 		var novo camposEmpresa
 		if _, err := api.MesclarPatch(base, in.RawBody, &novo); err != nil {
 			return nil, err
 		}
 		e, err := svc.EditarEmpresa(ctx, a, adm.EntradaEmpresa{
-			RazaoSocial: novo.RazaoSocial, NomeFantasia: novo.NomeFantasia, CNPJ: novo.CNPJ, FusoHorario: novo.FusoHorario,
+			RazaoSocial: novo.RazaoSocial, NomeFantasia: novo.NomeFantasia, IdentificacaoTipo: novo.IdentificacaoTipo,
+			Identificacao: novo.Identificacao, IdiomaPadrao: novo.IdiomaPadrao, FusoHorario: novo.FusoHorario,
 			MFAObrigatorio: novo.MFAObrigatorio, VersaoEsperada: &esperada,
 		})
 		if err != nil {

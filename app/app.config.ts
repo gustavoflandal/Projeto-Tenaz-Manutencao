@@ -21,6 +21,8 @@ const versaoRelease = process.env.TENAZ_VERSAO ?? '0.0.0-dev';
 const commit = process.env.TENAZ_COMMIT ?? 'desconhecido';
 const dataBuild = process.env.TENAZ_DATA_BUILD ?? '';
 const ambiente = process.env.TENAZ_AMBIENTE ?? 'desenvolvimento';
+// Base da API. 10.0.2.2 é o computador do desenvolvedor visto pelo emulador Android.
+const apiUrl = process.env.TENAZ_API_URL ?? 'http://10.0.2.2:8080';
 
 // As lojas exigem inteiro crescente. No CI é o número da execução; localmente,
 // 1 basta, porque build local não vai para loja.
@@ -32,11 +34,13 @@ const versaoParaLoja = versaoRelease.split('-')[0] ?? '0.0.0';
 const config: ExpoConfig = {
   name: 'Tenaz',
   slug: 'tenaz',
-  scheme: 'tenaz',
+  // O esquema br.com.tenaz.app recebe o retorno do login (redirect_uri
+  // br.com.tenaz.app:/oauth, seção 4.3 de docs/3_ESPECIFICACAO_APIS.md).
+  scheme: ['br.com.tenaz.app', 'tenaz'],
   version: versaoParaLoja,
   orientation: 'portrait',
   userInterfaceStyle: 'automatic',
-  newArchEnabled: true,
+  // A nova arquitetura do React Native é a única desde o SDK 55: não há mais chave `newArchEnabled`.
 
   // Política de impressão digital: a versão de runtime muda só quando a parte
   // nativa muda, o que é exatamente a condição para a atualização sem loja
@@ -44,12 +48,6 @@ const config: ExpoConfig = {
   runtimeVersion: { policy: 'fingerprint' },
 
   icon: './assets/icone.png',
-  splash: {
-    image: './assets/splash.png',
-    resizeMode: 'contain',
-    backgroundColor: '#14202E', // Aço, da marca
-  },
-
   ios: {
     bundleIdentifier: 'br.com.tenaz.app',
     buildNumber: String(numeroDoBuild),
@@ -66,7 +64,15 @@ const config: ExpoConfig = {
     permissions: ['CAMERA', 'ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION'],
   },
 
-  plugins: ['expo-router', 'expo-secure-store', 'expo-sqlite'],
+  plugins: [
+    'expo-router',
+    // A tela de abertura é plugin desde o SDK 55 (a chave `splash` saiu da configuração).
+    ['expo-splash-screen', { image: './assets/splash.png', resizeMode: 'contain', backgroundColor: '#14202E' }],
+    'expo-secure-store',
+    'expo-sqlite',
+    'expo-web-browser',
+    'expo-local-authentication',
+  ],
 
   // Lido em tempo de execução pelo selo de versão e pela tela "Sobre".
   // `versaoRelease` guarda a versão completa, com o sufixo de pré-lançamento
@@ -76,6 +82,7 @@ const config: ExpoConfig = {
     commit,
     dataBuild,
     ambiente,
+    apiUrl,
   },
 };
 

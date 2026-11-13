@@ -3,14 +3,14 @@ package adm
 import (
 	"context"
 	"errors"
-	"math/big"
 	"net/http"
+	"tenaz/internal/plataforma/textos"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 
+	"tenaz/internal/plataforma/auditoria"
 	"tenaz/internal/plataforma/autenticacao"
 	"tenaz/internal/plataforma/autorizacao"
 	"tenaz/internal/plataforma/db"
@@ -32,7 +32,7 @@ var ErrUltimoAdministrador = erros.Novo("ultimo_administrador", "A empresa ficar
 // banco próprios (ADR-011). A inativação de usuário não chama nada daqui: o
 // trigger de acesso_empresa revoga as sessões na mesma transação.
 type Autenticacao interface {
-	EmitirConvite(ctx context.Context, empresaID, usuarioID uuid.UUID, email, nomeEmpresa, nomeConvidado string) error
+	EmitirConvite(ctx context.Context, empresaID, usuarioID uuid.UUID, email, nomeEmpresa, nomeConvidado, idioma string) error
 	EncerrarSessoesUsuario(ctx context.Context, admin autorizacao.Ator, usuarioID uuid.UUID) (int, error)
 	AceitarConvite(ctx context.Context, token, senha string,
 		ligar func(ctx context.Context, c autenticacao.ConviteValido, identidadeID uuid.UUID) error) (autenticacao.ConviteValido, error)
@@ -42,7 +42,13 @@ type Autenticacao interface {
 type Dependencias struct {
 	Banco        *db.DB // pool da aplicação
 	Autenticacao Autenticacao
-	Agora        func() time.Time
+	// Auditoria é a captura por tela e a gravação de visualização, impressão
+	// e extração (plataforma/auditoria).
+	Auditoria *auditoria.Servico
+	// Verificador compara o selo do banco com a cópia imutável. Opcional: sem
+	// ele, a verificação responde servico_indisponivel.
+	Verificador *auditoria.Verificador
+	Agora       func() time.Time
 }
 
 type servico struct {
@@ -51,7 +57,7 @@ type servico struct {
 
 // Novo monta o serviço do módulo.
 func Novo(d Dependencias) (Servico, error) {
-	if d.Banco == nil || d.Autenticacao == nil {
+	if d.Banco == nil || d.Autenticacao == nil || d.Auditoria == nil {
 		return nil, errors.New("adm: dependência ausente")
 	}
 	if d.Agora == nil {
@@ -62,9 +68,15 @@ func Novo(d Dependencias) (Servico, error) {
 
 func (s *servico) agora() time.Time { return s.d.Agora().UTC() }
 
-// naEmpresa abre a transação com a empresa e o escopo do ator.
+// moduloADM é o código do módulo gravado em evento_auditoria.modulo por tudo
+// o que este serviço faz.
+const moduloADM = "adm"
+
+// naEmpresa abre a transação com a empresa e o escopo do ator, e fixa o
+// módulo da chamada (a tela de origem, quando é de Administração, vem da
+// requisição).
 func (s *servico) naEmpresa(ctx context.Context, a autorizacao.Ator, fn func(context.Context) error) error {
-	return s.d.Banco.NaEmpresa(ctx, a.EmpresaID, a.Escopo, fn)
+	return s.d.Banco.NaEmpresa(db.ComModulo(ctx, moduloADM), a.EmpresaID, a.Escopo, fn)
 }
 
 // apenasInterno: as rotas de ADM não existem para usuário externo, além de
@@ -85,7 +97,7 @@ func naoEncontrado(err error) error {
 
 func conferirVersao(esperada *int64, atual int64) error {
 	if esperada != nil && *esperada != atual {
-		return erros.VersaoDesatualizada.Com("o registro está na versão %d", atual).ComDado("versao_atual", atual)
+		return erros.VersaoDesatualizada.ComChave("detalhe.versao_gravada", textos.Parametros{"versao": atual}).ComDado("versao_atual", atual)
 	}
 	return nil
 }
@@ -99,24 +111,4 @@ func vazioParaNil(s string) *string {
 		return nil
 	}
 	return &s
-}
-
-// centavos converte numeric(12,2) em centavos, sem ponto flutuante.
-func centavos(n pgtype.Numeric) *int64 {
-	if !n.Valid || n.Int == nil || n.NaN {
-		return nil
-	}
-	v := new(big.Int).Set(n.Int)
-	exp := n.Exp + 2
-	dez := big.NewInt(10)
-	for ; exp > 0; exp-- {
-		v.Mul(v, dez)
-	}
-	for ; exp < 0; exp++ {
-		v.Quo(v, dez)
-	}
-	if !v.IsInt64() {
-		return nil
-	}
-	return ptr(v.Int64())
 }

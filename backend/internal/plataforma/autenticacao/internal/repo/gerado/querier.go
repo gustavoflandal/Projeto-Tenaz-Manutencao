@@ -67,14 +67,20 @@ type Querier interface {
 	// ------------------------------------------------- trilha (app.evento_auditoria)
 	// Evento de autenticação na trilha da empresa (seção 6.9 do documento 5),
 	// gravado na transação NaTrilha, que fixou app.empresa_id e os dados da
-	// requisição. Só estas 13 colunas têm INSERT para tenaz_autenticacao, e não há
+	// requisição. Só estas 16 colunas têm INSERT (as 13 da 00005, mais nome, resultado e tela da 00007) para tenaz_autenticacao, e não há
 	// SELECT: sem RETURNING. ator_tipo e entidade são fixos; a política restritiva
 	// do papel confere a ação e que usuario_id é o da identidade naquela empresa.
+	// O nome do usuário no evento é o de acesso_empresa naquela empresa
+	// (AuthNomeDoAcesso): a policy autenticacao_identidade confere que o nome
+	// gravado é o desta linha.
 	AuthInserirEvento(ctx context.Context, arg AuthInserirEventoParams) error
 	AuthLigarSessaoAoCodigo(ctx context.Context, arg AuthLigarSessaoAoCodigoParams) error
 	// ------------------------------------------------------------ acesso_empresa
 	AuthListarAcessos(ctx context.Context, identidadeID uuid.UUID) ([]AuthListarAcessosRow, error)
 	AuthMarcarEmailVerificado(ctx context.Context, id uuid.UUID) error
+	// Nome do usuário naquela empresa, para o evento da trilha (evento_auditoria.
+	// usuario_nome). Filtro (identidade_id, empresa_id), a chave primária.
+	AuthNomeDoAcesso(ctx context.Context, arg AuthNomeDoAcessoParams) (string, error)
 	// Login certo: zera as falhas e, quando os parâmetros do Argon2id mudaram,
 	// grava o hash recalculado.
 	AuthRegistrarLoginCerto(ctx context.Context, arg AuthRegistrarLoginCertoParams) error

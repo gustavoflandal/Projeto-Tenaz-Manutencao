@@ -104,7 +104,7 @@ func (r *rotas) registrarUnidades(s *api.Servidor) {
 
 	api.Registrar(s, rotaADM(api.Rota{
 		ID: "alterarUnidade", Metodo: http.MethodPatch, Caminho: "/v1/unidades/{id}", Permissoes: gerenciar,
-		Resumo: "Alterar unidade", Descricao: "Nome, código, endereço, fuso, CNPJ e coordenadas. JSON Merge Patch com If-Match.",
+		Resumo: "Alterar unidade", Descricao: "Nome, código, endereço, fuso, identificação (do tipo do país da empresa) e coordenadas. JSON Merge Patch com If-Match.",
 	}), func(ctx context.Context, in *entradaPatchID[PatchUnidade]) (*saida[Unidade], error) {
 		svc, a, err := r.contexto(ctx)
 		if err != nil {
@@ -122,7 +122,7 @@ func (r *rotas) registrarUnidades(s *api.Servidor) {
 			return nil, err
 		}
 		base := camposUnidade{
-			Codigo: atual.Codigo, Nome: atual.Nome, CNPJ: atual.CNPJ, Endereco: paraEndereco(atual.Endereco),
+			Codigo: atual.Codigo, Nome: atual.Nome, IdentificacaoTipo: atual.IdentificacaoTipo, Identificacao: atual.Identificacao, Endereco: paraEndereco(atual.Endereco),
 			FusoHorario: atual.FusoHorario, Latitude: atual.Latitude, Longitude: atual.Longitude,
 		}
 		var novo camposUnidade
@@ -130,7 +130,7 @@ func (r *rotas) registrarUnidades(s *api.Servidor) {
 			return nil, err
 		}
 		u, err := svc.EditarUnidade(ctx, a, atual.ID, adm.EntradaUnidade{
-			Codigo: novo.Codigo, Nome: novo.Nome, CNPJ: novo.CNPJ, Endereco: deEndereco(novo.Endereco), FusoHorario: novo.FusoHorario,
+			Codigo: novo.Codigo, Nome: novo.Nome, IdentificacaoTipo: novo.IdentificacaoTipo, Identificacao: novo.Identificacao, Endereco: deEndereco(novo.Endereco), FusoHorario: novo.FusoHorario,
 			Latitude: novo.Latitude, Longitude: novo.Longitude, VersaoEsperada: &esperada,
 		})
 		if err != nil {

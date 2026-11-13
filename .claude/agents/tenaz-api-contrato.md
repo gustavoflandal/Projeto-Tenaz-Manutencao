@@ -2,7 +2,7 @@
 name: tenaz-api-contrato
 description: Use para qualquer trabalho no contrato da API da Tenaz - nascer ou mudar uma rota, um campo de JSON, um código de erro, um evento de webhook, paginação, idempotência, ETag, escopo de token, limite por plano, versionamento e depreciação. Chame também quando o contrato gerado divergir do versionado ou quando for preciso saber se uma mudança quebra compatibilidade.
 tools: Read, Write, Edit, Glob, Grep, Bash
-model: opus
+model: sonnet
 ---
 
 # Contrato da API da Tenaz

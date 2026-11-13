@@ -1,0 +1,86 @@
+// Regras de domínio compartilhadas entre a web e o app, com os mesmos casos
+// de teste do servidor (seção 7 de docs/5_ARQUITETURA_SOFTWARE.md).
+
+export {
+  ehTipoDeEmpresa,
+  ehTipoDeIdentificacao,
+  ehTipoDePessoa,
+  identificacaoValida,
+  mascararEntrada,
+  mascararParaLista,
+  normalizarIdentificacao,
+  TIPOS_DE_EMPRESA,
+  TIPOS_DE_IDENTIFICACAO,
+  TIPOS_DE_PESSOA,
+  validarIdentificacao,
+  type MotivoDeRecusa,
+  type ResultadoDaValidacao,
+  type TipoDeEmpresa,
+  type TipoDeIdentificacao,
+  type TipoDePessoa,
+} from './identificacao';
+export {
+  cpaConfereComSubdivisao,
+  normalizarCodigoPostal,
+  SUBDIVISOES,
+  subdivisaoValida,
+  validarCodigoPostal,
+  type ResultadoDoCodigoPostal,
+} from './enderecos';
+export {
+  ErroDeDinheiro,
+  lerPrecoUnitario,
+  lerValor,
+  moedaDoCodigo,
+  multiplicar,
+  quantidadeDeTexto,
+  ratear,
+  somar,
+  subtrair,
+  textoDoPrecoUnitario,
+  textoDoValor,
+  type CodigoDeErroDeDinheiro,
+  type CodigoDeMoeda,
+  type Moeda as MoedaDeDinheiro,
+  type OpcoesDeLeitura,
+  type PrecoUnitario,
+  type Quantidade,
+  type Valor,
+} from './dinheiro';
+export {
+  ErroDeFormato,
+  formatarData,
+  formatarDataHora,
+  formatarDecimal,
+  formatarInteiro,
+  formatarMedidor,
+  formatarPercentual,
+  formatarPrecoUnitario,
+  formatarValor,
+  fusoDoAparelho,
+  simboloDoPais,
+} from './formatos';
+export {
+  casasDecimaisDaMoeda,
+  ehPais,
+  MOEDAS,
+  PAISES,
+  paisDaMoeda,
+  PERFIS_DE_PAIS,
+  tiposDePessoaParaOPais,
+  type IdiomaDoPerfil,
+  type Moeda,
+  type Pais,
+  type PerfilDePais,
+} from './paises';
+export { SENHA_TAMANHO_MINIMO, senhaTemTamanho } from './senha';
+export {
+  DIAS_DA_SEMANA,
+  primeiraSobreposicao,
+  sobrepoem,
+  turnosDoModelo,
+  validarTurno,
+  type ErroDeTurno,
+  type ModeloDeTurnos,
+  type Turno,
+} from './turnos';

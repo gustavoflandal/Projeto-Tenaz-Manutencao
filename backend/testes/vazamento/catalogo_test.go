@@ -38,8 +38,12 @@ SELECT conrelid::regclass::text || '.' || conname || ' ' || array_to_string(colu
        confrelid::regclass::text || ' ' || array_to_string(referenciadas, ',')
 FROM fks
 WHERE NOT (
-  -- para app.empresa: a própria coluna empresa_id aponta para o id
-  (confrelid = 'app.empresa'::regclass AND colunas = ARRAY['empresa_id'::name] AND referenciadas = ARRAY['id'::name])
+  -- para app.empresa: a própria coluna empresa_id, na primeira posição, aponta
+  -- para o id, sozinha (empresa_id -> id) ou com a moeda (00010: (empresa_id,
+  -- moeda) -> (id, moeda)). Outra coluna apontando para app.empresa
+  -- (empresa_cliente_id -> id) ou empresa_id apontando para outra coluna é
+  -- acusada: TestDetectorAcusaFKParaEmpresaPorOutraColuna.
+  (confrelid = 'app.empresa'::regclass AND colunas[1] = 'empresa_id' AND referenciadas[1] = 'id')
   -- para tabela de empresa: empresa_id casado com empresa_id
   OR EXISTS (SELECT 1 FROM generate_subscripts(colunas, 1) i
              WHERE colunas[i] = 'empresa_id' AND referenciadas[i] = 'empresa_id'))
@@ -71,11 +75,73 @@ func TestDetectorAcusaFKSimples(t *testing.T) {
 	}
 }
 
+// TestDetectorAcusaFKParaEmpresaPorOutraColuna: para app.empresa, só a
+// coluna empresa_id, na primeira posição e apontando para o id, prende a
+// linha à própria empresa. Uma coluna que não é empresa_id (o cliente de uma
+// subcontratada, empresa_cliente_id) aponta para qualquer empresa, porque a
+// FK ignora o RLS; empresa_id apontando para outra coluna não é a própria
+// empresa. Cada FK fica numa tabela própria, para que a acusação de uma não
+// esconda a falta da outra; a última é o controle (a forma aceita da 00010).
+func TestDetectorAcusaFKParaEmpresaPorOutraColuna(t *testing.T) {
+	ctx := context.Background()
+	casos := []struct {
+		tabela, colunas, fk string
+		acusar              bool
+	}{
+		{"app.tabela_proposital_fk_empresa_composta", "empresa_cliente_id uuid, moeda_cliente char(3)",
+			"(empresa_cliente_id, moeda_cliente) REFERENCES app.empresa (id, moeda)", true},
+		{"app.tabela_proposital_fk_empresa_simples", "empresa_cliente_id uuid",
+			"(empresa_cliente_id) REFERENCES app.empresa (id)", true},
+		{"app.tabela_proposital_fk_empresa_outra_chave", "identificacao text",
+			"(empresa_id, identificacao) REFERENCES app.empresa (identificacao_tipo, identificacao)", true},
+		{"app.tabela_proposital_fk_empresa_moeda", "moeda char(3)",
+			"(empresa_id, moeda) REFERENCES app.empresa (id, moeda)", false},
+	}
+	var comandos []string
+	for _, c := range casos {
+		// empresa_id é text na terceira, para casar com identificacao_tipo.
+		tipo := "uuid"
+		if strings.Contains(c.fk, "identificacao_tipo") {
+			tipo = "text"
+		}
+		comandos = append(comandos, "CREATE TABLE "+c.tabela+" (empresa_id "+tipo+" NOT NULL, id uuid PRIMARY KEY, "+
+			c.colunas+", FOREIGN KEY "+c.fk+")")
+	}
+	tx := criarTabelasDeProva(t, ctx, comandos)
+
+	acusadas := map[string]bool{}
+	for _, fk := range listarTexto(t, ctx, tx, sqlFKSimples) {
+		for _, c := range casos {
+			if strings.HasPrefix(fk, c.tabela+".") {
+				acusadas[c.tabela] = true
+			}
+		}
+	}
+	for _, c := range casos {
+		switch {
+		case c.acusar && !acusadas[c.tabela]:
+			t.Errorf("a FK %s de %s para app.empresa não foi acusada; ela aceitaria outra empresa", c.fk, c.tabela)
+		case !c.acusar && acusadas[c.tabela]:
+			t.Errorf("controle: a FK %s, forma aceita (00010), foi acusada", c.fk)
+		}
+	}
+}
+
 // ------------------------------------------------------ unicidade
 
 // Unicidade de negócio é sempre composta com empresa_id na frente (consulta 7
 // da seção 2.8): uma unicidade global responde "já existe" sobre dado de outra
-// empresa. app.empresa é a exceção declarada (o próprio tenant, com CNPJ único).
+// empresa. app.empresa é a exceção declarada: é o próprio tenant, e
+// uq_empresa_identificacao (identificacao_tipo, identificacao) é única na
+// plataforma, como o CNPJ era. A exceção aceita um oráculo de um bit, "esta
+// identificação já é cliente da Tenaz", por dois caminhos: o POST
+// /v1/empresas público (anônimo, qualquer país) e o PATCH /v1/empresa
+// autenticado (administrador, só o tipo do país da própria empresa; a sonda
+// que não colide troca a identificação da própria empresa e fica na trilha,
+// a que colide é desfeita e não fica). Os dois respondem 409 conflito no
+// campo identificacao e nada mais: nem o identificador, nem o nome, nem dado
+// algum da empresa que já tem a identificação (oraculoDeIdentificacao, em
+// api_test.go, fixa a forma no PATCH).
 const sqlUnicidadeGlobal = `
 SELECT i.indexrelid::regclass::text
 FROM pg_index i
@@ -101,9 +167,11 @@ var ordemComandos = []string{"SELECT", "INSERT", "UPDATE", "DELETE"}
 // tenaz_app e os privilégios dele. É a matéria-prima de acessoExterno.
 const sqlPoliticasDoApp = `
 SELECT c.oid::regclass::text AS tabela,
-       has_table_privilege('tenaz_app', c.oid, 'SELECT') AS p_select,
-       has_table_privilege('tenaz_app', c.oid, 'INSERT') AS p_insert,
-       has_table_privilege('tenaz_app', c.oid, 'UPDATE') AS p_update,
+       -- has_any_column_privilege: também o privilégio por coluna (00008: o
+       -- INSERT do tenaz_app em evento_auditoria é por coluna).
+       has_any_column_privilege('tenaz_app', c.oid, 'SELECT') AS p_select,
+       has_any_column_privilege('tenaz_app', c.oid, 'INSERT') AS p_insert,
+       has_any_column_privilege('tenaz_app', c.oid, 'UPDATE') AS p_update,
        has_table_privilege('tenaz_app', c.oid, 'DELETE') AS p_delete,
        coalesce(p.polname, '') AS politica,
        coalesce(p.polpermissive, true) AS permissiva,
@@ -415,7 +483,7 @@ func TestDetectorAcusaFuncaoDefinerEmPublic(t *testing.T) {
 		"ALTER FUNCTION public.vaza_senhas() OWNER TO tenaz_credencial",
 		// m26: dono o superusuário da suíte, lendo app.pessoa sem RLS
 		`CREATE FUNCTION public.vaza_cpfs() RETURNS SETOF text LANGUAGE sql SECURITY DEFINER
-		   AS 'SELECT cpf FROM app.pessoa'`,
+		   AS 'SELECT identificacao FROM app.pessoa'`,
 	})
 
 	// Primeiro, que a mutação é de fato um vazamento: o tenaz_app, sem
@@ -517,7 +585,7 @@ func TestDetectorAcusaFuncaoAnexadaAExtensao(t *testing.T) {
 	ctx := context.Background()
 	tx := criarTabelasDeProva(t, ctx, []string{
 		`CREATE FUNCTION public.citext_ajuda() RETURNS SETOF text LANGUAGE sql SECURITY DEFINER
-		   AS 'SELECT cpf FROM app.pessoa'`,
+		   AS 'SELECT identificacao FROM app.pessoa'`,
 		"ALTER EXTENSION citext ADD FUNCTION public.citext_ajuda()",
 	})
 	var definer bool
@@ -717,7 +785,7 @@ JOIN pg_namespace n ON n.oid = c.relnamespace,
      unnest(ARRAY['TRUNCATE', 'TRIGGER', 'REFERENCES']) pr
 WHERE n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg\_%'
   AND c.relkind IN ('r', 'p')
-  AND has_table_privilege(r, c.oid, pr)
+  AND CASE WHEN pr IN ('SELECT', 'INSERT', 'UPDATE', 'REFERENCES') THEN has_any_column_privilege(r, c.oid, pr) ELSE has_table_privilege(r, c.oid, pr) END
 ORDER BY 1`
 
 func TestNenhumPapelDaAplicacaoTemTruncateTriggerOuReferences(t *testing.T) {

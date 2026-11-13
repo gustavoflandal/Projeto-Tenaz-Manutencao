@@ -23,6 +23,7 @@ func TestRedacaoDeCamposSensiveis(t *testing.T) {
 		{"chave_api", true},
 		{"X-Api-Key", true},
 		{"cpf", true},
+		{"identificacao", true},
 		{"cpf_condutor", true},
 		{"exame_toxicologico", true},
 		{"aso_resultado", true},

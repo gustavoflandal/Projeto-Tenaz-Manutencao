@@ -21,6 +21,10 @@
 //	escopo_test.go     prestador, locatário e link dentro de A
 //	auditoria_test.go  imutabilidade, mesma transação, isolamento da trilha
 //	plataforma_test.go credenciais de autenticação, que não têm RLS
+//	api_test.go        parte 3: a API rota a rota, guiada pelo openapi.yaml
+//	                   (id de B, listas, referências, empresa_id, perfis
+//	                   externos, retrato de B); casos em api_casos_test.go
+//	api_detector_test.go provas de detector da parte 3
 //
 // Toda regra de catálogo tem a sua prova de detector (TestDetector...): a
 // suíte cria de propósito um objeto malformado e exige ser acusada. Sem isso,
@@ -93,6 +97,7 @@ func TestMain(m *testing.M) {
 		codigo = 1
 	}
 
+	encerrarAPI()
 	pool.Close()
 	encerrar()
 	os.Exit(codigo)

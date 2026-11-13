@@ -2,7 +2,7 @@
 name: tenaz-banco-dados
 description: Use para qualquer trabalho no banco da Tenaz - criar ou alterar tabela, coluna, chave, índice ou enum, escrever migração, escrever consulta tipada, numeração de documentos, auditoria, anexos, desempenho de consulta, volume e crescimento, particionamento. Chame antes de qualquer implementação que grave dado novo.
 tools: Read, Write, Edit, Glob, Grep, Bash
-model: opus
+model: sonnet
 ---
 
 # Banco de dados da Tenaz

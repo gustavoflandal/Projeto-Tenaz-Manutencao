@@ -12,11 +12,26 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AppCapturaAuditorium struct {
+	EmpresaID     uuid.UUID  `json:"empresa_id"`
+	ID            uuid.UUID  `json:"id"`
+	Tela          string     `json:"tela"`
+	Visualizacao  bool       `json:"visualizacao"`
+	Impressao     bool       `json:"impressao"`
+	Extracao      bool       `json:"extracao"`
+	Versao        int64      `json:"versao"`
+	AlteradoXid   uint64     `json:"alterado_xid"`
+	CriadoEm      time.Time  `json:"criado_em"`
+	CriadoPor     *uuid.UUID `json:"criado_por"`
+	AtualizadoEm  time.Time  `json:"atualizado_em"`
+	AtualizadoPor *uuid.UUID `json:"atualizado_por"`
+	ExcluidoEm    *time.Time `json:"excluido_em"`
+}
+
 type AppEmpresa struct {
 	ID                    uuid.UUID   `json:"id"`
 	RazaoSocial           string      `json:"razao_social"`
 	NomeFantasia          *string     `json:"nome_fantasia"`
-	Cnpj                  *string     `json:"cnpj"`
 	Plano                 *string     `json:"plano"`
 	SrvHabilitado         bool        `json:"srv_habilitado"`
 	MfaObrigatorio        bool        `json:"mfa_obrigatorio"`
@@ -32,6 +47,11 @@ type AppEmpresa struct {
 	AtualizadoEm          time.Time   `json:"atualizado_em"`
 	AtualizadoPor         *uuid.UUID  `json:"atualizado_por"`
 	ExcluidoEm            *time.Time  `json:"excluido_em"`
+	Pais                  string      `json:"pais"`
+	Moeda                 string      `json:"moeda"`
+	IdiomaPadrao          string      `json:"idioma_padrao"`
+	IdentificacaoTipo     *string     `json:"identificacao_tipo"`
+	Identificacao         *string     `json:"identificacao"`
 }
 
 type AppEventoAuditorium struct {
@@ -57,6 +77,13 @@ type AppEventoAuditorium struct {
 	OcorridoNoDispositivoEm *time.Time  `json:"ocorrido_no_dispositivo_em"`
 	Escopo                  *string     `json:"escopo"`
 	Transacao               uint64      `json:"transacao"`
+	UsuarioNome             *string     `json:"usuario_nome"`
+	Tela                    *string     `json:"tela"`
+	Modulo                  *string     `json:"modulo"`
+	Resultado               string      `json:"resultado"`
+	Sensivel                bool        `json:"sensivel"`
+	Detalhe                 []byte      `json:"detalhe"`
+	Hash                    []byte      `json:"hash"`
 }
 
 type AppFeriadoUnidade struct {
@@ -95,7 +122,6 @@ type AppPessoa struct {
 	EmpresaID            uuid.UUID   `json:"empresa_id"`
 	ID                   uuid.UUID   `json:"id"`
 	Nome                 string      `json:"nome"`
-	Cpf                  *string     `json:"cpf"`
 	DataNascimento       pgtype.Date `json:"data_nascimento"`
 	Matricula            *string     `json:"matricula"`
 	Cargo                *string     `json:"cargo"`
@@ -113,6 +139,19 @@ type AppPessoa struct {
 	AtualizadoEm         time.Time   `json:"atualizado_em"`
 	AtualizadoPor        *uuid.UUID  `json:"atualizado_por"`
 	ExcluidoEm           *time.Time  `json:"excluido_em"`
+	IdentificacaoTipo    *string     `json:"identificacao_tipo"`
+	Identificacao        *string     `json:"identificacao"`
+}
+
+type AppSeloAuditorium struct {
+	EmpresaID     uuid.UUID   `json:"empresa_id"`
+	Dia           pgtype.Date `json:"dia"`
+	Quantidade    int64       `json:"quantidade"`
+	HashDia       []byte      `json:"hash_dia"`
+	HashAnterior  []byte      `json:"hash_anterior"`
+	HashEncadeado []byte      `json:"hash_encadeado"`
+	CalculadoEm   time.Time   `json:"calculado_em"`
+	ChaveObjeto   string      `json:"chave_objeto"`
 }
 
 type AppTurnoUnidade struct {
@@ -133,23 +172,24 @@ type AppTurnoUnidade struct {
 }
 
 type AppUnidade struct {
-	EmpresaID     uuid.UUID      `json:"empresa_id"`
-	ID            uuid.UUID      `json:"id"`
-	Codigo        string         `json:"codigo"`
-	Nome          string         `json:"nome"`
-	Cnpj          *string        `json:"cnpj"`
-	Endereco      []byte         `json:"endereco"`
-	FusoHorario   *string        `json:"fuso_horario"`
-	Latitude      pgtype.Numeric `json:"latitude"`
-	Longitude     pgtype.Numeric `json:"longitude"`
-	Situacao      string         `json:"situacao"`
-	Versao        int64          `json:"versao"`
-	AlteradoXid   uint64         `json:"alterado_xid"`
-	CriadoEm      time.Time      `json:"criado_em"`
-	CriadoPor     *uuid.UUID     `json:"criado_por"`
-	AtualizadoEm  time.Time      `json:"atualizado_em"`
-	AtualizadoPor *uuid.UUID     `json:"atualizado_por"`
-	ExcluidoEm    *time.Time     `json:"excluido_em"`
+	EmpresaID         uuid.UUID      `json:"empresa_id"`
+	ID                uuid.UUID      `json:"id"`
+	Codigo            string         `json:"codigo"`
+	Nome              string         `json:"nome"`
+	Endereco          []byte         `json:"endereco"`
+	FusoHorario       *string        `json:"fuso_horario"`
+	Latitude          pgtype.Numeric `json:"latitude"`
+	Longitude         pgtype.Numeric `json:"longitude"`
+	Situacao          string         `json:"situacao"`
+	Versao            int64          `json:"versao"`
+	AlteradoXid       uint64         `json:"alterado_xid"`
+	CriadoEm          time.Time      `json:"criado_em"`
+	CriadoPor         *uuid.UUID     `json:"criado_por"`
+	AtualizadoEm      time.Time      `json:"atualizado_em"`
+	AtualizadoPor     *uuid.UUID     `json:"atualizado_por"`
+	ExcluidoEm        *time.Time     `json:"excluido_em"`
+	IdentificacaoTipo *string        `json:"identificacao_tipo"`
+	Identificacao     *string        `json:"identificacao"`
 }
 
 type AppUsuario struct {
@@ -172,6 +212,8 @@ type AppUsuario struct {
 	AtualizadoEm    time.Time      `json:"atualizado_em"`
 	AtualizadoPor   *uuid.UUID     `json:"atualizado_por"`
 	ExcluidoEm      *time.Time     `json:"excluido_em"`
+	Idioma          string         `json:"idioma"`
+	Moeda           string         `json:"moeda"`
 }
 
 type AppUsuarioPerfil struct {
@@ -190,9 +232,10 @@ type AppUsuarioPerfil struct {
 }
 
 type AppUsuarioPermissao struct {
-	EmpresaID     uuid.UUID  `json:"empresa_id"`
-	ID            uuid.UUID  `json:"id"`
-	UsuarioID     uuid.UUID  `json:"usuario_id"`
+	EmpresaID uuid.UUID `json:"empresa_id"`
+	ID        uuid.UUID `json:"id"`
+	UsuarioID uuid.UUID `json:"usuario_id"`
+	// <módulo>.<ação>, do catálogo de RF-ADM-005, sem exceção
 	Permissao     string     `json:"permissao"`
 	Versao        int64      `json:"versao"`
 	AlteradoXid   uint64     `json:"alterado_xid"`
@@ -209,6 +252,7 @@ type PlataformaAcessoEmpresa struct {
 	UsuarioID    uuid.UUID `json:"usuario_id"`
 	Habilitado   bool      `json:"habilitado"`
 	AtualizadoEm time.Time `json:"atualizado_em"`
+	UsuarioNome  string    `json:"usuario_nome"`
 }
 
 type PlataformaCodigoAutorizacao struct {

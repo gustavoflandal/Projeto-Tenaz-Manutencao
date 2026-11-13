@@ -17,7 +17,7 @@ func TestFluxoContaLoginMFATrocaLogout(t *testing.T) {
 	// pede senha, porque o login já existe.
 	c := anonimo(t)
 	c.post("/v1/empresas", map[string]any{
-		"cnpj": cnpjAleatorio(), "razao_social": "Segunda Empresa Ltda", "plano": "profissional",
+		"pais": "BR", "identificacao_tipo": "cnpj", "identificacao": cnpjAleatorio(), "razao_social": "Segunda Empresa Ltda", "plano": "profissional",
 		"responsavel": map[string]any{"nome": "Ana", "email": em},
 		"unidade":     map[string]any{"codigo": "FIL", "nome": "Filial", "turnos": turnoUtil},
 	}).ok(http.StatusCreated)
@@ -40,6 +40,14 @@ func TestFluxoContaLoginMFATrocaLogout(t *testing.T) {
 	}
 	if _, tem := sessao["empresa_id"]; tem {
 		t.Fatal("empresa_id não sai na sessão (seção 2.2)")
+	}
+	// País, moeda e idiomas na sessão (documento 3, 2.17): sempre presentes.
+	empS, usrS := sessao["empresa"].(map[string]any), sessao["usuario"].(map[string]any)
+	if empS["pais"] != "BR" || empS["moeda"] != "BRL" || empS["idioma_padrao"] != "pt-BR" || usrS["idioma"] != "pt-BR" {
+		t.Fatalf("país e idioma na sessão: %v %v", empS, usrS)
+	}
+	if eu := web.get("/v1/usuarios/eu").ok(http.StatusOK); eu["pais"] != "BR" || eu["moeda"] != "BRL" || eu["idioma"] != "pt-BR" {
+		t.Fatalf("país no usuário: %v", eu)
 	}
 
 	// Ativa o MFA.

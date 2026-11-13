@@ -175,7 +175,7 @@ type chaveTx struct{}
 // transação. Uma transação por vez é o que garante que nenhum código tenha
 // duas empresas abertas ao mesmo tempo (seção 2.4 do documento 2). Quem já
 // está dentro de uma transação usa a do contexto, por Tx ou Q.
-var ErrTransacaoAninhada = erros.SemContextoEmpresa.Com("transação aninhada: use a transação do contexto")
+var ErrTransacaoAninhada = erros.SemContextoEmpresa.Tecnico("transação aninhada: use a transação do contexto")
 
 // NaEmpresa abre uma transação, fixa o contexto de empresa, de escopo e da
 // requisição e coloca a transação no contexto. Todo caso de uso que toca dado
@@ -190,7 +190,7 @@ var ErrTransacaoAninhada = erros.SemContextoEmpresa.Com("transação aninhada: u
 // o escopo tem usuário e "sistema" quando não tem.
 func (db *DB) NaEmpresa(ctx context.Context, empresaID uuid.UUID, escopo Escopo, fn func(context.Context) error) error {
 	if empresaID == uuid.Nil {
-		return erros.SemContextoEmpresa.Com("empresa_id vazio em NaEmpresa")
+		return erros.SemContextoEmpresa.Tecnico("empresa_id vazio em NaEmpresa")
 	}
 	if err := escopo.Valido(); err != nil {
 		return erros.SemContextoEmpresa.Por(err)
@@ -227,7 +227,17 @@ const contextoSQL = `SELECT
   set_config('app.user_agent',                 $11, true),
   set_config('app.token_api_id',               $12, true),
   set_config('app.dispositivo_id',             $13, true),
-  set_config('app.ocorrido_no_dispositivo_em', $14, true)`
+  set_config('app.ocorrido_no_dispositivo_em', $14, true),
+  set_config('app.modulo',                     $15, true),
+  set_config('app.tela',                       $16, true)`
+
+// nomeUsuarioSQL fixa a 17ª variável, app.usuario_nome: o nome do usuário no
+// instante da transação, lido do cadastro dele na empresa. Vem numa instrução
+// à parte, depois da primeira, porque a leitura de app.usuario passa pelo RLS
+// e precisa de app.empresa_id e app.escopo já fixados. O trigger do evento só
+// copia o nome quando o usuario_id do evento é o desta transação.
+const nomeUsuarioSQL = `SELECT set_config('app.usuario_nome',
+  coalesce((SELECT u.nome FROM app.usuario u WHERE u.empresa_id = $1 AND u.id = $2), ''), true)`
 
 func fixarContexto(ctx context.Context, tx pgx.Tx, empresaID uuid.UUID, escopo Escopo, req Requisicao) error {
 	lote := &pgx.Batch{}
@@ -235,7 +245,13 @@ func fixarContexto(ctx context.Context, tx pgx.Tx, empresaID uuid.UUID, escopo E
 		empresaID.String(), escopo.Tipo, textoUUID(escopo.UsuarioID), textoUUID(escopo.FornecedorID),
 		textoUUID(escopo.LocatarioID), escopo.LinkHashHex,
 		req.AtorTipo, req.Origem, req.IP, req.RequestID, req.UserAgent,
-		textoUUID(req.TokenAPIID), textoUUID(req.DispositivoID), textoInstante(req.OcorridoNoDispositivoEm))
+		textoUUID(req.TokenAPIID), textoUUID(req.DispositivoID), textoInstante(req.OcorridoNoDispositivoEm),
+		req.Modulo, req.Tela)
+	if escopo.UsuarioID != nil {
+		lote.Queue(nomeUsuarioSQL, empresaID, *escopo.UsuarioID)
+	} else {
+		lote.Queue(`SELECT set_config('app.usuario_nome', '', true)`)
+	}
 	// O banco confere o escopo contra o cadastro e recusa a transação se
 	// divergirem. Falha fechada.
 	lote.Queue(`SELECT app.conferir_escopo()`)
@@ -245,7 +261,7 @@ func fixarContexto(ctx context.Context, tx pgx.Tx, empresaID uuid.UUID, escopo E
 		if errors.As(err, &pgErr) && pgErr.Code == "42501" && escopo.UsuarioID != nil {
 			// Usuário inativado, excluído ou com vínculo externo trocado
 			// durante a sessão: a credencial deixou de valer (seção 2.9.3).
-			return erros.CredencialInvalida.Com("o acesso do usuário mudou; entre de novo").Por(err)
+			return erros.CredencialInvalida.ComChave("detalhe.acesso_mudou", nil).Por(err)
 		}
 		return fmt.Errorf("fixar contexto da transação: %w", err)
 	}
@@ -258,12 +274,23 @@ func EmTransacao(ctx context.Context) bool {
 	return ok
 }
 
+// SemTransacao devolve o contexto sem a transação, para abrir OUTRA, em outra
+// conexão, enquanto a primeira segue aberta. Só existe para ler configuração
+// da plataforma que o escopo da requisição não alcança (a captura de
+// auditoria, que o escopo externo não lê) com cache; não é caminho para
+// misturar duas empresas, e a nova transação passa por NaEmpresa como qualquer
+// outra, com empresa e escopo próprios. Segura uma segunda conexão do pool
+// enquanto dura: use só com cache.
+func SemTransacao(ctx context.Context) context.Context {
+	return context.WithValue(ctx, chaveTx{}, nil)
+}
+
 // Tx recupera a transação do contexto. Devolve erro quando o chamador está
 // fora de NaEmpresa, o que é falha de programação, não condição de execução.
 func Tx(ctx context.Context) (pgx.Tx, error) {
 	tx, ok := ctx.Value(chaveTx{}).(pgx.Tx)
 	if !ok {
-		return nil, erros.SemContextoEmpresa.Com("acesso a dado de cliente fora de NaEmpresa")
+		return nil, erros.SemContextoEmpresa.Tecnico("acesso a dado de cliente fora de NaEmpresa")
 	}
 	return tx, nil
 }

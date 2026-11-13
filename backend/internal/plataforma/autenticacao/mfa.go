@@ -39,7 +39,7 @@ func (s *Servico) IniciarMFA(ctx context.Context, a autorizacao.Ator) (Configura
 			return naoEncontrado(err, erros.CredencialInvalida)
 		}
 		if id.MfaAtivadoEm != nil {
-			return erros.TransicaoInvalida.Com("o segundo fator já está ativo").ComDado("estado_atual", "ativo")
+			return erros.TransicaoInvalida.ComChave("detalhe.mfa_ja_ativo", nil).ComDado("estado_atual", "ativo")
 		}
 		emailID = id.Email
 		return q.AuthGravarSegredoMFAPendente(ctx, gerado.AuthGravarSegredoMFAPendenteParams{
@@ -61,10 +61,10 @@ func (s *Servico) ConfirmarMFA(ctx context.Context, a autorizacao.Ator, codigo s
 			return naoEncontrado(err, erros.CredencialInvalida)
 		}
 		if id.MfaAtivadoEm != nil {
-			return erros.TransicaoInvalida.Com("o segundo fator já está ativo").ComDado("estado_atual", "ativo")
+			return erros.TransicaoInvalida.ComChave("detalhe.mfa_ja_ativo", nil).ComDado("estado_atual", "ativo")
 		}
 		if id.MfaSegredoCifrado == nil {
-			return erros.TransicaoInvalida.Com("inicie a ativação antes de confirmar").ComDado("estado_atual", "inativo")
+			return erros.TransicaoInvalida.ComChave("detalhe.mfa_iniciar_antes", nil).ComDado("estado_atual", "inativo")
 		}
 		segredo, err := s.d.Cifrador.Decifrar(id.MfaSegredoCifrado, id.ID[:])
 		if err != nil {
@@ -99,7 +99,7 @@ func (s *Servico) DesativarMFA(ctx context.Context, a autorizacao.Ator, codigo s
 		return err
 	}
 	if exigida {
-		return erros.TransicaoInvalida.Com("uma empresa em que você entra exige o segundo fator; ele não pode ser desativado").
+		return erros.TransicaoInvalida.ComChave("detalhe.mfa_empresa_exige", nil).
 			ComDado("estado_atual", "exigido_pela_empresa")
 	}
 	agora := s.agora()
@@ -110,7 +110,7 @@ func (s *Servico) DesativarMFA(ctx context.Context, a autorizacao.Ator, codigo s
 			return naoEncontrado(err, erros.CredencialInvalida)
 		}
 		if id.MfaAtivadoEm == nil {
-			return erros.TransicaoInvalida.Com("o segundo fator não está ativo").ComDado("estado_atual", "inativo")
+			return erros.TransicaoInvalida.ComChave("detalhe.mfa_inativo", nil).ComDado("estado_atual", "inativo")
 		}
 		segredo, err := s.d.Cifrador.Decifrar(id.MfaSegredoCifrado, id.ID[:])
 		if err != nil {

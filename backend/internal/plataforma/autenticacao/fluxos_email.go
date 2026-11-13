@@ -14,6 +14,7 @@ import (
 	"tenaz/internal/plataforma/email"
 	"tenaz/internal/plataforma/erros"
 	"tenaz/internal/plataforma/obs"
+	"tenaz/internal/plataforma/textos"
 )
 
 // Finalidades de token_email.
@@ -75,13 +76,13 @@ func (s *Servico) RecuperarSenha(ctx context.Context, emailInformado string) err
 	if segredo == "" {
 		return nil
 	}
+	// E-mail disparado pela própria pessoa: o idioma negociado na requisição,
+	// porque a identidade é global e não guarda idioma (ADR-013, Parte B, item 7).
+	idioma := textos.DoContexto(ctx)
 	msg := email.Mensagem{
 		Para:    destino,
-		Assunto: "Redefinição de senha na Tenaz",
-		Texto: "Recebemos um pedido para redefinir a sua senha na Tenaz.\n\n" +
-			"Para criar uma senha nova, abra o link abaixo em até 1 hora:\n\n" +
-			s.link("/redefinir-senha", segredo) + "\n\n" +
-			"Se não foi você, ignore este e-mail: a sua senha continua a mesma.\n",
+		Assunto: textos.T(idioma, "email.redefinicao_senha.assunto", nil),
+		Texto:   textos.T(idioma, "email.redefinicao_senha.corpo", textos.Parametros{"link": s.link("/redefinir-senha", segredo)}),
 	}
 	s.enviarEmSegundoPlano(ctx, msg)
 	return nil
@@ -167,7 +168,7 @@ func (s *Servico) TrocarSenha(ctx context.Context, a autorizacao.Ator, atual, no
 		return err
 	}
 	if id.SenhaHash == nil {
-		return erros.TransicaoInvalida.Com("a identidade entra por SSO e não tem senha").ComDado("estado_atual", "sso")
+		return erros.TransicaoInvalida.ComChave("detalhe.identidade_sso", nil).ComDado("estado_atual", "sso")
 	}
 	ok, _, err := s.d.Hasher.Verificar(ctx, atual, *id.SenhaHash)
 	if err != nil {
@@ -177,7 +178,7 @@ func (s *Servico) TrocarSenha(ctx context.Context, a autorizacao.Ator, atual, no
 		if err := s.registrarFalha(ctx, id.ID, s.agora()); err != nil {
 			return err
 		}
-		return erros.CredencialInvalida.ComCampo("senha_atual", erros.CampoValorInvalido, "A senha atual não confere.")
+		return erros.CredencialInvalida.ComCampoChave("senha_atual", erros.CampoValorInvalido, "campo.senha_atual", nil)
 	}
 	if err := s.d.Politica.Validar(nova, id.Email); err != nil {
 		return err
@@ -209,7 +210,7 @@ func (s *Servico) TrocarSenha(ctx context.Context, a autorizacao.Ator, atual, no
 //
 // Falha no envio: servico_indisponivel. O usuário continua convidado, com o
 // link gravado; o administrador reenvia.
-func (s *Servico) EmitirConvite(ctx context.Context, empresaID, usuarioID uuid.UUID, emailDestino, nomeEmpresa, nomeConvidado string) error {
+func (s *Servico) EmitirConvite(ctx context.Context, empresaID, usuarioID uuid.UUID, emailDestino, nomeEmpresa, nomeConvidado, idiomaDestinatario string) error {
 	agora := s.agora()
 	segredo, hash, err := novoSegredo()
 	if err != nil {
@@ -230,18 +231,23 @@ func (s *Servico) EmitirConvite(ctx context.Context, empresaID, usuarioID uuid.U
 	if err != nil {
 		return fmt.Errorf("emitir convite: %w", err)
 	}
+	// E-mail disparado por outra pessoa: o idioma do destinatário, que é o
+	// usuario.idioma (no convite, o padrão da empresa).
+	idioma := textos.PtBR
+	if textos.Suportado(idiomaDestinatario) {
+		idioma = textos.Idioma(idiomaDestinatario)
+	}
 	err = s.d.Email.Enviar(ctx, email.Mensagem{
 		Para:    destino,
-		Assunto: "Convite para a Tenaz: " + nomeEmpresa,
-		Texto: "Olá, " + nomeConvidado + ".\n\n" +
-			"Você foi convidado a acessar a empresa " + nomeEmpresa + " na Tenaz.\n\n" +
-			"Para aceitar, abra o link abaixo em até 7 dias:\n\n" +
-			s.link("/convite", segredo) + "\n\n" +
-			"Se você não esperava este convite, ignore este e-mail.\n",
+		Assunto: textos.T(idioma, "email.convite.assunto", textos.Parametros{"empresa": nomeEmpresa}),
+		Texto: textos.T(idioma, "email.convite.corpo", textos.Parametros{
+			"nome": nomeConvidado, "empresa": nomeEmpresa, "dias": int(s.cfg.ValidadeConvite.Hours() / 24),
+			"link": s.link("/convite", segredo),
+		}),
 	})
 	if err != nil {
 		obs.Logger(ctx).Error("enviar convite", "erro", err)
-		return erros.ServicoIndisponivel.Com("o convite foi gravado, mas o e-mail não saiu; reenvie o convite").Por(err)
+		return erros.ServicoIndisponivel.ComChave("detalhe.convite_email_nao_saiu", nil).Por(err)
 	}
 	return nil
 }

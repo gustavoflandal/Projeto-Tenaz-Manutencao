@@ -35,12 +35,12 @@ const Redigido = "[REDIGIDO]"
 
 // sensiveis são os nomes de campo cujo valor nunca vai para o log, pela seção
 // 14.3: senha, token, chave de API, segredo de conector, conteúdo de documento
-// sensível, CPF completo, resultado de exame. A Tenaz não guarda dado de saúde;
+// sensível, identificação pessoal completa (CPF, CUIL, DNI, CI), resultado de exame. A Tenaz não guarda dado de saúde;
 // os nomes de exame continuam na lista por defesa, para o caso de um conector
 // ou um anexo trazerem esse dado: redigir a mais não vaza nada.
 var sensiveis = []string{
 	"senha", "password", "token", "secret", "segredo", "chave_api", "api_key",
-	"authorization", "cookie", "cpf", "exame", "toxicologico", "aso",
+	"authorization", "cookie", "cpf", "identificacao", "exame", "toxicologico", "aso",
 	"refresh_token", "access_token", "credencial", "private_key", "assinatura_hmac",
 }
 

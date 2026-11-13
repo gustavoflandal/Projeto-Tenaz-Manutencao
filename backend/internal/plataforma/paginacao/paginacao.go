@@ -76,7 +76,7 @@ func Decodificar(s, consulta string, agora time.Time) (*Posicao, error) {
 	if s == "" {
 		return nil, nil
 	}
-	invalido := erros.CursorInvalido.Com("cursor corrompido, de outra consulta ou vencido; recomece sem cursor")
+	invalido := erros.CursorInvalido.ComChave("detalhe.cursor_invalido", nil)
 	if len(s) > 512 {
 		return nil, invalido
 	}

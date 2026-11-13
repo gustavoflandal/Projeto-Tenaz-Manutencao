@@ -1,6 +1,7 @@
 package rotas
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"tenaz/internal/modulos/adm"
 	"tenaz/internal/plataforma/api"
 	"tenaz/internal/plataforma/autorizacao"
+	"tenaz/internal/plataforma/dinheiro"
 )
 
 // Tipos do contrato do ADM. Campos em snake_case, iguais às colunas do banco
@@ -23,7 +25,11 @@ type Empresa struct {
 	ID                    uuid.UUID `json:"id" format:"uuid"`
 	RazaoSocial           string    `json:"razao_social"`
 	NomeFantasia          *string   `json:"nome_fantasia"`
-	CNPJ                  *string   `json:"cnpj" doc:"14 dígitos, sem máscara"`
+	Pais                  string    `json:"pais" enum:"BR,AR,PY" doc:"Define a moeda, o idioma padrão sugerido e o tipo de identificação; só leitura depois da criação da conta"`
+	Moeda                 string    `json:"moeda" enum:"BRL,ARS,PYG" doc:"Moeda da empresa, dada pelo país; só leitura"`
+	IdiomaPadrao          string    `json:"idioma_padrao" enum:"pt-BR,es-419" doc:"Idioma que o usuário convidado recebe; cada usuário muda o seu em PATCH /v1/usuarios/eu"`
+	IdentificacaoTipo     *string   `json:"identificacao_tipo" doc:"cnpj no BR, cuit na AR, ruc no PY"`
+	Identificacao         *string   `json:"identificacao" doc:"Normalizada: maiúsculas, só letras e dígitos, sem máscara"`
 	Plano                 *string   `json:"plano" doc:"essencial, profissional ou enterprise; nulo na conta só do plano Serviços"`
 	SrvHabilitado         bool      `json:"srv_habilitado"`
 	MFAObrigatorio        bool      `json:"mfa_obrigatorio" doc:"Segundo fator exigido de todos os usuários (RN-ADM-027): quem não o tem entra com sessão restrita à ativação"`
@@ -38,7 +44,8 @@ type Empresa struct {
 
 func paraEmpresa(e adm.Empresa) Empresa {
 	return Empresa{
-		ID: e.ID, RazaoSocial: e.RazaoSocial, NomeFantasia: e.NomeFantasia, CNPJ: e.CNPJ, Plano: e.Plano,
+		ID: e.ID, RazaoSocial: e.RazaoSocial, NomeFantasia: e.NomeFantasia, Pais: e.Pais, Moeda: e.Moeda,
+		IdiomaPadrao: e.IdiomaPadrao, IdentificacaoTipo: e.IdentificacaoTipo, Identificacao: e.Identificacao, Plano: e.Plano,
 		SrvHabilitado: e.SrvHabilitado, MFAObrigatorio: e.MFAObrigatorio, Situacao: e.Situacao, FusoHorario: e.FusoHorario,
 		RetencaoAuditoriaAnos: e.RetencaoAuditoriaAnos, TesteAte: e.TesteAte, Versao: e.Versao,
 		CriadoEm: api.Instante(e.CriadoEm), AtualizadoEm: api.Instante(e.AtualizadoEm),
@@ -49,18 +56,23 @@ func paraEmpresa(e adm.Empresa) Empresa {
 type PatchEmpresa struct {
 	RazaoSocial  *string `json:"razao_social,omitempty" minLength:"1" maxLength:"200"`
 	NomeFantasia *string `json:"nome_fantasia,omitempty" maxLength:"200" nullable:"true"`
-	CNPJ         *string `json:"cnpj,omitempty" maxLength:"18" doc:"Com ou sem máscara"`
-	FusoHorario  *string `json:"fuso_horario,omitempty" maxLength:"64"`
+	// País e moeda não mudam pela API: enviá-los é 422 campo_somente_leitura.
+	IdentificacaoTipo *string `json:"identificacao_tipo,omitempty" enum:"cnpj,cuit,ruc" doc:"Só o tipo do país da empresa"`
+	Identificacao     *string `json:"identificacao,omitempty" maxLength:"24" doc:"Com ou sem máscara; a forma e, no CNPJ, o dígito verificador são conferidos"`
+	IdiomaPadrao      *string `json:"idioma_padrao,omitempty" enum:"pt-BR,es-419"`
+	FusoHorario       *string `json:"fuso_horario,omitempty" maxLength:"64"`
 	// MFAObrigatorio liga ou desliga o segundo fator obrigatório (RN-ADM-027).
 	MFAObrigatorio *bool `json:"mfa_obrigatorio,omitempty" doc:"Exige segundo fator de todos os usuários da empresa"`
 }
 
 type camposEmpresa struct {
-	RazaoSocial    string  `json:"razao_social"`
-	NomeFantasia   *string `json:"nome_fantasia"`
-	CNPJ           string  `json:"cnpj"`
-	FusoHorario    string  `json:"fuso_horario"`
-	MFAObrigatorio bool    `json:"mfa_obrigatorio"`
+	RazaoSocial       string  `json:"razao_social"`
+	NomeFantasia      *string `json:"nome_fantasia"`
+	IdentificacaoTipo string  `json:"identificacao_tipo"`
+	Identificacao     string  `json:"identificacao"`
+	IdiomaPadrao      string  `json:"idioma_padrao"`
+	FusoHorario       string  `json:"fuso_horario"`
+	MFAObrigatorio    bool    `json:"mfa_obrigatorio"`
 }
 
 // Responsavel é quem cria a conta: nasce administrador convidado.
@@ -72,14 +84,17 @@ type Responsavel struct {
 
 // NovaEmpresa é o corpo de POST /v1/empresas (cadastro pelo site).
 type NovaEmpresa struct {
-	CNPJ          string         `json:"cnpj" maxLength:"18" doc:"Com ou sem máscara; dígito verificador conferido"`
-	RazaoSocial   string         `json:"razao_social" minLength:"1" maxLength:"200"`
-	NomeFantasia  *string        `json:"nome_fantasia,omitempty" maxLength:"200"`
-	FusoHorario   string         `json:"fuso_horario,omitempty" maxLength:"64" doc:"IANA; ausente: America/Sao_Paulo"`
-	Plano         *string        `json:"plano,omitempty" enum:"essencial,profissional,enterprise" doc:"Ausente só com srv_habilitado (conta do plano Serviços)"`
-	SrvHabilitado bool           `json:"srv_habilitado,omitempty" doc:"Conta de subcontratada, com o módulo SRV (RF-SRV-001)"`
-	Responsavel   Responsavel    `json:"responsavel"`
-	Unidade       EntradaUnidade `json:"unidade" doc:"Unidade inicial; sem turnos, segunda a sexta das 08:00 às 17:00"`
+	Pais              string         `json:"pais" enum:"BR,AR,PY" doc:"Define a moeda (BRL, ARS, PYG), o idioma padrão sugerido e o tipo de identificação; não muda depois"`
+	IdentificacaoTipo string         `json:"identificacao_tipo" enum:"cnpj,cuit,ruc" doc:"Só o tipo de pessoa jurídica do país: cnpj no BR, cuit na AR, ruc no PY"`
+	Identificacao     string         `json:"identificacao" maxLength:"24" doc:"Com ou sem máscara; a forma e, no CNPJ, o dígito verificador são conferidos"`
+	IdiomaPadrao      *string        `json:"idioma_padrao,omitempty" enum:"pt-BR,es-419" doc:"Ausente: o do país (pt-BR no BR, es-419 na AR e no PY)"`
+	RazaoSocial       string         `json:"razao_social" minLength:"1" maxLength:"200"`
+	NomeFantasia      *string        `json:"nome_fantasia,omitempty" maxLength:"200"`
+	FusoHorario       string         `json:"fuso_horario,omitempty" maxLength:"64" doc:"IANA; ausente: o do país (America/Sao_Paulo, America/Argentina/Buenos_Aires, America/Asuncion)"`
+	Plano             *string        `json:"plano,omitempty" enum:"essencial,profissional,enterprise" doc:"Ausente só com srv_habilitado (conta do plano Serviços)"`
+	SrvHabilitado     bool           `json:"srv_habilitado,omitempty" doc:"Conta de subcontratada, com o módulo SRV (RF-SRV-001)"`
+	Responsavel       Responsavel    `json:"responsavel"`
+	Unidade           EntradaUnidade `json:"unidade" doc:"Unidade inicial; sem turnos, segunda a sexta das 08:00 às 17:00"`
 }
 
 // ContaCriada é a resposta de POST /v1/empresas. Nenhum identificador sai
@@ -92,25 +107,25 @@ type ContaCriada struct {
 
 // Endereco da unidade.
 type Endereco struct {
-	Logradouro  string `json:"logradouro,omitempty" maxLength:"200"`
-	Numero      string `json:"numero,omitempty" maxLength:"20"`
-	Complemento string `json:"complemento,omitempty" maxLength:"100"`
-	Bairro      string `json:"bairro,omitempty" maxLength:"100"`
-	Municipio   string `json:"municipio,omitempty" maxLength:"100"`
-	UF          string `json:"uf,omitempty" maxLength:"2"`
-	CEP         string `json:"cep,omitempty" maxLength:"9"`
+	Logradouro   string `json:"logradouro,omitempty" maxLength:"200"`
+	Numero       string `json:"numero,omitempty" maxLength:"20"`
+	Complemento  string `json:"complemento,omitempty" maxLength:"100"`
+	Bairro       string `json:"bairro,omitempty" maxLength:"100"`
+	Municipio    string `json:"municipio,omitempty" maxLength:"100"`
+	Subdivisao   string `json:"subdivisao,omitempty" maxLength:"6" doc:"Código ISO 3166-2 do país da empresa (BR-SP, AR-C, PY-ASU)"`
+	CodigoPostal string `json:"codigo_postal,omitempty" maxLength:"16" doc:"CEP (BR), CPA ou código de 4 dígitos (AR), 6 dígitos (PY); recebido com ou sem máscara, devolvido normalizado"`
 }
 
 // PatchEndereco é o endereço no PATCH, que aceita null para apagar.
 type PatchEndereco struct {
-	_           struct{} `nullable:"true"`
-	Logradouro  string   `json:"logradouro,omitempty" maxLength:"200" nullable:"true"`
-	Numero      string   `json:"numero,omitempty" maxLength:"20" nullable:"true"`
-	Complemento string   `json:"complemento,omitempty" maxLength:"100" nullable:"true"`
-	Bairro      string   `json:"bairro,omitempty" maxLength:"100" nullable:"true"`
-	Municipio   string   `json:"municipio,omitempty" maxLength:"100" nullable:"true"`
-	UF          string   `json:"uf,omitempty" maxLength:"2" nullable:"true"`
-	CEP         string   `json:"cep,omitempty" maxLength:"9" nullable:"true"`
+	_            struct{} `nullable:"true"`
+	Logradouro   string   `json:"logradouro,omitempty" maxLength:"200" nullable:"true"`
+	Numero       string   `json:"numero,omitempty" maxLength:"20" nullable:"true"`
+	Complemento  string   `json:"complemento,omitempty" maxLength:"100" nullable:"true"`
+	Bairro       string   `json:"bairro,omitempty" maxLength:"100" nullable:"true"`
+	Municipio    string   `json:"municipio,omitempty" maxLength:"100" nullable:"true"`
+	Subdivisao   string   `json:"subdivisao,omitempty" maxLength:"6" nullable:"true"`
+	CodigoPostal string   `json:"codigo_postal,omitempty" maxLength:"16" nullable:"true"`
 }
 
 func paraEndereco(e *adm.Endereco) *Endereco {
@@ -198,23 +213,25 @@ type Unidade struct {
 
 // ResumoUnidade é a linha da lista.
 type ResumoUnidade struct {
-	ID           uuid.UUID `json:"id" format:"uuid"`
-	Codigo       string    `json:"codigo"`
-	Nome         string    `json:"nome"`
-	CNPJ         *string   `json:"cnpj"`
-	Endereco     *Endereco `json:"endereco"`
-	FusoHorario  *string   `json:"fuso_horario" doc:"Nulo: herda o da empresa"`
-	Latitude     *float64  `json:"latitude"`
-	Longitude    *float64  `json:"longitude"`
-	Situacao     string    `json:"situacao" enum:"ativa,inativa"`
-	Versao       int64     `json:"versao"`
-	CriadoEm     time.Time `json:"criado_em"`
-	AtualizadoEm time.Time `json:"atualizado_em"`
+	ID                uuid.UUID `json:"id" format:"uuid"`
+	Codigo            string    `json:"codigo"`
+	Nome              string    `json:"nome"`
+	IdentificacaoTipo *string   `json:"identificacao_tipo" doc:"Só o tipo do país da empresa"`
+	Identificacao     *string   `json:"identificacao"`
+	Endereco          *Endereco `json:"endereco"`
+	FusoHorario       *string   `json:"fuso_horario" doc:"Nulo: herda o da empresa"`
+	Latitude          *float64  `json:"latitude"`
+	Longitude         *float64  `json:"longitude"`
+	Situacao          string    `json:"situacao" enum:"ativa,inativa"`
+	Versao            int64     `json:"versao"`
+	CriadoEm          time.Time `json:"criado_em"`
+	AtualizadoEm      time.Time `json:"atualizado_em"`
 }
 
 func paraResumoUnidade(u adm.Unidade) ResumoUnidade {
 	return ResumoUnidade{
-		ID: u.ID, Codigo: u.Codigo, Nome: u.Nome, CNPJ: u.CNPJ, Endereco: paraEndereco(u.Endereco), FusoHorario: u.FusoHorario,
+		ID: u.ID, Codigo: u.Codigo, Nome: u.Nome, IdentificacaoTipo: u.IdentificacaoTipo, Identificacao: u.Identificacao,
+		Endereco: paraEndereco(u.Endereco), FusoHorario: u.FusoHorario,
 		Latitude: u.Latitude, Longitude: u.Longitude, Situacao: u.Situacao, Versao: u.Versao,
 		CriadoEm: api.Instante(u.CriadoEm), AtualizadoEm: api.Instante(u.AtualizadoEm),
 	}
@@ -230,19 +247,21 @@ func paraUnidade(u adm.Unidade) Unidade {
 
 // EntradaUnidade cria a unidade.
 type EntradaUnidade struct {
-	Codigo      string         `json:"codigo" minLength:"1" maxLength:"20"`
-	Nome        string         `json:"nome" minLength:"1" maxLength:"200"`
-	CNPJ        *string        `json:"cnpj,omitempty" maxLength:"18"`
-	Endereco    *Endereco      `json:"endereco,omitempty"`
-	FusoHorario *string        `json:"fuso_horario,omitempty" maxLength:"64"`
-	Latitude    *float64       `json:"latitude,omitempty" minimum:"-90" maximum:"90"`
-	Longitude   *float64       `json:"longitude,omitempty" minimum:"-180" maximum:"180"`
-	Turnos      []EntradaTurno `json:"turnos,omitempty" maxItems:"70" doc:"Só na criação; depois, pelas rotas de turno. Obrigatório em POST /v1/unidades; no cadastro da conta, ausente vale segunda a sexta das 08:00 às 17:00"`
+	Codigo            string         `json:"codigo" minLength:"1" maxLength:"20"`
+	Nome              string         `json:"nome" minLength:"1" maxLength:"200"`
+	IdentificacaoTipo *string        `json:"identificacao_tipo,omitempty" enum:"cnpj,cuit,ruc" doc:"Só o tipo do país da empresa; vai junto com identificacao"`
+	Identificacao     *string        `json:"identificacao,omitempty" maxLength:"24"`
+	Endereco          *Endereco      `json:"endereco,omitempty"`
+	FusoHorario       *string        `json:"fuso_horario,omitempty" maxLength:"64"`
+	Latitude          *float64       `json:"latitude,omitempty" minimum:"-90" maximum:"90"`
+	Longitude         *float64       `json:"longitude,omitempty" minimum:"-180" maximum:"180"`
+	Turnos            []EntradaTurno `json:"turnos,omitempty" maxItems:"70" doc:"Só na criação; depois, pelas rotas de turno. Obrigatório em POST /v1/unidades; no cadastro da conta, ausente vale segunda a sexta das 08:00 às 17:00"`
 }
 
 func deUnidade(e EntradaUnidade) adm.EntradaUnidade {
 	u := adm.EntradaUnidade{
-		Codigo: e.Codigo, Nome: e.Nome, CNPJ: e.CNPJ, Endereco: deEndereco(e.Endereco), FusoHorario: e.FusoHorario,
+		Codigo: e.Codigo, Nome: e.Nome, IdentificacaoTipo: e.IdentificacaoTipo, Identificacao: e.Identificacao,
+		Endereco: deEndereco(e.Endereco), FusoHorario: e.FusoHorario,
 		Latitude: e.Latitude, Longitude: e.Longitude,
 	}
 	for _, t := range e.Turnos {
@@ -253,32 +272,36 @@ func deUnidade(e EntradaUnidade) adm.EntradaUnidade {
 
 // PatchUnidade altera a unidade. Turnos e feriados têm rotas próprias.
 type PatchUnidade struct {
-	Codigo      *string        `json:"codigo,omitempty" minLength:"1" maxLength:"20"`
-	Nome        *string        `json:"nome,omitempty" minLength:"1" maxLength:"200"`
-	CNPJ        *string        `json:"cnpj,omitempty" maxLength:"18" nullable:"true"`
-	Endereco    *PatchEndereco `json:"endereco,omitempty" doc:"Mesclado campo a campo; null apaga o endereço"`
-	FusoHorario *string        `json:"fuso_horario,omitempty" maxLength:"64" nullable:"true"`
-	Latitude    *float64       `json:"latitude,omitempty" minimum:"-90" maximum:"90" nullable:"true"`
-	Longitude   *float64       `json:"longitude,omitempty" minimum:"-180" maximum:"180" nullable:"true"`
+	Codigo            *string        `json:"codigo,omitempty" minLength:"1" maxLength:"20"`
+	Nome              *string        `json:"nome,omitempty" minLength:"1" maxLength:"200"`
+	IdentificacaoTipo *string        `json:"identificacao_tipo,omitempty" nullable:"true" doc:"cnpj, cuit ou ruc: o do país da empresa; vai junto com identificacao"`
+	Identificacao     *string        `json:"identificacao,omitempty" maxLength:"24" nullable:"true"`
+	Endereco          *PatchEndereco `json:"endereco,omitempty" doc:"Mesclado campo a campo; null apaga o endereço"`
+	FusoHorario       *string        `json:"fuso_horario,omitempty" maxLength:"64" nullable:"true"`
+	Latitude          *float64       `json:"latitude,omitempty" minimum:"-90" maximum:"90" nullable:"true"`
+	Longitude         *float64       `json:"longitude,omitempty" minimum:"-180" maximum:"180" nullable:"true"`
 }
 
 type camposUnidade struct {
-	Codigo      string    `json:"codigo"`
-	Nome        string    `json:"nome"`
-	CNPJ        *string   `json:"cnpj"`
-	Endereco    *Endereco `json:"endereco"`
-	FusoHorario *string   `json:"fuso_horario"`
-	Latitude    *float64  `json:"latitude"`
-	Longitude   *float64  `json:"longitude"`
+	Codigo            string    `json:"codigo"`
+	Nome              string    `json:"nome"`
+	IdentificacaoTipo *string   `json:"identificacao_tipo"`
+	Identificacao     *string   `json:"identificacao"`
+	Endereco          *Endereco `json:"endereco"`
+	FusoHorario       *string   `json:"fuso_horario"`
+	Latitude          *float64  `json:"latitude"`
+	Longitude         *float64  `json:"longitude"`
 }
 
 // ------------------------------------------------------------------ pessoa
 
-// Pessoa no detalhe, com o CPF inteiro (a leitura é registrada na trilha).
+// Pessoa no detalhe, com a identificação inteira, que é dado sensível (a leitura
+// é registrada na trilha com sensivel).
 type Pessoa struct {
 	ID                   uuid.UUID  `json:"id" format:"uuid"`
 	Nome                 string     `json:"nome"`
-	CPF                  *string    `json:"cpf" doc:"11 dígitos, sem máscara"`
+	IdentificacaoTipo    *string    `json:"identificacao_tipo" doc:"cpf, cuil, dni ou ci"`
+	Identificacao        *string    `json:"identificacao" doc:"Normalizada, sem máscara; dado sensível"`
 	DataNascimento       *string    `json:"data_nascimento" format:"date"`
 	Matricula            *string    `json:"matricula"`
 	Cargo                *string    `json:"cargo"`
@@ -297,32 +320,34 @@ type Pessoa struct {
 
 func paraPessoa(p adm.Pessoa) Pessoa {
 	return Pessoa{
-		ID: p.ID, Nome: p.Nome, CPF: p.CPF, DataNascimento: p.DataNascimento, Matricula: p.Matricula, Cargo: p.Cargo,
+		ID: p.ID, Nome: p.Nome, IdentificacaoTipo: p.IdentificacaoTipo, Identificacao: p.Identificacao,
+		DataNascimento: p.DataNascimento, Matricula: p.Matricula, Cargo: p.Cargo,
 		Telefone: p.Telefone, Email: p.Email, Vinculo: p.Vinculo, FornecedorID: p.FornecedorID, UnidadeID: p.UnidadeID,
 		RegistroProfissional: p.RegistroProfissional, Situacao: p.Situacao, UsuarioID: p.UsuarioID, Versao: p.Versao,
 		CriadoEm: api.Instante(p.CriadoEm), AtualizadoEm: api.Instante(p.AtualizadoEm),
 	}
 }
 
-// ResumoPessoa é a linha da lista, com o CPF mascarado.
+// ResumoPessoa é a linha da lista, com a identificação mascarada.
 type ResumoPessoa struct {
-	ID           uuid.UUID  `json:"id" format:"uuid"`
-	Nome         string     `json:"nome"`
-	CPFMascarado *string    `json:"cpf_mascarado" example:"***.***.789-01"`
-	Matricula    *string    `json:"matricula"`
-	Cargo        *string    `json:"cargo"`
-	Vinculo      string     `json:"vinculo" enum:"empregado,terceiro,autonomo"`
-	FornecedorID *uuid.UUID `json:"fornecedor_id" format:"uuid"`
-	UnidadeID    *uuid.UUID `json:"unidade_id" format:"uuid"`
-	Situacao     string     `json:"situacao" enum:"ativa,inativa"`
-	UsuarioID    *uuid.UUID `json:"usuario_id" format:"uuid"`
-	Versao       int64      `json:"versao"`
-	CriadoEm     time.Time  `json:"criado_em"`
+	ID                     uuid.UUID  `json:"id" format:"uuid"`
+	Nome                   string     `json:"nome"`
+	IdentificacaoTipo      *string    `json:"identificacao_tipo"`
+	IdentificacaoMascarada *string    `json:"identificacao_mascarada" example:"***.982.247-**" doc:"CPF mostra o miolo; os demais tipos, os 3 últimos caracteres"`
+	Matricula              *string    `json:"matricula"`
+	Cargo                  *string    `json:"cargo"`
+	Vinculo                string     `json:"vinculo" enum:"empregado,terceiro,autonomo"`
+	FornecedorID           *uuid.UUID `json:"fornecedor_id" format:"uuid"`
+	UnidadeID              *uuid.UUID `json:"unidade_id" format:"uuid"`
+	Situacao               string     `json:"situacao" enum:"ativa,inativa"`
+	UsuarioID              *uuid.UUID `json:"usuario_id" format:"uuid"`
+	Versao                 int64      `json:"versao"`
+	CriadoEm               time.Time  `json:"criado_em"`
 }
 
 func paraResumoPessoa(p adm.ResumoPessoa) ResumoPessoa {
 	return ResumoPessoa{
-		ID: p.ID, Nome: p.Nome, CPFMascarado: p.CPFMascarado, Matricula: p.Matricula, Cargo: p.Cargo, Vinculo: p.Vinculo,
+		ID: p.ID, Nome: p.Nome, IdentificacaoTipo: p.IdentificacaoTipo, IdentificacaoMascarada: p.IdentificacaoMascarada, Matricula: p.Matricula, Cargo: p.Cargo, Vinculo: p.Vinculo,
 		FornecedorID: p.FornecedorID, UnidadeID: p.UnidadeID, Situacao: p.Situacao, UsuarioID: p.UsuarioID, Versao: p.Versao,
 		CriadoEm: api.Instante(p.CriadoEm),
 	}
@@ -331,7 +356,8 @@ func paraResumoPessoa(p adm.ResumoPessoa) ResumoPessoa {
 // EntradaPessoa cria a pessoa.
 type EntradaPessoa struct {
 	Nome                 string     `json:"nome" minLength:"1" maxLength:"200"`
-	CPF                  *string    `json:"cpf,omitempty" maxLength:"14" doc:"Com ou sem máscara"`
+	IdentificacaoTipo    *string    `json:"identificacao_tipo,omitempty" enum:"cpf,cuil,dni,ci" doc:"Qualquer país suportado; vai junto com identificacao"`
+	Identificacao        *string    `json:"identificacao,omitempty" maxLength:"24" doc:"Com ou sem máscara; a forma e, no CPF, o dígito verificador são conferidos"`
 	DataNascimento       *string    `json:"data_nascimento,omitempty" format:"date"`
 	Matricula            *string    `json:"matricula,omitempty" maxLength:"40"`
 	Cargo                *string    `json:"cargo,omitempty" maxLength:"100"`
@@ -345,7 +371,7 @@ type EntradaPessoa struct {
 
 func dePessoa(e EntradaPessoa) adm.EntradaPessoa {
 	return adm.EntradaPessoa{
-		Nome: e.Nome, CPF: e.CPF, DataNascimento: e.DataNascimento, Matricula: e.Matricula, Cargo: e.Cargo, Telefone: e.Telefone,
+		Nome: e.Nome, IdentificacaoTipo: e.IdentificacaoTipo, Identificacao: e.Identificacao, DataNascimento: e.DataNascimento, Matricula: e.Matricula, Cargo: e.Cargo, Telefone: e.Telefone,
 		Email: e.Email, Vinculo: e.Vinculo, FornecedorID: e.FornecedorID, UnidadeID: e.UnidadeID,
 		RegistroProfissional: e.RegistroProfissional,
 	}
@@ -354,7 +380,8 @@ func dePessoa(e EntradaPessoa) adm.EntradaPessoa {
 // PatchPessoa altera a pessoa.
 type PatchPessoa struct {
 	Nome                 *string    `json:"nome,omitempty" minLength:"1" maxLength:"200"`
-	CPF                  *string    `json:"cpf,omitempty" maxLength:"14" nullable:"true"`
+	IdentificacaoTipo    *string    `json:"identificacao_tipo,omitempty" nullable:"true" doc:"cpf, cuil, dni ou ci; vai junto com identificacao"`
+	Identificacao        *string    `json:"identificacao,omitempty" maxLength:"24" nullable:"true"`
 	DataNascimento       *string    `json:"data_nascimento,omitempty" format:"date" nullable:"true"`
 	Matricula            *string    `json:"matricula,omitempty" maxLength:"40" nullable:"true"`
 	Cargo                *string    `json:"cargo,omitempty" maxLength:"100" nullable:"true"`
@@ -368,7 +395,8 @@ type PatchPessoa struct {
 
 type camposPessoa struct {
 	Nome                 string     `json:"nome"`
-	CPF                  *string    `json:"cpf"`
+	IdentificacaoTipo    *string    `json:"identificacao_tipo"`
+	Identificacao        *string    `json:"identificacao"`
 	DataNascimento       *string    `json:"data_nascimento"`
 	Matricula            *string    `json:"matricula"`
 	Cargo                *string    `json:"cargo"`
@@ -401,7 +429,10 @@ type Usuario struct {
 	Nome              string            `json:"nome"`
 	Email             *string           `json:"email"`
 	Telefone          *string           `json:"telefone"`
-	CustoHora         *string           `json:"custo_hora" doc:"Custo por hora, texto decimal" example:"125.50"`
+	CustoHora         *string           `json:"custo_hora" pattern:"^(0|[1-9][0-9]{0,11})(\\.[0-9]{1,6})?$" doc:"Custo por hora: preço unitário em texto decimal, com ponto, no mínimo as casas da moeda e até 6; sem sinal" example:"125.50"`
+	Pais              string            `json:"pais" enum:"BR,AR,PY" doc:"País da empresa; só leitura. A interface lê este campo e nunca o deriva da moeda"`
+	Moeda             string            `json:"moeda" enum:"BRL,ARS,PYG" doc:"Moeda de custo_hora: a da empresa; só leitura"`
+	Idioma            string            `json:"idioma" enum:"pt-BR,es-419" doc:"Idioma do usuário; só ele o altera, em PATCH /v1/usuarios/eu"`
 	UnidadePadraoID   *uuid.UUID        `json:"unidade_padrao_id" format:"uuid"`
 	Situacao          string            `json:"situacao" enum:"convidado,ativo,inativo"`
 	Perfis            []PerfilAtribuido `json:"perfis"`
@@ -411,11 +442,21 @@ type Usuario struct {
 	AtualizadoEm      time.Time         `json:"atualizado_em"`
 }
 
+// precoTexto é o texto canônico do preço unitário (documento 5, Parte F, item 4):
+// no mínimo as casas da moeda e no máximo seis, sem zeros à direita além delas.
+func precoTexto(p *dinheiro.PrecoUnitario) *string {
+	if p == nil {
+		return nil
+	}
+	s := p.String()
+	return &s
+}
+
 func paraUsuario(u adm.Usuario) Usuario {
 	out := Usuario{
 		ID: u.ID, PessoaID: u.PessoaID, FornecedorID: u.FornecedorID, LocatarioID: u.LocatarioID, EscopoAcesso: u.EscopoAcesso,
-		Nome: u.Nome, Email: u.Email, Telefone: u.Telefone, CustoHora: api.Dinheiro(u.CustoHoraCentavos),
-		UnidadePadraoID: u.UnidadePadraoID, Situacao: u.Situacao, Perfis: []PerfilAtribuido{},
+		Nome: u.Nome, Email: u.Email, Telefone: u.Telefone, CustoHora: precoTexto(u.CustoHora),
+		Pais: u.Pais, Moeda: u.Moeda, Idioma: u.Idioma, UnidadePadraoID: u.UnidadePadraoID, Situacao: u.Situacao, Perfis: []PerfilAtribuido{},
 		PermissoesAvulsas: append([]string{}, u.PermissoesAvulsas...), Versao: u.Versao,
 		CriadoEm: api.Instante(u.CriadoEm), AtualizadoEm: api.Instante(u.AtualizadoEm),
 	}
@@ -464,7 +505,7 @@ type EntradaUsuario struct {
 	LocatarioID     *uuid.UUID     `json:"locatario_id,omitempty" format:"uuid" doc:"Obrigatório no perfil locatario"`
 	PessoaID        *uuid.UUID     `json:"pessoa_id,omitempty" format:"uuid" doc:"Liga a uma pessoa existente; não use junto com nova_pessoa"`
 	NovaPessoa      *EntradaPessoa `json:"nova_pessoa,omitempty" doc:"Cria a pessoa junto; não use junto com pessoa_id"`
-	CustoHora       *string        `json:"custo_hora,omitempty" maxLength:"16" example:"125.50"`
+	CustoHora       *string        `json:"custo_hora,omitempty" pattern:"^(0|[1-9][0-9]{0,11})(\\.[0-9]{1,6})?$" doc:"Preço unitário em texto decimal, até 6 casas, sem sinal; recusado, sem arredondar, o que a moeda da empresa não representa" example:"125.50"`
 	UnidadePadraoID *uuid.UUID     `json:"unidade_padrao_id,omitempty" format:"uuid"`
 }
 
@@ -472,7 +513,7 @@ type EntradaUsuario struct {
 type PatchUsuario struct {
 	Nome            *string    `json:"nome,omitempty" minLength:"1" maxLength:"200"`
 	Telefone        *string    `json:"telefone,omitempty" maxLength:"30" nullable:"true"`
-	CustoHora       *string    `json:"custo_hora,omitempty" maxLength:"16" nullable:"true"`
+	CustoHora       *string    `json:"custo_hora,omitempty" pattern:"^(0|[1-9][0-9]{0,11})(\\.[0-9]{1,6})?$" nullable:"true"`
 	UnidadePadraoID *uuid.UUID `json:"unidade_padrao_id,omitempty" format:"uuid" nullable:"true"`
 	PessoaID        *uuid.UUID `json:"pessoa_id,omitempty" format:"uuid" nullable:"true"`
 	Perfis          []string   `json:"perfis,omitempty" minItems:"1" maxItems:"12" doc:"Lista completa dos perfis; substitui a atual"`
@@ -490,11 +531,13 @@ type camposUsuario struct {
 type PatchEu struct {
 	Nome     *string `json:"nome,omitempty" minLength:"1" maxLength:"200"`
 	Telefone *string `json:"telefone,omitempty" maxLength:"30" nullable:"true"`
+	Idioma   *string `json:"idioma,omitempty" enum:"pt-BR,es-419" doc:"Só o próprio usuário altera o idioma"`
 }
 
 type camposEu struct {
 	Nome     string  `json:"nome"`
 	Telefone *string `json:"telefone"`
+	Idioma   string  `json:"idioma"`
 }
 
 // EntradaPermissao concede uma permissão avulsa.
@@ -546,12 +589,17 @@ type ResumoEvento struct {
 	OcorridoEm              time.Time  `json:"ocorrido_em"`
 	AtorTipo                string     `json:"ator_tipo" enum:"usuario,sistema,integracao,suporte_tenaz,link_execucao,sincronizacao_conexao"`
 	UsuarioID               *uuid.UUID `json:"usuario_id" format:"uuid"`
+	UsuarioNome             *string    `json:"usuario_nome" doc:"Nome do usuário no instante do evento; a troca de nome não reescreve o histórico"`
 	TokenAPIID              *uuid.UUID `json:"token_api_id" format:"uuid"`
-	Acao                    string     `json:"acao"`
+	Acao                    string     `json:"acao" enum:"login,logout,inclusao,alteracao,exclusao,delecao,visualizacao,impressao,extracao" doc:"Tipo de operação (lista fechada, sumário 3.6)"`
+	Resultado               string     `json:"resultado" enum:"sucesso,falha" doc:"falha só em login; o motivo está em depois do detalhe do evento"`
 	Entidade                string     `json:"entidade"`
 	EntidadeID              *uuid.UUID `json:"entidade_id" format:"uuid"`
 	EntidadeChave           *string    `json:"entidade_chave"`
 	CamposAlterados         []string   `json:"campos_alterados"`
+	Modulo                  *string    `json:"modulo" doc:"Código do módulo (sumário, seção 2), em minúsculas"`
+	Tela                    *string    `json:"tela" doc:"Tela de origem, <modulo>.<tela> do catálogo fechado; nula em API, job e sincronização"`
+	Sensivel                bool       `json:"sensivel" doc:"O registro mostrado, impresso ou extraído tem dado sensível"`
 	Origem                  *string    `json:"origem" enum:"web,app,api,job,importacao"`
 	IP                      *string    `json:"ip"`
 	DispositivoID           *uuid.UUID `json:"dispositivo_id" format:"uuid"`
@@ -566,8 +614,9 @@ func paraResumoEvento(e adm.ResumoEvento) ResumoEvento {
 		campos = []string{}
 	}
 	return ResumoEvento{
-		ID: e.ID, OcorridoEm: api.Instante(e.OcorridoEm), AtorTipo: e.AtorTipo, UsuarioID: e.UsuarioID, TokenAPIID: e.TokenAPIID,
-		Acao: e.Acao, Entidade: e.Entidade, EntidadeID: e.EntidadeID, EntidadeChave: e.EntidadeChave, CamposAlterados: campos,
+		ID: e.ID, OcorridoEm: api.Instante(e.OcorridoEm), AtorTipo: e.AtorTipo, UsuarioID: e.UsuarioID, UsuarioNome: e.UsuarioNome,
+		TokenAPIID: e.TokenAPIID, Acao: e.Acao, Resultado: e.Resultado, Entidade: e.Entidade, EntidadeID: e.EntidadeID,
+		EntidadeChave: e.EntidadeChave, CamposAlterados: campos, Modulo: e.Modulo, Tela: e.Tela, Sensivel: e.Sensivel,
 		Origem: e.Origem, IP: e.IP, DispositivoID: e.DispositivoID, RequestID: e.RequestID, ConexaoEmpresaID: e.ConexaoEmpresaID,
 		OcorridoNoDispositivoEm: api.InstanteOpcional(e.OcorridoNoDispositivoEm),
 	}
@@ -577,12 +626,50 @@ func paraResumoEvento(e adm.ResumoEvento) ResumoEvento {
 type Evento struct {
 	ResumoEvento
 	Antes     json.RawMessage `json:"antes" doc:"Valores antes da alteração; nulo na criação"`
-	Depois    json.RawMessage `json:"depois" doc:"Valores depois da alteração; nulo na exclusão"`
+	Depois    json.RawMessage `json:"depois" doc:"Valores depois da alteração; nulo na exclusão. Na falha de login, traz o motivo"`
+	Detalhe   json.RawMessage `json:"detalhe" doc:"Filtros, formato e quantidade de uma impressão ou extração; nunca o conteúdo mostrado"`
+	Hash      string          `json:"hash" pattern:"^[0-9a-f]{64}$" doc:"sha256, em hexadecimal, do conteúdo do evento (formato 1, documento 2, seção 9.2.1)"`
 	UserAgent *string         `json:"user_agent"`
 }
 
 func paraEvento(e adm.Evento) Evento {
-	return Evento{ResumoEvento: paraResumoEvento(e.ResumoEvento), Antes: jsonOuNulo(e.Antes), Depois: jsonOuNulo(e.Depois), UserAgent: e.UserAgent}
+	return Evento{ResumoEvento: paraResumoEvento(e.ResumoEvento), Antes: jsonOuNulo(e.Antes), Depois: jsonOuNulo(e.Depois),
+		Detalhe: jsonOuNulo(e.Detalhe), Hash: hex.EncodeToString(e.Hash), UserAgent: e.UserAgent}
+}
+
+// DiaVerificado é o resultado da verificação de integridade de um dia UTC.
+type DiaVerificado struct {
+	Dia      string     `json:"dia" format:"date" doc:"Dia UTC"`
+	Estado   string     `json:"estado" enum:"integro,violado,nao_selado"`
+	Motivo   *string    `json:"motivo" doc:"Em violado: evento_alterado, eventos_divergentes, selo_adulterado, cadeia_quebrada, selo_ausente, evento_anterior_ao_primeiro_selo, copia_ausente ou copia_divergente. Em nao_selado: ainda_nao_selado ou anterior_ao_primeiro_selo"`
+	EventoID *uuid.UUID `json:"evento_id" format:"uuid" doc:"Primeiro evento alterado, quando há como apontar"`
+}
+
+func paraDiaVerificado(d adm.DiaVerificado) DiaVerificado {
+	return DiaVerificado{Dia: d.Dia.UTC().Format("2006-01-02"), Estado: d.Estado, Motivo: d.Motivo, EventoID: d.EventoID}
+}
+
+// CapturaAuditoria é a configuração de uma tela do catálogo.
+type CapturaAuditoria struct {
+	Tela         string `json:"tela" example:"adm.pessoas" doc:"<modulo>.<tela> do catálogo fechado"`
+	Modulo       string `json:"modulo" example:"adm"`
+	Nome         string `json:"nome" example:"Pessoas"`
+	Visualizacao bool   `json:"visualizacao" doc:"Grava um evento por registro aberto nesta tela"`
+	Impressao    bool   `json:"impressao" doc:"Grava a impressão (PDF ou tela) feita nesta tela"`
+	Extracao     bool   `json:"extracao" doc:"Grava a extração (lista, relatório, exportação) feita nesta tela"`
+	Configurada  bool   `json:"configurada" doc:"Falso: a empresa ainda não mudou nenhuma chave desta tela e vale o padrão (impressão e extração ligadas, visualização desligada)"`
+}
+
+func paraCapturaAuditoria(c adm.CapturaAuditoria) CapturaAuditoria {
+	return CapturaAuditoria{Tela: c.Tela, Modulo: c.Modulo, Nome: c.Nome, Visualizacao: c.Visualizacao,
+		Impressao: c.Impressao, Extracao: c.Extracao, Configurada: c.Configurada}
+}
+
+// EntradaCapturaAuditoria são as três chaves de uma tela: sempre as três.
+type EntradaCapturaAuditoria struct {
+	Visualizacao bool `json:"visualizacao"`
+	Impressao    bool `json:"impressao"`
+	Extracao     bool `json:"extracao"`
 }
 
 func jsonOuNulo(b []byte) json.RawMessage {

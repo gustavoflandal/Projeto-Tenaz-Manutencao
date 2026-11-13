@@ -19,6 +19,8 @@ import (
 	"github.com/google/uuid"
 
 	"tenaz/internal/modulos/adm"
+	"tenaz/internal/plataforma/armazenamento"
+	"tenaz/internal/plataforma/auditoria"
 	"tenaz/internal/plataforma/autenticacao"
 	"tenaz/internal/plataforma/autorizacao"
 	"tenaz/internal/plataforma/db"
@@ -27,10 +29,15 @@ import (
 )
 
 var (
-	amb   *dbteste.Ambiente
-	auth  *autenticacao.Servico
-	svc   adm.Servico
-	caixa = &caixaDeEntrada{}
+	amb  *dbteste.Ambiente
+	auth *autenticacao.Servico
+	svc  adm.Servico
+	aud  *auditoria.Servico
+
+	verificador     *auditoria.Verificador
+	bucket          *armazenamento.S3 // nil: sem armazenamento (motivoSemBucket diz por quê)
+	motivoSemBucket string
+	caixa           = &caixaDeEntrada{}
 )
 
 // caixaDeEntrada é o Enviador dos testes: guarda as mensagens em memória.
@@ -93,7 +100,26 @@ func TestMain(m *testing.M) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	svc, err = adm.Novo(adm.Dependencias{Banco: amb.App, Autenticacao: auth})
+	aud, err = auditoria.Novo(auditoria.Dependencias{Banco: amb.App})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	// O armazenamento do selo é opcional no TestMain: os testes que o exigem
+	// se pulam se ele não responde.
+	var arm armazenamento.Armazenamento
+	if s3, _, errS3 := dbteste.ArmazenamentoS3(ctx); errS3 == nil {
+		arm = s3
+		bucket = s3
+	} else {
+		motivoSemBucket = errS3.Error()
+	}
+	verificador, err = auditoria.NovoVerificador(amb.App, arm)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	svc, err = adm.Novo(adm.Dependencias{Banco: amb.App, Autenticacao: auth, Auditoria: aud, Verificador: verificador})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -193,7 +219,7 @@ func novaConta(t *testing.T, plano string) conta {
 		p = &plano
 	}
 	c, err := svc.CriarConta(ctx, adm.EntradaCriarConta{
-		CNPJ: cnpjAleatorio(), RazaoSocial: "Transportes Teste Ltda", Plano: p,
+		Pais: "BR", IdentificacaoTipo: "cnpj", Identificacao: cnpjAleatorio(), RazaoSocial: "Transportes Teste Ltda", Plano: p,
 		Responsavel: adm.EntradaResponsavel{Nome: "Ana Administradora", Email: em},
 		Unidade:     adm.EntradaUnidade{Codigo: "MTZ", Nome: "Matriz", Turnos: turnosComerciais()},
 	})
@@ -203,7 +229,7 @@ func novaConta(t *testing.T, plano string) conta {
 	if !c.ConviteEnviado {
 		t.Fatal("o convite do responsável deveria ter saído")
 	}
-	if _, err := svc.AceitarConvite(ctx, caixa.token(t, em), senhaBoa); err != nil {
+	if _, err := svc.AceitarConvite(ctx, caixa.token(t, em), senhaBoa, nil); err != nil {
 		t.Fatalf("aceitar convite: %v", err)
 	}
 	a, cookie := entrar(t, em, senhaBoa, &c.EmpresaID)
@@ -241,7 +267,7 @@ func convidarEEntrar(t *testing.T, c conta, e adm.EntradaUsuario) (adm.Usuario, 
 	if err != nil {
 		t.Fatalf("criar usuário: %v", err)
 	}
-	if _, err := svc.AceitarConvite(ctx, caixa.token(t, e.Email), senhaBoa); err != nil {
+	if _, err := svc.AceitarConvite(ctx, caixa.token(t, e.Email), senhaBoa, nil); err != nil {
 		t.Fatalf("aceitar convite: %v", err)
 	}
 	a, _ := entrar(t, e.Email, senhaBoa, &c.criada.EmpresaID)

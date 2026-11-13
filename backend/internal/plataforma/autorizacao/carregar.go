@@ -28,17 +28,17 @@ func Carregar(ctx context.Context, empresaID, usuarioID uuid.UUID) (Ator, error)
 	}
 	u, err := q.AutzBuscarUsuario(ctx, consultas.AutzBuscarUsuarioParams{EmpresaID: empresaID, ID: usuarioID})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return Ator{}, erros.CredencialInvalida.Com("usuário não encontrado")
+		return Ator{}, erros.CredencialInvalida.Tecnico("usuário não encontrado")
 	}
 	if err != nil {
 		return Ator{}, fmt.Errorf("ler usuário: %w", err)
 	}
 	if u.Situacao != "ativo" || u.IdentidadeID == nil {
-		return Ator{}, erros.CredencialInvalida.Com("usuário não está ativo")
+		return Ator{}, erros.CredencialInvalida.Tecnico("usuário não está ativo")
 	}
 	emp, err := q.AutzBuscarEmpresa(ctx, empresaID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return Ator{}, erros.CredencialInvalida.Com("empresa não encontrada")
+		return Ator{}, erros.CredencialInvalida.Tecnico("empresa não encontrada")
 	}
 	if err != nil {
 		return Ator{}, fmt.Errorf("ler empresa: %w", err)
@@ -96,6 +96,10 @@ func Carregar(ctx context.Context, empresaID, usuarioID uuid.UUID) (Ator, error)
 		Plano:          emp.Plano,
 		SrvHabilitado:  emp.SrvHabilitado,
 		MFAObrigatorio: emp.MfaObrigatorio,
+		Idioma:         u.Idioma,
+		IdiomaEmpresa:  emp.IdiomaPadrao,
+		Pais:           emp.Pais,
+		Moeda:          emp.Moeda,
 	}, nil
 }
 

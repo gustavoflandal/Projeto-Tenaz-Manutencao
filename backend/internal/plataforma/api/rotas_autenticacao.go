@@ -41,6 +41,7 @@ type UsuarioSessao struct {
 	Email    string     `json:"email" format:"email"`
 	PessoaID *uuid.UUID `json:"pessoa_id" format:"uuid"`
 	MFAAtivo bool       `json:"mfa_ativo" doc:"Segundo fator por TOTP ativo"`
+	Idioma   string     `json:"idioma" enum:"pt-BR,es-419" doc:"Idioma do usuário (usuario.idioma); só leitura aqui, a troca é PATCH /v1/usuarios/eu"`
 }
 
 // EmpresaSessao é a empresa atual. O identificador não aparece: a empresa
@@ -49,6 +50,9 @@ type EmpresaSessao struct {
 	Nome          string  `json:"nome"`
 	Plano         *string `json:"plano" enum:"essencial,profissional,enterprise" doc:"Nulo na conta só do plano Serviços"`
 	SrvHabilitado bool    `json:"srv_habilitado" doc:"Módulo SRV habilitado (conta de subcontratada)"`
+	Pais          string  `json:"pais" enum:"BR,AR,PY" doc:"País da empresa (ISO 3166-1 alfa-2); só leitura"`
+	Moeda         string  `json:"moeda" enum:"BRL,ARS,PYG" doc:"Moeda da empresa, dada pelo país; só leitura"`
+	IdiomaPadrao  string  `json:"idioma_padrao" enum:"pt-BR,es-419" doc:"Idioma padrão da empresa (empresa.idioma_padrao)"`
 }
 
 // EmpresaAcesso é uma empresa do seletor.
@@ -75,7 +79,7 @@ func montarSessao(info autenticacao.InfoSessao) Sessao {
 	a := info.Ator
 	s := Sessao{
 		Canal: a.Canal, EscopoAcesso: a.Escopo.Tipo,
-		Usuario: UsuarioSessao{ID: a.UsuarioID, Nome: info.Nome, Email: info.Email, PessoaID: a.PessoaID, MFAAtivo: info.MFAAtivo},
+		Usuario: UsuarioSessao{ID: a.UsuarioID, Nome: info.Nome, Email: info.Email, PessoaID: a.PessoaID, MFAAtivo: info.MFAAtivo, Idioma: a.Idioma},
 		Perfis:  append([]string{}, a.Perfis...), Permissoes: a.Permissoes.Lista(),
 		Empresas: []EmpresaAcesso{}, MFAPendente: info.MFAPendente,
 	}
@@ -89,7 +93,7 @@ func montarSessao(info autenticacao.InfoSessao) Sessao {
 	for _, e := range info.Empresas {
 		ea := EmpresaAcesso{ID: e.EmpresaID, Nome: e.Nome, Atual: e.EmpresaID == a.EmpresaID}
 		if ea.Atual {
-			s.Empresa = EmpresaSessao{Nome: e.Nome, Plano: a.Plano, SrvHabilitado: a.SrvHabilitado}
+			s.Empresa = EmpresaSessao{Nome: e.Nome, Plano: a.Plano, SrvHabilitado: a.SrvHabilitado, Pais: a.Pais, Moeda: a.Moeda, IdiomaPadrao: a.IdiomaEmpresa}
 			s.Empresas = append([]EmpresaAcesso{ea}, s.Empresas...)
 		} else {
 			s.Empresas = append(s.Empresas, ea)
@@ -221,7 +225,7 @@ func registrarAutenticacao(s *Servidor) {
 		if errors.Is(err, erros.CredencialInvalida) {
 			// A mesma mensagem para e-mail inexistente, senha errada e conta
 			// bloqueada: a resposta não revela qual foi (documento 9, 5.3).
-			return nil, erros.CredencialInvalida.Com("E-mail ou senha incorretos, ou acesso bloqueado por algum tempo. Confira os dados ou peça um link de redefinição de senha.")
+			return nil, erros.CredencialInvalida.ComChave("detalhe.login_invalido", nil)
 		}
 		if err != nil {
 			return nil, err
@@ -243,10 +247,10 @@ func registrarAutenticacao(s *Servidor) {
 		})
 		var e *erros.Erro
 		if errors.As(err, &e) && errors.Is(e, erros.MFACodigoInvalido) {
-			return nil, e.Com("Código incorreto. Confira o código atual do aplicativo autenticador.")
+			return nil, e.ComChave("detalhe.mfa_codigo_incorreto", nil)
 		}
 		if errors.Is(err, erros.CredencialInvalida) {
-			return nil, erros.CredencialInvalida.Com("O desafio venceu, já foi usado ou esgotou as tentativas; entre de novo com e-mail e senha.")
+			return nil, erros.CredencialInvalida.ComChave("detalhe.mfa_desafio", nil)
 		}
 		if err != nil {
 			return nil, err
@@ -423,7 +427,7 @@ func registrarAutenticacao(s *Servidor) {
 func (s *Servidor) concluirLogin(ctx context.Context, r autenticacao.ResultadoLogin) (*saidaSessao, error) {
 	if r.DesafioMFA != nil {
 		return nil, erros.MFAObrigatorio.
-			Com("Informe o código do aplicativo autenticador em POST /v1/auth/mfa/verificar.").
+			ComChave("detalhe.mfa_informe_codigo", nil).
 			ComDado("desafio_id", r.DesafioMFA.DesafioID).
 			ComDado("desafio_expira_em", r.DesafioMFA.ExpiraEm)
 	}
@@ -619,7 +623,7 @@ func registrarOAuth(s *Servidor) {
 		}
 		if err != nil {
 			if errors.Is(err, erros.CredencialInvalida) {
-				return nil, erros.CredencialInvalida.Com("Código ou refresh token inválido, vencido ou já usado; entre de novo.").
+				return nil, erros.CredencialInvalida.ComChave("detalhe.refresh_invalido", nil).
 					ComDado("error", "invalid_grant")
 			}
 			return nil, err

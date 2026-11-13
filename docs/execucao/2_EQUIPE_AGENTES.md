@@ -1,9 +1,9 @@
 # Equipe de Agentes — Tenaz
 
-**Versão:** 0.1 · **Data:** 12/11/2026 · **Status:** Em elaboração
+**Versão:** 0.3 · **Data:** 13/11/2026 · **Status:** Em elaboração
 **Produto:** Tenaz · Gestão de Manutenção e Frota
 
-Catálogo dos 16 agentes especializados que executam o projeto. A definição executável de cada um está em [../../.claude/agents/](../../.claude/agents/); este documento explica a divisão de trabalho, o que cada agente é dono e quando chamá-lo. As regras de orquestração estão em [1_MODELO_EXECUCAO.md](1_MODELO_EXECUCAO.md), seção 5.
+Catálogo dos 18 agentes especializados que executam o projeto. A definição executável de cada um está em [../../.claude/agents/](../../.claude/agents/); este documento explica a divisão de trabalho, o que cada agente é dono e quando chamá-lo. As regras de orquestração estão em [1_MODELO_EXECUCAO.md](1_MODELO_EXECUCAO.md), seção 5.
 
 ---
 
@@ -224,7 +224,7 @@ Os três agentes sem equivalente existem porque este projeto tem exigências que
 | **Decide** | Como a norma se traduz em campo, validação e evidência; que pergunta fazer ao apoio externo |
 | **Chamar quando** | A etapa toca NR-12, NR-13, LOTO, documentos com vencimento, capacitações, CNH, MOPP, assinatura, LGPD, NF-e ou CFOP |
 | **Não faz** | Dar parecer jurídico, contábil ou de SST. Prepara o material e a pergunta; a resposta é da pessoa contratada (P1, P2, P6, P8) |
-| **Portão que guarda** | OS de máquina NR-12 não conclui sem os sete campos do item 12.11.2; dado de saúde só com a permissão própria |
+| **Portão que guarda** | OS de máquina NR-12 não conclui sem os sete campos do item 12.11.2; nenhum dado de saúde no produto (sumário 3.6) |
 
 ### 8.2 `tenaz-integracoes-dados`
 
@@ -235,6 +235,30 @@ Os três agentes sem equivalente existem porque este projeto tem exigências que
 | **Chamar quando** | A etapa toca telemática, cartão combustível, ERP, importação de planilha, IoT, assistente de IA ou indicador avançado |
 | **Não faz** | Deixar a IA gravar sem confirmação humana (princípio 6 da arquitetura) |
 | **Portão que guarda** | Toda integração com timeout, retry, disjuntor e idempotência; nenhum dado de empresa cruza a busca vetorial |
+
+### 8.3 `tenaz-conformidade-mercosul`
+
+| | |
+|---|---|
+| **Dono de** | A interpretação das normas da Argentina e do Paraguai nos requisitos, por país; a pesquisa de legislação vigente, com fontes, em [../pesquisa/](../pesquisa/); o preparo das pendências P12, P13 e P14 do sumário |
+| **Decide** | Como a norma de cada país se traduz em campo, validação e evidência, em cima da base comum; que pergunta fazer ao apoio externo do país |
+| **Chamar quando** | A etapa toca algo que depende do país da empresa: segurança do trabalho em máquinas e vasos de pressão, documentos de veículo e de condutor, identificação fiscal, fatura eletrônica, proteção de dados e transferência internacional |
+| **Não faz** | Dar parecer jurídico, contábil ou de segurança do trabalho; aplicar regra brasileira a empresa de outro país, ou o contrário |
+| **Portão que guarda** | Toda regra por país cita a fonte oficial com data da consulta; nada é declarado conforme sem o apoio externo do país |
+
+Criado em 13/11/2026, a pedido do dono do produto, quando a Tenaz passou a ser multipaís desde o MVP ([etapa 014](../etapas/014_2026-11-13_multipais-e-idiomas.md)). O Brasil continua com o `tenaz-conformidade-br`.
+
+### 8.4 `tenaz-idiomas`
+
+| | |
+|---|---|
+| **Dono de** | O glossário bilíngue do vocabulário canônico (`pt-BR` e `es-419`); a revisão dos catálogos de textos; as regras de formato de data, hora, número e moeda por idioma e país; o tom de voz em espanhol |
+| **Decide** | A tradução aprovada de cada termo da interface; se um texto está pronto nos dois idiomas |
+| **Chamar quando** | Nasce ou muda texto visível ao usuário (tela, e-mail, notificação, documento gerado, mensagem de erro), e antes de uma tela ir para evidência |
+| **Não faz** | Traduzir nome canônico do banco, da API ou do código; aceitar tradução automática sem revisão |
+| **Portão que guarda** | Nenhuma tela vai para evidência com texto faltando num dos dois idiomas ou com termo fora do glossário |
+
+Criado em 13/11/2026, a pedido do dono do produto, junto com o `tenaz-conformidade-mercosul`.
 
 ---
 
@@ -252,6 +276,19 @@ Os três agentes sem equivalente existem porque este projeto tem exigências que
 
 ---
 
+## 9-b. Modelo de cada agente
+
+Decisão do dono do produto em 13/11/2026, na etapa E01, para baixar o custo sem perder o rigor: **Sonnet** para os agentes que executam e **Opus** para os quatro guardiões, cuja falha passa despercebida e custa caro. A revisão cruzada da seção 5.3 do [modelo de execução](1_MODELO_EXECUCAO.md) continua valendo: o erro de quem executa é pego por quem revisa. O modelo de cada agente fica no campo `model` do arquivo em [../../.claude/agents/](../../.claude/agents/).
+
+| Modelo | Agentes | Por quê |
+|---|---|---|
+| **Opus** | `tenaz-isolamento`, `tenaz-qa-automacao`, `tenaz-arquiteto`, `tenaz-conexao-contas` | Guardam os riscos críticos R2, R4 e R5 do sumário e as decisões estruturais. Na E01 foram as revisões deles que acharam os vazamentos ISO-E01-01 a 10 e as mutações que a suíte não detectava |
+| **Sonnet** | `tenaz-conformidade-mercosul`, `tenaz-idiomas`, `tenaz-produto`, `tenaz-dominio-manutencao`, `tenaz-banco-dados`, `tenaz-backend-go`, `tenaz-api-contrato`, `tenaz-design-sistema`, `tenaz-frontend-web`, `tenaz-mobile-offline`, `tenaz-plataforma-sre`, `tenaz-documentacao`, `tenaz-conformidade-br`, `tenaz-integracoes-dados` | Executam com regras e documentos claros, e todo trabalho deles passa por um revisor da seção 5.3 |
+
+O Haiku não é usado: o trabalho exige seguir ao mesmo tempo o vocabulário canônico, a documentação idempotente ao código e as regras de isolamento. A sessão principal (o orquestrador) usa o modelo escolhido pelo dono do produto no Claude Code.
+
+Se uma revisão de um guardião mostrar que um executor em Sonnet erra de forma repetida no mesmo tipo de tarefa, o agente volta ao Opus por decisão registrada no registro da etapa.
+
 ## 10. Como manter este catálogo
 
 1. Agente novo ou papel alterado: atualize a definição em [../../.claude/agents/](../../.claude/agents/) **e** este documento, no mesmo commit.
@@ -263,3 +300,5 @@ Os três agentes sem equivalente existem porque este projeto tem exigências que
 **Histórico de versões**
 
 - v0.1 (12/11/2026): primeira versão. Dezesseis agentes em seis grupos, correspondência com o time de 15 pessoas do roadmap 0.3, donos, portões e regra de manutenção do catálogo.
+- v0.2 (13/11/2026): seção 9-b, modelo de cada agente (Sonnet para os executores, Opus para isolamento, QA, arquitetura e conexão entre contas), por decisão do dono do produto na etapa E01; contagem de regras de negócio atualizada.
+- v0.3 (13/11/2026): dois agentes novos, `tenaz-conformidade-mercosul` (Argentina e Paraguai) e `tenaz-idiomas` (pt-BR e es-419), a pedido do dono do produto com o escopo multipaís (etapa 014); o portão do `tenaz-conformidade-br` passa a dizer que não há dado de saúde no produto. São 18 agentes.
