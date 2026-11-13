@@ -1,16 +1,36 @@
-# Tabelas permitidas sem a coluna empresa_id.
+# Tabelas fora do RLS por empresa (seção 2.11 de docs/2_ARQUITETURA_BANCO_DADOS.md).
 #
-# Uma tabela entra aqui apenas se for catálogo global da Tenaz ou controle da
-# própria plataforma — nunca dado de cliente. Acrescentar uma linha é decisão
+# Entram aqui: as tabelas de app sem empresa_id e TODAS as tabelas de
+# plataforma, tenham ou não empresa_id — em plataforma não há RLS, e a defesa é
+# outra (privilégio por coluna, FK composta, só hash), conferida em
+# privilegios.txt e nos testes de plataforma. Acrescentar uma linha é decisão
 # de revisão de código, e o revisor é o agente tenaz-isolamento.
 #
 # Pergunta de controle antes de acrescentar: duas empresas diferentes podem
 # ver a mesma linha sem nenhum problema? Se a resposta tem qualquer "depende",
-# a tabela NÃO é global e precisa de empresa_id.
+# a tabela NÃO é global: precisa de empresa_id e de RLS, ou de um papel próprio
+# que a isole dos módulos de negócio (ver o achado ISO-E01-02).
 #
-# A suíte de vazamento quebra o build quando aparece em app ou plataforma uma
-# tabela sem empresa_id que não esteja nesta lista.
+# A suíte quebra o build quando aparece em app ou plataforma uma tabela fora do
+# RLS que não esteja nesta lista, e quando uma linha daqui não existe no banco.
 #
-# Formato: esquema.tabela  # justificativa
+# Classe (segundo campo), que decide a regra de dono e de privilégio:
+#   tenant      app.empresa: o próprio tenant, com RLS por id
+#   credencial  credencial de autenticação: dono tenaz_credencial, só o
+#               tenaz_autenticacao alcança (ADR-011, ISO-E01-08)
+#   catalogo    catálogo global só leitura, mantido por migração
+#   controle    controle da própria plataforma (migrações)
+# Tabela de plataforma sem RLS, de dono tenaz_dono, que não seja catalogo nem
+# controle quebra o build: o tenaz_manutencao, membro do dono, a leria.
+#
+# Formato: esquema.tabela  classe  # justificativa
 
-plataforma.migracao   # controle de versão do esquema, do goose; não tem dado de negócio
+plataforma.migracao            controle    # controle de versão do esquema, do goose; não tem dado de negócio
+app.empresa                    tenant      # o próprio tenant: não tem empresa_id, e sim id; RLS forçado com policies por id (seção 2.3)
+plataforma.identidade          credencial  # login global, lido antes de a empresa ser conhecida; uma identidade serve a várias empresas (seção 5.1). Só o tenaz_autenticacao alcança (ADR-011)
+plataforma.acesso_empresa      credencial  # vínculo identidade-empresa, mantido só pelo trigger SECURITY DEFINER a partir de app.usuario; só o tenaz_autenticacao lê (ADR-011)
+plataforma.sessao              credencial  # sessão web e do app; chega sem empresa (cookie). Só o tenaz_autenticacao alcança (ADR-011); empresa_id fixado na criação, sem UPDATE, FK composta para app.usuario
+plataforma.token_renovacao     credencial  # refresh token rotativo, só hash; a empresa vem da sessão (familia_id)
+plataforma.codigo_autorizacao  credencial  # código OAuth de uso único, só hash; empresa fixada na criação, FK composta para app.usuario
+plataforma.desafio_mfa         credencial  # passo entre a senha e o TOTP, antes da escolha da empresa; só hash, sem empresa
+plataforma.token_email         credencial  # link de convite, redefinição e verificação, só hash; o convite tem FK composta para app.usuario

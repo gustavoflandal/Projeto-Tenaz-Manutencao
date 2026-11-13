@@ -122,11 +122,15 @@ func TestVariavelVaziaNaoEstouraOCast(t *testing.T) {
 }
 
 // app.conferir_escopo() recusa a transação quando o contexto está incoerente.
-// Cada caso abaixo é um jeito real de errar.
+// Cada caso abaixo é um jeito real de errar. Desde a 00004 a função confere o
+// escopo contra a linha de app.usuario, então os casos usam os usuários das
+// fixtures: um usuário inventado é recusado, corretamente, até no escopo
+// interno.
 func TestConferirEscopoRecusaContextoInvalido(t *testing.T) {
 	ctx := context.Background()
-	empresa := uuid.New().String()
-	usuario := uuid.New().String()
+	f := fixtures(t)
+	empresa := f.A.ID
+	usuario := f.A.UsuarioInterno
 
 	casos := []struct {
 		nome     string
@@ -195,6 +199,70 @@ func TestConferirEscopoRecusaContextoInvalido(t *testing.T) {
 			},
 			recusa: false,
 		},
+		{
+			nome:     "usuário inventado",
+			contexto: map[string]string{"app.empresa_id": empresa, "app.escopo": "interno", "app.usuario_id": uuid.New().String()},
+			recusa:   true,
+			motivo:   "usuário que não existe na empresa",
+		},
+		{
+			nome:     "usuário de outra empresa",
+			contexto: map[string]string{"app.empresa_id": empresa, "app.escopo": "interno", "app.usuario_id": f.B.UsuarioInterno},
+			recusa:   true,
+			motivo:   "o usuário é de B e a transação é de A",
+		},
+		{
+			nome:     "usuário inativo",
+			contexto: map[string]string{"app.empresa_id": empresa, "app.escopo": "interno", "app.usuario_id": f.A.UsuarioInativo},
+			recusa:   true,
+			motivo:   "usuário inativo não abre transação",
+		},
+		{
+			nome:     "prestador marcado como interno",
+			contexto: map[string]string{"app.empresa_id": empresa, "app.escopo": "interno", "app.usuario_id": f.UsuarioF1},
+			recusa:   true,
+			motivo:   "o cadastro diz prestador",
+		},
+		{
+			nome: "prestador com o fornecedor de outro",
+			contexto: map[string]string{"app.empresa_id": empresa, "app.escopo": "prestador",
+				"app.usuario_id": f.UsuarioF1, "app.fornecedor_id": f.F2},
+			recusa: true,
+			motivo: "usuário de F1 com fornecedor F2 no contexto",
+		},
+		{
+			nome: "interno se passando por prestador",
+			contexto: map[string]string{"app.empresa_id": empresa, "app.escopo": "prestador",
+				"app.usuario_id": usuario, "app.fornecedor_id": f.F1},
+			recusa: true,
+			motivo: "o cadastro diz interno",
+		},
+		{
+			nome: "locatário com o locatário de outro",
+			contexto: map[string]string{"app.empresa_id": empresa, "app.escopo": "locatario",
+				"app.usuario_id": f.UsuarioL1, "app.locatario_id": f.L2},
+			recusa: true,
+			motivo: "usuário de L1 com locatário L2 no contexto",
+		},
+		{
+			nome: "prestador de B com o mesmo fornecedor_id, na empresa A",
+			contexto: map[string]string{"app.empresa_id": empresa, "app.escopo": "prestador",
+				"app.usuario_id": f.UsuarioBMesmoFornecedor, "app.fornecedor_id": f.F1},
+			recusa: true,
+			motivo: "o usuário é de B; o fornecedor_id igual não o leva para A",
+		},
+		{
+			nome: "prestador coerente",
+			contexto: map[string]string{"app.empresa_id": empresa, "app.escopo": "prestador",
+				"app.usuario_id": f.UsuarioF1, "app.fornecedor_id": f.F1},
+			recusa: false,
+		},
+		{
+			nome: "locatário coerente",
+			contexto: map[string]string{"app.empresa_id": empresa, "app.escopo": "locatario",
+				"app.usuario_id": f.UsuarioL1, "app.locatario_id": f.L1},
+			recusa: false,
+		},
 	}
 
 	for _, c := range casos {
@@ -211,6 +279,9 @@ func TestConferirEscopoRecusaContextoInvalido(t *testing.T) {
 
 			if c.recusa && err == nil {
 				t.Errorf("app.conferir_escopo() aceitou o contexto, mas deveria recusar: %s", c.motivo)
+			}
+			if c.recusa && err != nil && sqlstate(err) != erroPrivilegio {
+				t.Errorf("app.conferir_escopo() recusou com erro inesperado (%v); esperado %s", err, erroPrivilegio)
 			}
 			if !c.recusa && err != nil {
 				t.Errorf("app.conferir_escopo() recusou um contexto válido: %v", err)

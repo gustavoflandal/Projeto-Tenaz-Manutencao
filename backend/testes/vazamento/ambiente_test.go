@@ -11,15 +11,28 @@
 //	R4  prestador ou locatário vendo dado alheio — RNF-037, RNF-038
 //	R5  sincronização copiando além do permitido — RNF-041, RNF-042
 //
-// Nesta etapa (E00) ainda não existe tabela de negócio, então o que a suíte
-// verifica é a COBERTURA: que o mecanismo de detecção existe e quebra o build
-// no instante em que uma tabela nascer sem defesa. A prova de que o detector
-// funciona está em TestDetectorAcusaTabelaSemPolitica, que cria de propósito
-// uma tabela malformada e exige que a verificação a acuse.
+// Organização (a partir de E01):
+//
+//	cobertura_test.go  RLS forçado e policies exatas em toda tabela; partições;
+//	                   exceções versionadas; tabelas globais
+//	catalogo_test.go   FK composta, unicidade, lista de acesso externo,
+//	                   SECURITY DEFINER, mapa de privilégios fora do RLS
+//	empresas_test.go   A contra B em toda tabela de app, gerada do catálogo
+//	escopo_test.go     prestador, locatário e link dentro de A
+//	auditoria_test.go  imutabilidade, mesma transação, isolamento da trilha
+//	plataforma_test.go credenciais de autenticação, que não têm RLS
+//
+// Toda regra de catálogo tem a sua prova de detector (TestDetector...): a
+// suíte cria de propósito um objeto malformado e exige ser acusada. Sem isso,
+// uma verificação errada passaria por vacuidade. Falhas de isolamento já
+// demonstradas e devolvidas ao dono da migração ficam em achadosAbertos
+// (banco_test.go): o teste roda, aparece como SKIP com o ID do achado e, enquanto
+// a lista não estiver vazia, o portão de isolamento da etapa está vermelho.
 package vazamento
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"testing"
@@ -37,12 +50,16 @@ import (
 // Testar RLS contra uma versão diferente da de produção não prova nada.
 const imagemPostgres = "postgres:17-alpine"
 
-var pool *pgxpool.Pool
+var (
+	pool     *pgxpool.Pool
+	urlBanco string // para os testes que abrem pool próprio (db.NaEmpresa real)
+)
 
 func TestMain(m *testing.M) {
 	ctx := context.Background()
 
 	url, encerrar, err := subirBanco(ctx)
+	urlBanco = url
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "não foi possível preparar o banco de teste: %v\n", err)
 		os.Exit(1)
@@ -62,6 +79,17 @@ func TestMain(m *testing.M) {
 	}
 
 	codigo := m.Run()
+
+	// O portão dos achados abertos vale para a suíte inteira, não para um
+	// teste: chave sem prova, ou achado aberto no CI, encerra com erro.
+	execucaoCompleta := true
+	if f := flag.Lookup("test.run"); f != nil && f.Value.String() != "" {
+		execucaoCompleta = false
+	}
+	for _, p := range problemasDosAchados(execucaoCompleta) {
+		fmt.Fprintln(os.Stderr, "FALHA DO PORTÃO DE ISOLAMENTO:", p)
+		codigo = 1
+	}
 
 	pool.Close()
 	encerrar()

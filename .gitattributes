@@ -1,0 +1,21 @@
+# Fim de linha LF em todo arquivo de texto, em qualquer sistema.
+#
+# Sem isto, um checkout no Windows com core.autocrlf=true grava CRLF na pasta
+# de trabalho: o gofmt passa a acusar arquivos corretos, a conferência do
+# contrato OpenAPI acusa o arquivo inteiro e os scripts .sh quebram no bash.
+# "Passa na minha máquina" e "passa no CI" deixam de significar a mesma coisa.
+* text=auto eol=lf
+
+# Binários: nunca converter.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
+*.pdf  binary
+*.woff binary
+*.woff2 binary
+*.ttf  binary
+*.otf  binary
+*.zip  binary

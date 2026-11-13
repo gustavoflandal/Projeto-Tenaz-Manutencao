@@ -1,21 +1,2144 @@
 components:
   schemas:
-    Campo:
+    Autorizacao:
       additionalProperties: false
       properties:
-        local:
-          description: Onde o erro ocorreu
-          examples:
-            - body.prioridade
-          type: string
-        mensagem:
-          description: O que está errado com o campo
+        uri_redirecionamento:
+          description: redirect_uri com code e state (ou error=access_denied), para a web navegar até ela e o sistema entregar ao app
           type: string
       required:
-        - local
+        - uri_redirecionamento
+      type: object
+    CampoErro:
+      additionalProperties: false
+      properties:
+        campo:
+          description: Campo em notação de ponto
+          examples:
+            - responsavel.email
+          type: string
+        codigo:
+          description: "Vocabulário curto: obrigatorio, valor_invalido, tamanho_maximo, tamanho_minimo, formato_invalido, fora_da_faixa, nao_encontrado, duplicado, inativo"
+          examples:
+            - obrigatorio
+          type: string
+        mensagem:
+          description: O que está errado e o que fazer
+          examples:
+            - Informe o e-mail.
+          type: string
+        valores_aceitos:
+          description: Valores aceitos, quando o campo é uma enumeração
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      required:
+        - campo
+        - codigo
         - mensagem
       type: object
-    Dados:
+    ConfiguracaoMFA:
+      additionalProperties: false
+      properties:
+        segredo_base32:
+          description: Segredo para digitar no aplicativo autenticador
+          type: string
+        uri_otpauth:
+          description: URI otpauth:// para o QR code
+          type: string
+      required:
+        - segredo_base32
+        - uri_otpauth
+      type: object
+    ContaCriada:
+      additionalProperties: false
+      properties:
+        convite_enviado:
+          description: "Falso: a conta existe, mas o e-mail do convite não saiu; peça o reenvio ao suporte"
+          type: boolean
+      required:
+        - convite_enviado
+      type: object
+    Convite:
+      additionalProperties: false
+      properties:
+        email:
+          description: E-mail convidado
+          type: string
+        pede_senha:
+          description: "Verdadeiro: o e-mail ainda não tem login e a tela pede a senha nova; falso: entra com a senha que já tem"
+          type: boolean
+      required:
+        - email
+        - pede_senha
+      type: object
+    ConviteAceito:
+      additionalProperties: false
+      properties:
+        identidade_nova:
+          description: "Falso: o e-mail já entrava em outra empresa e usa a senha que tem"
+          type: boolean
+      required:
+        - identidade_nova
+      type: object
+    Empresa:
+      additionalProperties: false
+      properties:
+        atualizado_em:
+          format: date-time
+          type: string
+        cnpj:
+          description: 14 dígitos, sem máscara
+          type:
+            - string
+            - "null"
+        criado_em:
+          format: date-time
+          type: string
+        fuso_horario:
+          examples:
+            - America/Sao_Paulo
+          type: string
+        id:
+          format: uuid
+          type: string
+        nome_fantasia:
+          type:
+            - string
+            - "null"
+        plano:
+          description: essencial, profissional ou enterprise; nulo na conta só do plano Serviços
+          type:
+            - string
+            - "null"
+        razao_social:
+          type: string
+        retencao_auditoria_anos:
+          format: int32
+          type: integer
+        situacao:
+          enum:
+            - teste
+            - ativa
+            - suspensa
+            - cancelada
+          type: string
+        srv_habilitado:
+          type: boolean
+        teste_ate:
+          format: date
+          type:
+            - string
+            - "null"
+        versao:
+          format: int64
+          type: integer
+      required:
+        - id
+        - razao_social
+        - nome_fantasia
+        - cnpj
+        - plano
+        - srv_habilitado
+        - situacao
+        - fuso_horario
+        - retencao_auditoria_anos
+        - teste_ate
+        - versao
+        - criado_em
+        - atualizado_em
+      type: object
+    EmpresaAcesso:
+      additionalProperties: false
+      properties:
+        atual:
+          description: Empresa da credencial atual
+          type: boolean
+        id:
+          description: Identificador para empresa_escolhida_id
+          format: uuid
+          type: string
+        nome:
+          type: string
+      required:
+        - id
+        - nome
+        - atual
+      type: object
+    EmpresaSessao:
+      additionalProperties: false
+      properties:
+        nome:
+          type: string
+        plano:
+          description: Nulo na conta só do plano Serviços
+          enum:
+            - essencial
+            - profissional
+            - enterprise
+          type:
+            - string
+            - "null"
+        srv_habilitado:
+          description: Módulo SRV habilitado (conta de subcontratada)
+          type: boolean
+      required:
+        - nome
+        - plano
+        - srv_habilitado
+      type: object
+    Endereco:
+      additionalProperties: false
+      properties:
+        bairro:
+          maxLength: 100
+          type: string
+        cep:
+          maxLength: 9
+          type: string
+        complemento:
+          maxLength: 100
+          type: string
+        logradouro:
+          maxLength: 200
+          type: string
+        municipio:
+          maxLength: 100
+          type: string
+        numero:
+          maxLength: 20
+          type: string
+        uf:
+          maxLength: 2
+          type: string
+      type: object
+    EntradaAutorizarPOSTBody:
+      additionalProperties: false
+      properties:
+        client_id:
+          maxLength: 64
+          type: string
+        code_challenge:
+          maxLength: 128
+          type: string
+        code_challenge_method:
+          enum:
+            - S256
+          type: string
+        empresa_escolhida_id:
+          description: Empresa da sessão do app, entre as de GET /v1/auth/sessao
+          format: uuid
+          type: string
+        redirect_uri:
+          maxLength: 512
+          type: string
+        response_type:
+          enum:
+            - code
+          type: string
+        state:
+          maxLength: 512
+          type: string
+      required:
+        - response_type
+        - client_id
+        - redirect_uri
+        - code_challenge
+        - code_challenge_method
+        - empresa_escolhida_id
+      type: object
+    EntradaCodigoMFABody:
+      additionalProperties: false
+      properties:
+        codigo:
+          pattern: ^[0-9]{6}$
+          type: string
+      required:
+        - codigo
+      type: object
+    EntradaConviteAceitarBody:
+      additionalProperties: false
+      properties:
+        senha:
+          description: Obrigatória quando pede_senha; ignorada quando o e-mail já tem login
+          maxLength: 1024
+          type: string
+        token:
+          maxLength: 43
+          minLength: 43
+          type: string
+      required:
+        - token
+      type: object
+    EntradaConviteConsultarBody:
+      additionalProperties: false
+      properties:
+        token:
+          description: "Token do link do convite, lido do fragmento #token="
+          maxLength: 43
+          minLength: 43
+          type: string
+      required:
+        - token
+      type: object
+    EntradaFeriado:
+      additionalProperties: false
+      properties:
+        data:
+          format: date
+          type: string
+        descricao:
+          maxLength: 100
+          minLength: 1
+          type: string
+      required:
+        - data
+        - descricao
+      type: object
+    EntradaLoginBody:
+      additionalProperties: false
+      properties:
+        email:
+          description: E-mail do login
+          maxLength: 254
+          type: string
+        empresa_escolhida_id:
+          description: "Empresa da sessão, entre as da pessoa; ausente: a da última sessão"
+          format: uuid
+          type: string
+        senha:
+          maxLength: 1024
+          type: string
+      required:
+        - email
+        - senha
+      type: object
+    EntradaMFABody:
+      additionalProperties: false
+      properties:
+        codigo:
+          description: Código de 6 dígitos do aplicativo autenticador
+          pattern: ^[0-9]{6}$
+          type: string
+        desafio_id:
+          description: desafio_id da resposta 401 mfa_obrigatorio
+          maxLength: 43
+          minLength: 43
+          type: string
+        empresa_escolhida_id:
+          format: uuid
+          type: string
+      required:
+        - desafio_id
+        - codigo
+      type: object
+    EntradaPermissao:
+      additionalProperties: false
+      properties:
+        permissao:
+          description: Código do catálogo de RF-ADM-005
+          examples:
+            - pessoa.saude.ler
+          maxLength: 60
+          type: string
+      required:
+        - permissao
+      type: object
+    EntradaPessoa:
+      additionalProperties: false
+      properties:
+        cargo:
+          maxLength: 100
+          type: string
+        cpf:
+          description: Com ou sem máscara
+          maxLength: 14
+          type: string
+        data_nascimento:
+          format: date
+          type: string
+        email:
+          maxLength: 254
+          type: string
+        fornecedor_id:
+          format: uuid
+          type: string
+        matricula:
+          maxLength: 40
+          type: string
+        nome:
+          maxLength: 200
+          minLength: 1
+          type: string
+        registro_profissional:
+          maxLength: 60
+          type: string
+        telefone:
+          maxLength: 30
+          type: string
+        unidade_id:
+          format: uuid
+          type: string
+        vinculo:
+          description: "Ausente: empregado"
+          enum:
+            - empregado
+            - terceiro
+            - autonomo
+          type: string
+      required:
+        - nome
+      type: object
+    EntradaRecuperarSenhaBody:
+      additionalProperties: false
+      properties:
+        email:
+          maxLength: 254
+          type: string
+      required:
+        - email
+      type: object
+    EntradaRedefinirSenhaBody:
+      additionalProperties: false
+      properties:
+        nova_senha:
+          maxLength: 1024
+          type: string
+        token:
+          description: "Token do link do e-mail, lido do fragmento #token="
+          maxLength: 43
+          minLength: 43
+          type: string
+      required:
+        - token
+        - nova_senha
+      type: object
+    EntradaRevogarBody:
+      additionalProperties: false
+      properties:
+        client_id:
+          maxLength: 64
+          type: string
+        token:
+          maxLength: 128
+          type: string
+        token_type_hint:
+          enum:
+            - refresh_token
+          type: string
+      required:
+        - token
+      type: object
+    EntradaTokenBody:
+      additionalProperties: false
+      properties:
+        client_id:
+          maxLength: 64
+          type: string
+        code:
+          maxLength: 64
+          type: string
+        code_verifier:
+          maxLength: 128
+          type: string
+        grant_type:
+          enum:
+            - authorization_code
+            - refresh_token
+          type: string
+        redirect_uri:
+          maxLength: 512
+          type: string
+        refresh_token:
+          maxLength: 128
+          type: string
+      required:
+        - grant_type
+        - client_id
+      type: object
+    EntradaTrocarEmpresaBody:
+      additionalProperties: false
+      properties:
+        empresa_escolhida_id:
+          description: Empresa de destino, entre as de GET /v1/auth/sessao
+          format: uuid
+          type: string
+      required:
+        - empresa_escolhida_id
+      type: object
+    EntradaTrocarSenhaBody:
+      additionalProperties: false
+      properties:
+        nova_senha:
+          maxLength: 1024
+          type: string
+        senha_atual:
+          maxLength: 1024
+          type: string
+      required:
+        - senha_atual
+        - nova_senha
+      type: object
+    EntradaTurno:
+      additionalProperties: false
+      properties:
+        dia_semana:
+          description: 1 = segunda ... 7 = domingo
+          format: int32
+          maximum: 7
+          minimum: 1
+          type: integer
+        hora_fim:
+          examples:
+            - "17:00"
+          maxLength: 5
+          type: string
+        hora_inicio:
+          examples:
+            - "08:00"
+          maxLength: 5
+          type: string
+        nome:
+          maxLength: 60
+          type: string
+      required:
+        - dia_semana
+        - hora_inicio
+        - hora_fim
+      type: object
+    EntradaUnidade:
+      additionalProperties: false
+      properties:
+        cnpj:
+          maxLength: 18
+          type: string
+        codigo:
+          maxLength: 20
+          minLength: 1
+          type: string
+        endereco:
+          $ref: "#/components/schemas/Endereco"
+        fuso_horario:
+          maxLength: 64
+          type: string
+        latitude:
+          format: double
+          maximum: 90
+          minimum: -90
+          type: number
+        longitude:
+          format: double
+          maximum: 180
+          minimum: -180
+          type: number
+        nome:
+          maxLength: 200
+          minLength: 1
+          type: string
+        turnos:
+          description: Só na criação; depois, pelas rotas de turno. Obrigatório em POST /v1/unidades; no cadastro da conta, ausente vale segunda a sexta das 08:00 às 17:00
+          items:
+            $ref: "#/components/schemas/EntradaTurno"
+          maxItems: 70
+          type:
+            - array
+            - "null"
+      required:
+        - codigo
+        - nome
+      type: object
+    EntradaUsuario:
+      additionalProperties: false
+      properties:
+        custo_hora:
+          examples:
+            - "125.50"
+          maxLength: 16
+          type: string
+        email:
+          maxLength: 254
+          type: string
+        fornecedor_id:
+          description: Obrigatório no perfil prestador
+          format: uuid
+          type: string
+        locatario_id:
+          description: Obrigatório no perfil locatario
+          format: uuid
+          type: string
+        nome:
+          maxLength: 200
+          minLength: 1
+          type: string
+        nova_pessoa:
+          $ref: "#/components/schemas/EntradaPessoa"
+          description: Cria a pessoa junto; não use junto com pessoa_id
+        perfis:
+          description: "Códigos dos perfis: administrador, gestor, tecnico..."
+          items:
+            type: string
+          maxItems: 12
+          minItems: 1
+          type:
+            - array
+            - "null"
+        pessoa_id:
+          description: Liga a uma pessoa existente; não use junto com nova_pessoa
+          format: uuid
+          type: string
+        telefone:
+          maxLength: 30
+          type: string
+        unidade_padrao_id:
+          format: uuid
+          type: string
+      required:
+        - nome
+        - email
+        - perfis
+      type: object
+    Evento:
+      additionalProperties: false
+      properties:
+        acao:
+          type: string
+        antes:
+          description: Valores antes da alteração; nulo na criação
+        ator_tipo:
+          enum:
+            - usuario
+            - sistema
+            - integracao
+            - suporte_tenaz
+            - link_execucao
+            - sincronizacao_conexao
+          type: string
+        campos_alterados:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        conexao_empresa_id:
+          format: uuid
+          type: string
+        depois:
+          description: Valores depois da alteração; nulo na exclusão
+        dispositivo_id:
+          format: uuid
+          type: string
+        entidade:
+          type: string
+        entidade_chave:
+          type:
+            - string
+            - "null"
+        entidade_id:
+          format: uuid
+          type: string
+        id:
+          format: uuid
+          type: string
+        ip:
+          type:
+            - string
+            - "null"
+        ocorrido_em:
+          format: date-time
+          type: string
+        ocorrido_no_dispositivo_em:
+          format: date-time
+          type:
+            - string
+            - "null"
+        origem:
+          enum:
+            - web
+            - app
+            - api
+            - job
+            - importacao
+          type:
+            - string
+            - "null"
+        request_id:
+          type:
+            - string
+            - "null"
+        token_api_id:
+          format: uuid
+          type: string
+        user_agent:
+          type:
+            - string
+            - "null"
+        usuario_id:
+          format: uuid
+          type: string
+      required:
+        - antes
+        - depois
+        - user_agent
+        - id
+        - ocorrido_em
+        - ator_tipo
+        - usuario_id
+        - token_api_id
+        - acao
+        - entidade
+        - entidade_id
+        - entidade_chave
+        - campos_alterados
+        - origem
+        - ip
+        - dispositivo_id
+        - request_id
+        - conexao_empresa_id
+        - ocorrido_no_dispositivo_em
+      type: object
+    Feriado:
+      additionalProperties: false
+      properties:
+        data:
+          format: date
+          type: string
+        descricao:
+          type: string
+        id:
+          format: uuid
+          type: string
+        unidade_id:
+          format: uuid
+          type: string
+        versao:
+          format: int64
+          type: integer
+      required:
+        - id
+        - unidade_id
+        - data
+        - descricao
+        - versao
+      type: object
+    ListaFeriado:
+      additionalProperties: false
+      properties:
+        dados:
+          items:
+            $ref: "#/components/schemas/Feriado"
+          type:
+            - array
+            - "null"
+        paginacao:
+          $ref: "#/components/schemas/Paginacao"
+      required:
+        - dados
+        - paginacao
+      type: object
+    ListaPerfil:
+      additionalProperties: false
+      properties:
+        dados:
+          items:
+            $ref: "#/components/schemas/Perfil"
+          type:
+            - array
+            - "null"
+        paginacao:
+          $ref: "#/components/schemas/Paginacao"
+      required:
+        - dados
+        - paginacao
+      type: object
+    ListaPermissao:
+      additionalProperties: false
+      properties:
+        dados:
+          items:
+            $ref: "#/components/schemas/Permissao"
+          type:
+            - array
+            - "null"
+        paginacao:
+          $ref: "#/components/schemas/Paginacao"
+      required:
+        - dados
+        - paginacao
+      type: object
+    ListaResumoEvento:
+      additionalProperties: false
+      properties:
+        dados:
+          items:
+            $ref: "#/components/schemas/ResumoEvento"
+          type:
+            - array
+            - "null"
+        paginacao:
+          $ref: "#/components/schemas/Paginacao"
+      required:
+        - dados
+        - paginacao
+      type: object
+    ListaResumoPessoa:
+      additionalProperties: false
+      properties:
+        dados:
+          items:
+            $ref: "#/components/schemas/ResumoPessoa"
+          type:
+            - array
+            - "null"
+        paginacao:
+          $ref: "#/components/schemas/Paginacao"
+      required:
+        - dados
+        - paginacao
+      type: object
+    ListaResumoUnidade:
+      additionalProperties: false
+      properties:
+        dados:
+          items:
+            $ref: "#/components/schemas/ResumoUnidade"
+          type:
+            - array
+            - "null"
+        paginacao:
+          $ref: "#/components/schemas/Paginacao"
+      required:
+        - dados
+        - paginacao
+      type: object
+    ListaResumoUsuario:
+      additionalProperties: false
+      properties:
+        dados:
+          items:
+            $ref: "#/components/schemas/ResumoUsuario"
+          type:
+            - array
+            - "null"
+        paginacao:
+          $ref: "#/components/schemas/Paginacao"
+      required:
+        - dados
+        - paginacao
+      type: object
+    NovaEmpresa:
+      additionalProperties: false
+      properties:
+        cnpj:
+          description: Com ou sem máscara; dígito verificador conferido
+          maxLength: 18
+          type: string
+        fuso_horario:
+          description: "IANA; ausente: America/Sao_Paulo"
+          maxLength: 64
+          type: string
+        nome_fantasia:
+          maxLength: 200
+          type: string
+        plano:
+          description: Ausente só com srv_habilitado (conta do plano Serviços)
+          enum:
+            - essencial
+            - profissional
+            - enterprise
+          type: string
+        razao_social:
+          maxLength: 200
+          minLength: 1
+          type: string
+        responsavel:
+          $ref: "#/components/schemas/Responsavel"
+        srv_habilitado:
+          description: Conta de subcontratada, com o módulo SRV (RF-SRV-001)
+          type: boolean
+        unidade:
+          $ref: "#/components/schemas/EntradaUnidade"
+          description: Unidade inicial; sem turnos, segunda a sexta das 08:00 às 17:00
+      required:
+        - cnpj
+        - razao_social
+        - responsavel
+        - unidade
+      type: object
+    Paginacao:
+      additionalProperties: false
+      properties:
+        limite:
+          description: Itens por página
+          examples:
+            - 50
+          format: int32
+          type: integer
+        proximo_cursor:
+          description: Valor para o parâmetro cursor da próxima página; nulo quando não há mais
+          type:
+            - string
+            - "null"
+        tem_mais:
+          description: Há mais itens depois desta página
+          type: boolean
+      required:
+        - proximo_cursor
+        - tem_mais
+        - limite
+      type: object
+    PatchEmpresa:
+      additionalProperties: false
+      properties:
+        cnpj:
+          description: Com ou sem máscara
+          maxLength: 18
+          type: string
+        fuso_horario:
+          maxLength: 64
+          type: string
+        nome_fantasia:
+          maxLength: 200
+          type:
+            - string
+            - "null"
+        razao_social:
+          maxLength: 200
+          minLength: 1
+          type: string
+      type: object
+    PatchEndereco:
+      additionalProperties: false
+      properties:
+        bairro:
+          maxLength: 100
+          type:
+            - string
+            - "null"
+        cep:
+          maxLength: 9
+          type:
+            - string
+            - "null"
+        complemento:
+          maxLength: 100
+          type:
+            - string
+            - "null"
+        logradouro:
+          maxLength: 200
+          type:
+            - string
+            - "null"
+        municipio:
+          maxLength: 100
+          type:
+            - string
+            - "null"
+        numero:
+          maxLength: 20
+          type:
+            - string
+            - "null"
+        uf:
+          maxLength: 2
+          type:
+            - string
+            - "null"
+      type:
+        - object
+        - "null"
+    PatchEu:
+      additionalProperties: false
+      properties:
+        nome:
+          maxLength: 200
+          minLength: 1
+          type: string
+        telefone:
+          maxLength: 30
+          type:
+            - string
+            - "null"
+      type: object
+    PatchPessoa:
+      additionalProperties: false
+      properties:
+        cargo:
+          maxLength: 100
+          type:
+            - string
+            - "null"
+        cpf:
+          maxLength: 14
+          type:
+            - string
+            - "null"
+        data_nascimento:
+          format: date
+          type:
+            - string
+            - "null"
+        email:
+          maxLength: 254
+          type:
+            - string
+            - "null"
+        fornecedor_id:
+          format: uuid
+          type:
+            - string
+            - "null"
+        matricula:
+          maxLength: 40
+          type:
+            - string
+            - "null"
+        nome:
+          maxLength: 200
+          minLength: 1
+          type: string
+        registro_profissional:
+          maxLength: 60
+          type:
+            - string
+            - "null"
+        telefone:
+          maxLength: 30
+          type:
+            - string
+            - "null"
+        unidade_id:
+          format: uuid
+          type:
+            - string
+            - "null"
+        vinculo:
+          enum:
+            - empregado
+            - terceiro
+            - autonomo
+          type: string
+      type: object
+    PatchTurno:
+      additionalProperties: false
+      properties:
+        dia_semana:
+          format: int32
+          maximum: 7
+          minimum: 1
+          type: integer
+        hora_fim:
+          maxLength: 5
+          type: string
+        hora_inicio:
+          maxLength: 5
+          type: string
+        nome:
+          maxLength: 60
+          type:
+            - string
+            - "null"
+      type: object
+    PatchUnidade:
+      additionalProperties: false
+      properties:
+        cnpj:
+          maxLength: 18
+          type:
+            - string
+            - "null"
+        codigo:
+          maxLength: 20
+          minLength: 1
+          type: string
+        endereco:
+          $ref: "#/components/schemas/PatchEndereco"
+          description: Mesclado campo a campo; null apaga o endereço
+        fuso_horario:
+          maxLength: 64
+          type:
+            - string
+            - "null"
+        latitude:
+          format: double
+          maximum: 90
+          minimum: -90
+          type:
+            - number
+            - "null"
+        longitude:
+          format: double
+          maximum: 180
+          minimum: -180
+          type:
+            - number
+            - "null"
+        nome:
+          maxLength: 200
+          minLength: 1
+          type: string
+      type: object
+    PatchUsuario:
+      additionalProperties: false
+      properties:
+        custo_hora:
+          maxLength: 16
+          type:
+            - string
+            - "null"
+        nome:
+          maxLength: 200
+          minLength: 1
+          type: string
+        perfis:
+          description: Lista completa dos perfis; substitui a atual
+          items:
+            type: string
+          maxItems: 12
+          minItems: 1
+          type:
+            - array
+            - "null"
+        pessoa_id:
+          format: uuid
+          type:
+            - string
+            - "null"
+        telefone:
+          maxLength: 30
+          type:
+            - string
+            - "null"
+        unidade_padrao_id:
+          format: uuid
+          type:
+            - string
+            - "null"
+      type: object
+    Perfil:
+      additionalProperties: false
+      properties:
+        codigo:
+          type: string
+        id:
+          format: uuid
+          type: string
+        nome:
+          type: string
+        padrao:
+          description: Perfil padrão do sumário, que não se altera
+          type: boolean
+        perfil_origem:
+          type:
+            - string
+            - "null"
+        permissoes:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        versao:
+          format: int64
+          type: integer
+      required:
+        - id
+        - codigo
+        - nome
+        - padrao
+        - perfil_origem
+        - permissoes
+        - versao
+      type: object
+    PerfilAtribuido:
+      additionalProperties: false
+      properties:
+        codigo:
+          type: string
+        nome:
+          type: string
+        perfil_id:
+          format: uuid
+          type: string
+        perfil_origem:
+          description: Perfil padrão de origem
+          type: string
+        unidade_id:
+          format: uuid
+          type: string
+      required:
+        - perfil_id
+        - codigo
+        - nome
+        - perfil_origem
+        - unidade_id
+      type: object
+    Permissao:
+      additionalProperties: false
+      properties:
+        codigo:
+          examples:
+            - os.encerrar
+          type: string
+        descricao:
+          type: string
+        fase:
+          enum:
+            - MVP
+            - F2
+            - F3
+          type: string
+        grupo:
+          description: Grupo da seção 4.8 do documento 3
+          type: string
+        sensivel:
+          type: boolean
+      required:
+        - codigo
+        - descricao
+        - grupo
+        - fase
+        - sensivel
+      type: object
+    Pessoa:
+      additionalProperties: false
+      properties:
+        atualizado_em:
+          format: date-time
+          type: string
+        cargo:
+          type:
+            - string
+            - "null"
+        cpf:
+          description: 11 dígitos, sem máscara
+          type:
+            - string
+            - "null"
+        criado_em:
+          format: date-time
+          type: string
+        data_nascimento:
+          format: date
+          type:
+            - string
+            - "null"
+        email:
+          type:
+            - string
+            - "null"
+        fornecedor_id:
+          format: uuid
+          type: string
+        id:
+          format: uuid
+          type: string
+        matricula:
+          type:
+            - string
+            - "null"
+        nome:
+          type: string
+        registro_profissional:
+          type:
+            - string
+            - "null"
+        situacao:
+          enum:
+            - ativa
+            - inativa
+            - desligada
+          type: string
+        telefone:
+          type:
+            - string
+            - "null"
+        unidade_id:
+          format: uuid
+          type: string
+        usuario_id:
+          description: Usuário ligado à pessoa, se houver
+          format: uuid
+          type: string
+        versao:
+          format: int64
+          type: integer
+        vinculo:
+          enum:
+            - empregado
+            - terceiro
+            - autonomo
+          type: string
+      required:
+        - id
+        - nome
+        - cpf
+        - data_nascimento
+        - matricula
+        - cargo
+        - telefone
+        - email
+        - vinculo
+        - fornecedor_id
+        - unidade_id
+        - registro_profissional
+        - situacao
+        - usuario_id
+        - versao
+        - criado_em
+        - atualizado_em
+      type: object
+    Problema:
+      additionalProperties: true
+      properties:
+        campos_faltantes:
+          description: Campos exigidos que faltaram
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        codigo:
+          description: Código estável do erro, em snake_case; é o que o cliente trata
+          examples:
+            - validacao_falhou
+          type: string
+        desafio_expira_em:
+          description: "mfa_obrigatorio: fim da validade do desafio (5 minutos)"
+          format: date-time
+          type: string
+        desafio_id:
+          description: "mfa_obrigatorio: desafio do segundo fator, segredo de 256 bits e uso único; vai no corpo de POST /v1/auth/mfa/verificar"
+          type: string
+        detail:
+          description: Explicação desta ocorrência e o que fazer
+          type: string
+        erros:
+          description: Erros por campo, com o campo em notação de ponto
+          items:
+            $ref: "#/components/schemas/CampoErro"
+          type:
+            - array
+            - "null"
+        estado_atual:
+          description: "transicao_invalida: estado atual do registro"
+          type: string
+        id_rastreio:
+          description: Igual ao X-Request-Id; o suporte usa para localizar o log
+          type: string
+        instance:
+          description: Caminho da requisição
+          examples:
+            - /v1/pessoas
+          type: string
+        plano_necessario:
+          description: "plano_nao_inclui_recurso: plano mínimo do recurso"
+          type: string
+        recurso_atual:
+          description: "versao_desatualizada: o recurso como está gravado, para o cliente mostrar a diferença"
+        status:
+          description: Código de status HTTP
+          examples:
+            - 422
+          format: int64
+          type: integer
+        tentativas_restantes:
+          description: "mfa_codigo_invalido: tentativas que restam no desafio; em zero, o login recomeça pela senha"
+          format: int32
+          type: integer
+        title:
+          description: Resumo legível, fixo por código
+          examples:
+            - Os dados enviados não passaram na validação
+          type: string
+        transicoes_permitidas:
+          description: "transicao_invalida: ações aceitas no estado atual"
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        type:
+          description: URI que documenta o código do erro
+          examples:
+            - https://api.tenaz.com.br/erros/validacao_falhou
+          type: string
+        versao_atual:
+          description: "versao_desatualizada: versão gravada do registro"
+          format: int64
+          type: integer
+      required:
+        - type
+        - title
+        - status
+        - codigo
+      type: object
+    Responsavel:
+      additionalProperties: false
+      properties:
+        email:
+          maxLength: 254
+          type: string
+        nome:
+          maxLength: 200
+          minLength: 1
+          type: string
+        telefone:
+          maxLength: 30
+          type: string
+      required:
+        - nome
+        - email
+      type: object
+    ResumoEvento:
+      additionalProperties: false
+      properties:
+        acao:
+          type: string
+        ator_tipo:
+          enum:
+            - usuario
+            - sistema
+            - integracao
+            - suporte_tenaz
+            - link_execucao
+            - sincronizacao_conexao
+          type: string
+        campos_alterados:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        conexao_empresa_id:
+          format: uuid
+          type: string
+        dispositivo_id:
+          format: uuid
+          type: string
+        entidade:
+          type: string
+        entidade_chave:
+          type:
+            - string
+            - "null"
+        entidade_id:
+          format: uuid
+          type: string
+        id:
+          format: uuid
+          type: string
+        ip:
+          type:
+            - string
+            - "null"
+        ocorrido_em:
+          format: date-time
+          type: string
+        ocorrido_no_dispositivo_em:
+          format: date-time
+          type:
+            - string
+            - "null"
+        origem:
+          enum:
+            - web
+            - app
+            - api
+            - job
+            - importacao
+          type:
+            - string
+            - "null"
+        request_id:
+          type:
+            - string
+            - "null"
+        token_api_id:
+          format: uuid
+          type: string
+        usuario_id:
+          format: uuid
+          type: string
+      required:
+        - id
+        - ocorrido_em
+        - ator_tipo
+        - usuario_id
+        - token_api_id
+        - acao
+        - entidade
+        - entidade_id
+        - entidade_chave
+        - campos_alterados
+        - origem
+        - ip
+        - dispositivo_id
+        - request_id
+        - conexao_empresa_id
+        - ocorrido_no_dispositivo_em
+      type: object
+    ResumoPessoa:
+      additionalProperties: false
+      properties:
+        cargo:
+          type:
+            - string
+            - "null"
+        cpf_mascarado:
+          examples:
+            - "***.***.789-01"
+          type:
+            - string
+            - "null"
+        criado_em:
+          format: date-time
+          type: string
+        fornecedor_id:
+          format: uuid
+          type: string
+        id:
+          format: uuid
+          type: string
+        matricula:
+          type:
+            - string
+            - "null"
+        nome:
+          type: string
+        situacao:
+          enum:
+            - ativa
+            - inativa
+            - desligada
+          type: string
+        unidade_id:
+          format: uuid
+          type: string
+        usuario_id:
+          format: uuid
+          type: string
+        versao:
+          format: int64
+          type: integer
+        vinculo:
+          enum:
+            - empregado
+            - terceiro
+            - autonomo
+          type: string
+      required:
+        - id
+        - nome
+        - cpf_mascarado
+        - matricula
+        - cargo
+        - vinculo
+        - fornecedor_id
+        - unidade_id
+        - situacao
+        - usuario_id
+        - versao
+        - criado_em
+      type: object
+    ResumoUnidade:
+      additionalProperties: false
+      properties:
+        atualizado_em:
+          format: date-time
+          type: string
+        cnpj:
+          type:
+            - string
+            - "null"
+        codigo:
+          type: string
+        criado_em:
+          format: date-time
+          type: string
+        endereco:
+          $ref: "#/components/schemas/Endereco"
+        fuso_horario:
+          description: "Nulo: herda o da empresa"
+          type:
+            - string
+            - "null"
+        id:
+          format: uuid
+          type: string
+        latitude:
+          format: double
+          type:
+            - number
+            - "null"
+        longitude:
+          format: double
+          type:
+            - number
+            - "null"
+        nome:
+          type: string
+        situacao:
+          enum:
+            - ativa
+            - inativa
+          type: string
+        versao:
+          format: int64
+          type: integer
+      required:
+        - id
+        - codigo
+        - nome
+        - cnpj
+        - endereco
+        - fuso_horario
+        - latitude
+        - longitude
+        - situacao
+        - versao
+        - criado_em
+        - atualizado_em
+      type: object
+    ResumoUsuario:
+      additionalProperties: false
+      properties:
+        criado_em:
+          format: date-time
+          type: string
+        email:
+          type:
+            - string
+            - "null"
+        fornecedor_id:
+          format: uuid
+          type: string
+        id:
+          format: uuid
+          type: string
+        locatario_id:
+          format: uuid
+          type: string
+        nome:
+          type: string
+        perfis:
+          description: Perfis de origem
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        pessoa_id:
+          format: uuid
+          type: string
+        situacao:
+          enum:
+            - convidado
+            - ativo
+            - inativo
+          type: string
+        telefone:
+          type:
+            - string
+            - "null"
+        versao:
+          format: int64
+          type: integer
+      required:
+        - id
+        - nome
+        - email
+        - telefone
+        - pessoa_id
+        - fornecedor_id
+        - locatario_id
+        - situacao
+        - perfis
+        - versao
+        - criado_em
+      type: object
+    Sessao:
+      additionalProperties: false
+      properties:
+        canal:
+          description: Canal da credencial
+          enum:
+            - web
+            - app
+          type: string
+        csrf_token:
+          description: Token CSRF da sessão web, para o cabeçalho X-CSRF-Token em POST, PATCH, PUT e DELETE; nulo no app
+          type:
+            - string
+            - "null"
+        empresa:
+          $ref: "#/components/schemas/EmpresaSessao"
+        empresas:
+          description: Empresas em que a pessoa entra, para o seletor; a atual vem primeiro
+          items:
+            $ref: "#/components/schemas/EmpresaAcesso"
+          type:
+            - array
+            - "null"
+        escopo_acesso:
+          description: Escopo de acesso da credencial (seção 4.9)
+          enum:
+            - interno
+            - prestador
+            - locatario
+            - link
+          type: string
+        expira_em:
+          description: Teto absoluto da sessão web (7 dias); a inatividade de 12 horas vence antes. Nulo fora do login e da troca de empresa
+          format: date-time
+          type:
+            - string
+            - "null"
+        perfis:
+          description: Códigos de origem dos perfis ativos
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        permissoes:
+          description: Permissões efetivas, em ordem alfabética (perfis e permissões avulsas)
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        usuario:
+          $ref: "#/components/schemas/UsuarioSessao"
+      required:
+        - canal
+        - csrf_token
+        - expira_em
+        - escopo_acesso
+        - usuario
+        - empresa
+        - perfis
+        - permissoes
+        - empresas
+      type: object
+    SessoesEncerradas:
+      additionalProperties: false
+      properties:
+        sessoes_encerradas:
+          format: int32
+          type: integer
+      required:
+        - sessoes_encerradas
+      type: object
+    TokensApp:
+      additionalProperties: false
+      properties:
+        access_token:
+          description: JWT EdDSA, 15 minutos
+          type: string
+        expires_in:
+          description: Segundos até o access token vencer
+          examples:
+            - 900
+          format: int64
+          type: integer
+        refresh_token:
+          description: Refresh token rotativo (tnz_rt_...), 30 dias de inatividade; cada uso devolve outro
+          type: string
+        scope:
+          enum:
+            - app_campo
+          type: string
+        token_type:
+          enum:
+            - Bearer
+          type: string
+      required:
+        - access_token
+        - token_type
+        - expires_in
+        - refresh_token
+        - scope
+      type: object
+    TrocaEmpresa:
+      additionalProperties: false
+      properties:
+        canal:
+          description: Canal da credencial
+          enum:
+            - web
+            - app
+          type: string
+        csrf_token:
+          description: Token CSRF da sessão web, para o cabeçalho X-CSRF-Token em POST, PATCH, PUT e DELETE; nulo no app
+          type:
+            - string
+            - "null"
+        empresa:
+          $ref: "#/components/schemas/EmpresaSessao"
+        empresas:
+          description: Empresas em que a pessoa entra, para o seletor; a atual vem primeiro
+          items:
+            $ref: "#/components/schemas/EmpresaAcesso"
+          type:
+            - array
+            - "null"
+        escopo_acesso:
+          description: Escopo de acesso da credencial (seção 4.9)
+          enum:
+            - interno
+            - prestador
+            - locatario
+            - link
+          type: string
+        expira_em:
+          description: Teto absoluto da sessão web (7 dias); a inatividade de 12 horas vence antes. Nulo fora do login e da troca de empresa
+          format: date-time
+          type:
+            - string
+            - "null"
+        perfis:
+          description: Códigos de origem dos perfis ativos
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        permissoes:
+          description: Permissões efetivas, em ordem alfabética (perfis e permissões avulsas)
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        tokens:
+          $ref: "#/components/schemas/TokensApp"
+          description: Tokens novos do app; nulo na web, que recebe o cookie novo
+        usuario:
+          $ref: "#/components/schemas/UsuarioSessao"
+      required:
+        - tokens
+        - canal
+        - csrf_token
+        - expira_em
+        - escopo_acesso
+        - usuario
+        - empresa
+        - perfis
+        - permissoes
+        - empresas
+      type: object
+    Turno:
+      additionalProperties: false
+      properties:
+        dia_semana:
+          description: 1 = segunda ... 7 = domingo
+          format: int32
+          maximum: 7
+          minimum: 1
+          type: integer
+        hora_fim:
+          description: Menor que o início termina no dia seguinte; 24:00 é meia-noite
+          examples:
+            - "17:00"
+          type: string
+        hora_inicio:
+          examples:
+            - "08:00"
+          type: string
+        id:
+          format: uuid
+          type: string
+        nome:
+          type:
+            - string
+            - "null"
+        unidade_id:
+          format: uuid
+          type: string
+        versao:
+          format: int64
+          type: integer
+      required:
+        - id
+        - unidade_id
+        - dia_semana
+        - hora_inicio
+        - hora_fim
+        - nome
+        - versao
+      type: object
+    Unidade:
+      additionalProperties: false
+      properties:
+        atualizado_em:
+          format: date-time
+          type: string
+        cnpj:
+          type:
+            - string
+            - "null"
+        codigo:
+          type: string
+        criado_em:
+          format: date-time
+          type: string
+        endereco:
+          $ref: "#/components/schemas/Endereco"
+        fuso_horario:
+          description: "Nulo: herda o da empresa"
+          type:
+            - string
+            - "null"
+        id:
+          format: uuid
+          type: string
+        latitude:
+          format: double
+          type:
+            - number
+            - "null"
+        longitude:
+          format: double
+          type:
+            - number
+            - "null"
+        nome:
+          type: string
+        situacao:
+          enum:
+            - ativa
+            - inativa
+          type: string
+        turnos:
+          items:
+            $ref: "#/components/schemas/Turno"
+          type:
+            - array
+            - "null"
+        versao:
+          format: int64
+          type: integer
+      required:
+        - turnos
+        - id
+        - codigo
+        - nome
+        - cnpj
+        - endereco
+        - fuso_horario
+        - latitude
+        - longitude
+        - situacao
+        - versao
+        - criado_em
+        - atualizado_em
+      type: object
+    Usuario:
+      additionalProperties: false
+      properties:
+        atualizado_em:
+          format: date-time
+          type: string
+        criado_em:
+          format: date-time
+          type: string
+        custo_hora:
+          description: Custo por hora, texto decimal
+          examples:
+            - "125.50"
+          type:
+            - string
+            - "null"
+        email:
+          type:
+            - string
+            - "null"
+        escopo_acesso:
+          enum:
+            - interno
+            - prestador
+            - locatario
+          type: string
+        fornecedor_id:
+          format: uuid
+          type: string
+        id:
+          format: uuid
+          type: string
+        locatario_id:
+          format: uuid
+          type: string
+        nome:
+          type: string
+        perfis:
+          items:
+            $ref: "#/components/schemas/PerfilAtribuido"
+          type:
+            - array
+            - "null"
+        permissoes_avulsas:
+          description: Permissões concedidas a este usuário além dos perfis, como pessoa.saude.ler
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        pessoa_id:
+          format: uuid
+          type: string
+        situacao:
+          enum:
+            - convidado
+            - ativo
+            - inativo
+          type: string
+        telefone:
+          type:
+            - string
+            - "null"
+        unidade_padrao_id:
+          format: uuid
+          type: string
+        versao:
+          format: int64
+          type: integer
+      required:
+        - id
+        - pessoa_id
+        - fornecedor_id
+        - locatario_id
+        - escopo_acesso
+        - nome
+        - email
+        - telefone
+        - custo_hora
+        - unidade_padrao_id
+        - situacao
+        - perfis
+        - permissoes_avulsas
+        - versao
+        - criado_em
+        - atualizado_em
+      type: object
+    UsuarioCriado:
+      additionalProperties: false
+      properties:
+        atualizado_em:
+          format: date-time
+          type: string
+        convite_enviado:
+          description: "Falso: o usuário existe, mas o e-mail não saiu; use reenviar-convite"
+          type: boolean
+        criado_em:
+          format: date-time
+          type: string
+        custo_hora:
+          description: Custo por hora, texto decimal
+          examples:
+            - "125.50"
+          type:
+            - string
+            - "null"
+        email:
+          type:
+            - string
+            - "null"
+        escopo_acesso:
+          enum:
+            - interno
+            - prestador
+            - locatario
+          type: string
+        fornecedor_id:
+          format: uuid
+          type: string
+        id:
+          format: uuid
+          type: string
+        locatario_id:
+          format: uuid
+          type: string
+        nome:
+          type: string
+        perfis:
+          items:
+            $ref: "#/components/schemas/PerfilAtribuido"
+          type:
+            - array
+            - "null"
+        permissoes_avulsas:
+          description: Permissões concedidas a este usuário além dos perfis, como pessoa.saude.ler
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        pessoa_id:
+          format: uuid
+          type: string
+        situacao:
+          enum:
+            - convidado
+            - ativo
+            - inativo
+          type: string
+        telefone:
+          type:
+            - string
+            - "null"
+        unidade_padrao_id:
+          format: uuid
+          type: string
+        versao:
+          format: int64
+          type: integer
+      required:
+        - convite_enviado
+        - id
+        - pessoa_id
+        - fornecedor_id
+        - locatario_id
+        - escopo_acesso
+        - nome
+        - email
+        - telefone
+        - custo_hora
+        - unidade_padrao_id
+        - situacao
+        - perfis
+        - permissoes_avulsas
+        - versao
+        - criado_em
+        - atualizado_em
+      type: object
+    UsuarioSessao:
+      additionalProperties: false
+      properties:
+        email:
+          format: email
+          type: string
+        id:
+          format: uuid
+          type: string
+        mfa_ativo:
+          description: Segundo fator por TOTP ativo
+          type: boolean
+        nome:
+          type: string
+        pessoa_id:
+          format: uuid
+          type: string
+      required:
+        - id
+        - nome
+        - email
+        - pessoa_id
+        - mfa_ativo
+      type: object
+    Versao:
       additionalProperties: false
       properties:
         commit:
@@ -38,59 +2161,4445 @@ components:
         - commit
         - data_build
       type: object
-    Problema:
-      additionalProperties: false
-      properties:
-        campos:
-          description: Erros por campo, quando a entrada é inválida
-          items:
-            $ref: "#/components/schemas/Campo"
-          type:
-            - array
-            - "null"
-        codigo:
-          description: Código estável do erro, para tratamento em código
-          examples:
-            - OS_TRANSICAO_INVALIDA
-          type: string
-        detail:
-          description: O que aconteceu e o que fazer
-          examples:
-            - A OS OS-2026-004812 está cancelada e não pode ser concluída.
-          type: string
-        instance:
-          description: Caminho da requisição que falhou
-          examples:
-            - /v1/ordens-servico/0193f2a1-7c3e-7b10-9a2e-5d1c3f0a8b77/concluir
-          type: string
-        status:
-          description: Código de status HTTP
-          examples:
-            - 409
-          format: int64
-          type: integer
-        title:
-          description: Resumo curto do tipo de erro
-          examples:
-            - Transição de estado inválida
-          type: string
-        type:
-          description: URI que documenta o código do erro
-          examples:
-            - https://docs.tenaz.com.br/erros/os-transicao-invalida
-          type: string
-      required:
-        - type
-        - title
-        - status
-        - codigo
-      type: object
+  securitySchemes:
+    bearer:
+      bearerFormat: JWT
+      description: Access token do app de campo, emitido por POST /oauth/token (seção 4.3 do documento 3).
+      scheme: bearer
+      type: http
+    sessao:
+      description: Sessão web (seção 4.2 do documento 3). Métodos que alteram dados exigem também o cabeçalho X-CSRF-Token e Origin de uma origem da web.
+      in: cookie
+      name: __Host-tenaz_sessao
+      type: apiKey
 info:
   description: API da Tenaz — Gestão de Manutenção e Frota. Contrato único usado pela web, pelo aplicativo de campo e pelos integradores.
   title: Tenaz
   version: "1"
 openapi: 3.1.0
 paths:
+  /oauth/authorize:
+    get:
+      description: Confere client_id e redirect_uri e redireciona (302) para a tela de autorização da web, /autorizar-app, com os mesmos parâmetros. Lá a pessoa entra com a sessão web normal (senha e MFA), escolhe a empresa e a web chama POST /oauth/authorize. Cliente ou URI de retorno inválidos respondem 422 e nunca redirecionam.
+      operationId: iniciarAutorizacaoApp
+      parameters:
+        - explode: false
+          in: query
+          name: response_type
+          required: true
+          schema:
+            enum:
+              - code
+            type: string
+        - explode: false
+          in: query
+          name: client_id
+          required: true
+          schema:
+            maxLength: 64
+            type: string
+        - explode: false
+          in: query
+          name: redirect_uri
+          required: true
+          schema:
+            maxLength: 512
+            type: string
+        - explode: false
+          in: query
+          name: code_challenge
+          required: true
+          schema:
+            maxLength: 128
+            type: string
+        - explode: false
+          in: query
+          name: code_challenge_method
+          required: true
+          schema:
+            enum:
+              - S256
+            type: string
+        - explode: false
+          in: query
+          name: state
+          schema:
+            maxLength: 512
+            type: string
+      responses:
+        "302":
+          description: Found
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+            Location:
+              schema:
+                type: string
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security: []
+      summary: Início do OAuth 2.1 com PKCE do app
+      tags:
+        - OAuth do app
+      x-escopos-acesso:
+        - publico
+      x-fase: MVP
+      x-modulo: ADM
+      x-plano-minimo: E
+    post:
+      description: "Chamada pela tela /autorizar-app da web, com a sessão web (cookie, X-CSRF-Token e Origin). Emite o código de uso único (60 s) e devolve a redirect_uri com code e state. Perfil sem mob.usar_app (o locatario) recebe a redirect_uri com error=access_denied. Empresa fora do acesso: 404."
+      operationId: autorizarApp
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntradaAutorizarPOSTBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Autorizacao"
+          description: OK
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Conflict
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+      summary: Autorizar o app na empresa escolhida
+      tags:
+        - OAuth do app
+      x-escopos-acesso:
+        - interno
+        - prestador
+        - locatario
+      x-fase: MVP
+      x-modulo: ADM
+      x-plano-minimo: E
+  /oauth/revoke:
+    post:
+      description: "RFC 7009: revoga a família de refresh tokens e a sessão do aparelho. O refresh token no corpo é a credencial. Token desconhecido também responde 200, para não servir de oráculo."
+      operationId: revogarTokenApp
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: "#/components/schemas/EntradaRevogarBody"
+        required: true
+      responses:
+        "200":
+          description: OK
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security: []
+      summary: Revogar o refresh token (sair no app)
+      tags:
+        - OAuth do app
+      x-escopos-acesso:
+        - publico
+      x-fase: MVP
+      x-modulo: ADM
+      x-plano-minimo: E
+  /oauth/token:
+    post:
+      description: "grant_type=authorization_code (code, redirect_uri, client_id, code_verifier) ou grant_type=refresh_token (refresh_token, client_id). Cada renovação devolve refresh token novo; um refresh token já usado e reapresentado revoga a família e a sessão do aparelho. Falha: 401 credencial_invalida com error=invalid_grant (RFC 6749). O app serializa as renovações."
+      operationId: emitirTokensApp
+      parameters:
+        - description: Dispositivo do app, gravado na sessão
+          in: header
+          name: X-Tenaz-Dispositivo-Id
+          schema:
+            description: Dispositivo do app, gravado na sessão
+            format: uuid
+            type: string
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: "#/components/schemas/EntradaTokenBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokensApp"
+          description: OK
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+            Pragma:
+              schema:
+                type: string
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security: []
+      summary: Trocar o código ou renovar o refresh token
+      tags:
+        - OAuth do app
+      x-escopos-acesso:
+        - publico
+      x-fase: MVP
+      x-modulo: ADM
+      x-plano-minimo: E
+  /v1/auth/convites/aceitar:
+    post:
+      description: Liga o login ao usuário convidado e o ativa; o link é gasto. Depois, a pessoa entra por POST /v1/auth/login. 410 link_email_invalido; 422 senha_fraca; 409 conflito se o e-mail já tem usuário na empresa.
+      operationId: aceitarConvite
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntradaConviteAceitarBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConviteAceito"
+          description: OK
+          headers:
+            ETag:
+              schema:
+                type:
+                  - string
+                  - "null"
+            Location:
+              schema:
+                type:
+                  - string
+                  - "null"
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security: []
+      summary: Aceitar o convite
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - publico
+      x-fase: MVP
+      x-modulo: ADM
+      x-plano-minimo: E
+  /v1/auth/convites/consultar:
+    post:
+      description: Confere o link sem gastá-lo, para a tela de aceite saber se pede senha. O token vai no corpo, nunca na URL. 410 link_email_invalido.
+      operationId: consultarConvite
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntradaConviteConsultarBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Convite"
+          description: OK
+          headers:
+            ETag:
+              schema:
+                type:
+                  - string
+                  - "null"
+            Location:
+              schema:
+                type:
+                  - string
+                  - "null"
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security: []
+      summary: Consultar o convite do link
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - publico
+      x-fase: MVP
+      x-modulo: ADM
+      x-plano-minimo: E
+  /v1/auth/login:
+    post:
+      description: Cria a sessão web e devolve o cookie de sessão e o csrf_token. Com MFA ativo, responde 401 mfa_obrigatorio com desafio_id, e o login termina em POST /v1/auth/mfa/verificar. Toda falha de credencial responde 401 credencial_invalida, sem dizer se o e-mail existe (RF-ADM-006).
+      operationId: entrar
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntradaLoginBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sessao"
+          description: OK
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+            Set-Cookie:
+              schema:
+                description: "Cookie da sessão web: HttpOnly, SameSite=Lax, Path=/; Secure e prefixo __Host- fora do desenvolvimento"
+                type:
+                  - string
+                  - "null"
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "410":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Gone
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security: []
+      summary: Entrar com e-mail e senha
+      tags:
+        - Autenticação
+      x-escopos-acesso:
+        - publico
+      x-fase: MVP
+      x-modulo: ADM
+      x-plano-minimo: E
+  /v1/auth/logout:
+    post:
+      description: Encerra a sessão no servidor (web ou app; no app, com a família de refresh tokens) e apaga o cookie.
+      operationId: sair
+      responses:
+        "204":
+          description: No Content
+          headers:
+            Set-Cookie:
+              schema:
+                description: "Cookie da sessão web: HttpOnly, SameSite=Lax, Path=/; Secure e prefixo __Host- fora do desenvolvimento"
+                type:
+                  - string
+                  - "null"
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Conflict
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Sair
+      tags:
+        - Autenticação
+      x-escopos-acesso:
+        - interno
+        - prestador
+        - locatario
+      x-fase: MVP
+      x-modulo: ADM
+      x-plano-minimo: E
+  /v1/auth/mfa/confirmar:
+    post:
+      description: Ativa o segundo fator com o primeiro código certo. 401 mfa_codigo_invalido.
+      operationId: confirmarMFA
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntradaCodigoMFABody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Conflict
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Confirmar a ativação do segundo fator
+      tags:
+        - Autenticação
+      x-escopos-acesso:
+        - interno
+        - prestador
+        - locatario
+      x-fase: MVP
+      x-modulo: ADM
+      x-plano-minimo: E
+  /v1/auth/mfa/desativar:
+    post:
+      description: Exige um código válido. 401 mfa_codigo_invalido; 409 transicao_invalida se não está ativo.
+      operationId: desativarMFA
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntradaCodigoMFABody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Conflict
+        "412":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Precondition Failed
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "428":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Precondition Required
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Desativar o segundo fator
+      tags:
+        - Autenticação
+      x-escopos-acesso:
+        - interno
+        - prestador
+        - locatario
+      x-fase: MVP
+      x-modulo: ADM
+      x-plano-minimo: E
+  /v1/auth/mfa/iniciar:
+    post:
+      description: Gera o segredo TOTP pendente e devolve o segredo e a URI do QR code, uma única vez. Só vale depois de POST /v1/auth/mfa/confirmar. 409 transicao_invalida se o segundo fator já está ativo.
+      operationId: iniciarMFA
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConfiguracaoMFA"
+          description: OK
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Conflict
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Iniciar a ativação do segundo fator
+      tags:
+        - Autenticação
+      x-escopos-acesso:
+        - interno
+        - prestador
+        - locatario
+      x-fase: MVP
+      x-modulo: ADM
+      x-plano-minimo: E
+  /v1/auth/mfa/verificar:
+    post:
+      description: Confere o código TOTP do desafio. Código errado responde 401 mfa_codigo_invalido com tentativas_restantes; esgotadas as 5 tentativas, ou vencido o desafio (5 minutos), o login recomeça pela senha.
+      operationId: verificarMFA
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntradaMFABody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sessao"
+          description: OK
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+            Set-Cookie:
+              schema:
+                description: "Cookie da sessão web: HttpOnly, SameSite=Lax, Path=/; Secure e prefixo __Host- fora do desenvolvimento"
+                type:
+                  - string
+                  - "null"
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "410":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Gone
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security: []
+      summary: Concluir o login com o segundo fator
+      tags:
+        - Autenticação
+      x-escopos-acesso:
+        - publico
+      x-fase: MVP
+      x-modulo: ADM
+      x-plano-minimo: E
+  /v1/auth/recuperar-senha:
+    post:
+      description: Envia o link (válido por 1 hora) se o e-mail tiver login. Responde 202 igual, exista ou não o e-mail, para não revelar quais e-mails existem.
+      operationId: recuperarSenha
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntradaRecuperarSenhaBody"
+        required: true
+      responses:
+        "202":
+          description: Accepted
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "410":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Gone
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security: []
+      summary: Pedir link de redefinição de senha
+      tags:
+        - Autenticação
+      x-escopos-acesso:
+        - publico
+      x-fase: MVP
+      x-modulo: ADM
+      x-plano-minimo: E
+  /v1/auth/redefinir-senha:
+    post:
+      description: O token vem do fragmento do link (#token=...) e vai no corpo, nunca na URL. Redefinir encerra todas as sessões da pessoa, em todas as empresas. 410 link_email_invalido; 422 senha_fraca.
+      operationId: redefinirSenha
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntradaRedefinirSenhaBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "410":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Gone
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security: []
+      summary: Redefinir a senha com o link do e-mail
+      tags:
+        - Autenticação
+      x-escopos-acesso:
+        - publico
+      x-fase: MVP
+      x-modulo: ADM
+      x-plano-minimo: E
+  /v1/auth/sessao:
+    get:
+      description: Usuário, empresa, escopo, perfis, permissões, empresas do seletor e, na web, o csrf_token.
+      operationId: obterSessao
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sessao"
+          description: OK
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Sessão atual
+      tags:
+        - Autenticação
+      x-escopos-acesso:
+        - interno
+        - prestador
+        - locatario
+      x-fase: MVP
+      x-modulo: ADM
+      x-plano-minimo: E
+  /v1/auth/trocar-empresa:
+    post:
+      description: "Emite credencial NOVA na empresa escolhida e revoga a atual: uma credencial nunca vale para duas empresas (seção 4.7). Na web, cookie e csrf_token novos; no app, tokens novos. Empresa fora do acesso: 404."
+      operationId: trocarEmpresa
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntradaTrocarEmpresaBody"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrocaEmpresa"
+          description: OK
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+            Set-Cookie:
+              schema:
+                description: "Cookie da sessão web: HttpOnly, SameSite=Lax, Path=/; Secure e prefixo __Host- fora do desenvolvimento"
+                type:
+                  - string
+                  - "null"
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Conflict
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Trocar de empresa
+      tags:
+        - Autenticação
+      x-escopos-acesso:
+        - interno
+        - prestador
+        - locatario
+      x-fase: MVP
+      x-modulo: ADM
+      x-plano-minimo: E
+  /v1/auth/trocar-senha:
+    post:
+      description: Confere a senha atual (errada conta como falha de login) e encerra as outras sessões da pessoa; a atual continua. 422 senha_fraca.
+      operationId: trocarSenha
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntradaTrocarSenhaBody"
+        required: true
+      responses:
+        "204":
+          description: No Content
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Conflict
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Trocar a própria senha
+      tags:
+        - Autenticação
+      x-escopos-acesso:
+        - interno
+        - prestador
+        - locatario
+      x-fase: MVP
+      x-modulo: ADM
+      x-plano-minimo: E
+  /v1/empresa:
+    get:
+      description: A empresa da credencial. Traz ETag.
+      operationId: obterEmpresa
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Empresa"
+          description: OK
+          headers:
+            ETag:
+              schema:
+                type:
+                  - string
+                  - "null"
+            Location:
+              schema:
+                type:
+                  - string
+                  - "null"
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Dados da empresa
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.ler
+      x-plano-minimo: E
+    patch:
+      description: "JSON Merge Patch com If-Match. Plano e módulo SRV mudam pela cobrança (RF-ADM-009), não aqui: 422 campo_somente_leitura."
+      operationId: alterarEmpresa
+      parameters:
+        - description: ETag lido do recurso; obrigatório
+          in: header
+          name: If-Match
+          schema:
+            description: ETag lido do recurso; obrigatório
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchEmpresa"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Empresa"
+          description: OK
+          headers:
+            ETag:
+              schema:
+                type:
+                  - string
+                  - "null"
+            Location:
+              schema:
+                type:
+                  - string
+                  - "null"
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Conflict
+        "412":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Precondition Failed
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "428":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Precondition Required
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Alterar dados cadastrais
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.gerenciar_empresa
+      x-plano-minimo: E
+  /v1/empresas:
+    post:
+      description: Cria a empresa com a unidade inicial, os 12 perfis padrão com a matriz de RF-ADM-005 e o responsável como administrador convidado, e envia o convite, que confirma o e-mail antes do primeiro acesso (RF-ADM-001; RF-SRV-001 com srv_habilitado). 409 conflito em CNPJ já cadastrado.
+      operationId: criarEmpresa
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NovaEmpresa"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContaCriada"
+          description: Created
+          headers:
+            ETag:
+              schema:
+                type:
+                  - string
+                  - "null"
+            Location:
+              schema:
+                type:
+                  - string
+                  - "null"
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Conflict
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security: []
+      summary: Criar a conta da empresa (cadastro pelo site)
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - publico
+      x-fase: MVP
+      x-modulo: ADM
+      x-plano-minimo: E
+  /v1/eventos-auditoria:
+    get:
+      description: Filtros por entidade, registro, usuário, ação e período; paginada por cursor, do mais recente (RF-ADM-011).
+      operationId: listarEventosAuditoria
+      parameters:
+        - explode: false
+          in: query
+          name: entidade
+          schema:
+            examples:
+              - usuario
+            maxLength: 60
+            type: string
+        - explode: false
+          in: query
+          name: entidade_id
+          schema:
+            format: uuid
+            type: string
+        - explode: false
+          in: query
+          name: usuario_id
+          schema:
+            format: uuid
+            type: string
+        - explode: false
+          in: query
+          name: acao
+          schema:
+            examples:
+              - alteracao
+            maxLength: 40
+            type: string
+        - description: A partir deste instante, inclusive
+          explode: false
+          in: query
+          name: ocorrido_em[gte]
+          schema:
+            description: A partir deste instante, inclusive
+            format: date-time
+            type: string
+        - description: Antes deste instante
+          explode: false
+          in: query
+          name: ocorrido_em[lt]
+          schema:
+            description: Antes deste instante
+            format: date-time
+            type: string
+        - explode: false
+          in: query
+          name: cursor
+          schema:
+            maxLength: 512
+            type: string
+        - explode: false
+          in: query
+          name: limite
+          schema:
+            default: 50
+            format: int32
+            maximum: 200
+            minimum: 1
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListaResumoEvento"
+          description: OK
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Trilha de auditoria
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.ler_auditoria
+      x-plano-minimo: E
+  /v1/eventos-auditoria/{id}:
+    get:
+      description: Com os valores antes e depois. O evento é imutável.
+      operationId: obterEventoAuditoria
+      parameters:
+        - description: Identificador (UUID)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: Identificador (UUID)
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Evento"
+          description: OK
+          headers:
+            ETag:
+              schema:
+                type:
+                  - string
+                  - "null"
+            Location:
+              schema:
+                type:
+                  - string
+                  - "null"
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Evento de auditoria
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.ler_auditoria
+      x-plano-minimo: E
+  /v1/perfis:
+    get:
+      description: Os 12 perfis padrão e os personalizados, com as permissões. Lista curta, inteira numa página.
+      operationId: listarPerfis
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListaPerfil"
+          description: OK
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Listar perfis
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.ler_usuarios
+      x-plano-minimo: E
+  /v1/permissoes:
+    get:
+      description: O catálogo inteiro de RF-ADM-005, com fase e marcação de sensível. Lista curta, inteira numa página.
+      operationId: listarPermissoes
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListaPermissao"
+          description: OK
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Catálogo de permissões
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.gerenciar_perfis
+      x-plano-minimo: E
+  /v1/pessoas:
+    get:
+      description: Paginada por cursor, ordem -criado_em. O CPF sai mascarado; o inteiro só no detalhe.
+      operationId: listarPessoas
+      parameters:
+        - description: Trecho do nome
+          explode: false
+          in: query
+          name: busca
+          schema:
+            description: Trecho do nome
+            maxLength: 100
+            type: string
+        - explode: false
+          in: query
+          name: situacao
+          schema:
+            enum:
+              - ativa
+              - inativa
+              - desligada
+            type: string
+        - explode: false
+          in: query
+          name: fornecedor_id
+          schema:
+            format: uuid
+            type: string
+        - explode: false
+          in: query
+          name: unidade_id
+          schema:
+            format: uuid
+            type: string
+        - description: "true: só pessoas com usuário; false: só sem usuário"
+          explode: false
+          in: query
+          name: com_usuario
+          schema:
+            description: "true: só pessoas com usuário; false: só sem usuário"
+            enum:
+              - "true"
+              - "false"
+            type: string
+        - description: proximo_cursor da página anterior
+          explode: false
+          in: query
+          name: cursor
+          schema:
+            description: proximo_cursor da página anterior
+            maxLength: 512
+            type: string
+        - explode: false
+          in: query
+          name: limite
+          schema:
+            default: 50
+            format: int32
+            maximum: 200
+            minimum: 1
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListaResumoPessoa"
+          description: OK
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Listar pessoas
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.ler_pessoas
+      x-plano-minimo: E
+    post:
+      description: Com ou sem usuário (RF-ADM-015). 409 conflito em CPF repetido na empresa.
+      operationId: criarPessoa
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntradaPessoa"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pessoa"
+          description: Created
+          headers:
+            ETag:
+              schema:
+                type:
+                  - string
+                  - "null"
+            Location:
+              schema:
+                type:
+                  - string
+                  - "null"
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Conflict
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Cadastrar pessoa
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.gerenciar_pessoas
+      x-plano-minimo: E
+  /v1/pessoas/{id}:
+    delete:
+      description: "A pessoa nunca é apagada: é inativada (seção 2.12). Com If-Match."
+      operationId: inativarPessoa
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - description: ETag lido do recurso; obrigatório
+          in: header
+          name: If-Match
+          schema:
+            description: ETag lido do recurso; obrigatório
+            type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Conflict
+        "412":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Precondition Failed
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "428":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Precondition Required
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Inativar pessoa
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.gerenciar_pessoas
+      x-plano-minimo: E
+    get:
+      description: Com o CPF inteiro; a leitura é registrada na trilha. O titular lê a própria pessoa sem adm.ler_pessoas. Traz ETag.
+      operationId: obterPessoa
+      parameters:
+        - description: Identificador (UUID)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: Identificador (UUID)
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pessoa"
+          description: OK
+          headers:
+            ETag:
+              schema:
+                type:
+                  - string
+                  - "null"
+            Location:
+              schema:
+                type:
+                  - string
+                  - "null"
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Detalhar pessoa
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.ler_pessoas
+      x-plano-minimo: E
+    patch:
+      description: JSON Merge Patch com If-Match.
+      operationId: alterarPessoa
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - description: ETag lido do recurso; obrigatório
+          in: header
+          name: If-Match
+          schema:
+            description: ETag lido do recurso; obrigatório
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchPessoa"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pessoa"
+          description: OK
+          headers:
+            ETag:
+              schema:
+                type:
+                  - string
+                  - "null"
+            Location:
+              schema:
+                type:
+                  - string
+                  - "null"
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Conflict
+        "412":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Precondition Failed
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "428":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Precondition Required
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Alterar pessoa
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.gerenciar_pessoas
+      x-plano-minimo: E
+  /v1/pessoas/{id}/reativar:
+    post:
+      description: inativa → ativa, com If-Match. 409 transicao_invalida se já está ativa.
+      operationId: reativarPessoa
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - description: ETag lido do recurso; obrigatório
+          in: header
+          name: If-Match
+          schema:
+            description: ETag lido do recurso; obrigatório
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pessoa"
+          description: OK
+          headers:
+            ETag:
+              schema:
+                type:
+                  - string
+                  - "null"
+            Location:
+              schema:
+                type:
+                  - string
+                  - "null"
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Conflict
+        "412":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Precondition Failed
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "428":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Precondition Required
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Reativar pessoa
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.gerenciar_pessoas
+      x-plano-minimo: E
+  /v1/unidades:
+    get:
+      description: Lista curta, inteira numa página (tem_mais falso), com as unidades ativas e inativas.
+      operationId: listarUnidades
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListaResumoUnidade"
+          description: OK
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Listar unidades
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.ler
+      x-plano-minimo: E
+    post:
+      description: "Com pelo menos um turno (RF-ADM-002). O Essencial tem 1 unidade: a segunda responde 403 plano_nao_inclui_recurso com plano_necessario. 409 conflito em código repetido."
+      operationId: criarUnidade
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntradaUnidade"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Unidade"
+          description: Created
+          headers:
+            ETag:
+              schema:
+                type:
+                  - string
+                  - "null"
+            Location:
+              schema:
+                type:
+                  - string
+                  - "null"
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Conflict
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Criar unidade
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.gerenciar_empresa
+      x-plano-minimo: E
+  /v1/unidades/{id}:
+    delete:
+      description: ativa → inativa, com If-Match; a unidade nunca é apagada (seção 2.12). A última unidade ativa não é inativada (422 validacao_falhou). 409 transicao_invalida se já está inativa.
+      operationId: inativarUnidade
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - description: ETag lido do recurso; obrigatório
+          in: header
+          name: If-Match
+          schema:
+            description: ETag lido do recurso; obrigatório
+            type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Conflict
+        "412":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Precondition Failed
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "428":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Precondition Required
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Inativar unidade
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.gerenciar_empresa
+      x-plano-minimo: E
+    get:
+      description: Com os turnos. Traz ETag.
+      operationId: obterUnidade
+      parameters:
+        - description: Identificador (UUID)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: Identificador (UUID)
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Unidade"
+          description: OK
+          headers:
+            ETag:
+              schema:
+                type:
+                  - string
+                  - "null"
+            Location:
+              schema:
+                type:
+                  - string
+                  - "null"
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Detalhar unidade
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.ler
+      x-plano-minimo: E
+    patch:
+      description: Nome, código, endereço, fuso, CNPJ e coordenadas. JSON Merge Patch com If-Match.
+      operationId: alterarUnidade
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - description: ETag lido do recurso; obrigatório
+          in: header
+          name: If-Match
+          schema:
+            description: ETag lido do recurso; obrigatório
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchUnidade"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Unidade"
+          description: OK
+          headers:
+            ETag:
+              schema:
+                type:
+                  - string
+                  - "null"
+            Location:
+              schema:
+                type:
+                  - string
+                  - "null"
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Conflict
+        "412":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Precondition Failed
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "428":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Precondition Required
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Alterar unidade
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.gerenciar_empresa
+      x-plano-minimo: E
+  /v1/unidades/{id}/feriados:
+    get:
+      description: Lista curta, inteira numa página, com filtro de período opcional.
+      operationId: listarFeriados
+      parameters:
+        - description: Unidade
+          in: path
+          name: id
+          required: true
+          schema:
+            description: Unidade
+            type: string
+        - description: A partir desta data, inclusive
+          explode: false
+          in: query
+          name: data[gte]
+          schema:
+            description: A partir desta data, inclusive
+            format: date
+            type: string
+        - description: Até esta data, inclusive
+          explode: false
+          in: query
+          name: data[lte]
+          schema:
+            description: Até esta data, inclusive
+            format: date
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListaFeriado"
+          description: OK
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Listar feriados da unidade
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.ler
+      x-plano-minimo: E
+    post:
+      description: 409 conflito em data repetida na unidade.
+      operationId: incluirFeriado
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntradaFeriado"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Feriado"
+          description: Created
+          headers:
+            ETag:
+              schema:
+                type:
+                  - string
+                  - "null"
+            Location:
+              schema:
+                type:
+                  - string
+                  - "null"
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Conflict
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Incluir feriado
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.gerenciar_empresa
+      x-plano-minimo: E
+  /v1/unidades/{id}/feriados/{feriado_id}:
+    delete:
+      description: Com If-Match (ETag do feriado, que vem na lista).
+      operationId: removerFeriado
+      parameters:
+        - description: Unidade
+          in: path
+          name: id
+          required: true
+          schema:
+            description: Unidade
+            type: string
+        - in: path
+          name: feriado_id
+          required: true
+          schema:
+            type: string
+        - description: ETag do feriado; obrigatório
+          in: header
+          name: If-Match
+          schema:
+            description: ETag do feriado; obrigatório
+            type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Conflict
+        "412":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Precondition Failed
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "428":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Precondition Required
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Remover feriado
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.gerenciar_empresa
+      x-plano-minimo: E
+  /v1/unidades/{id}/reativar:
+    post:
+      description: inativa → ativa, com If-Match; respeita o limite de unidades do plano. 409 transicao_invalida se já está ativa.
+      operationId: reativarUnidade
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - description: ETag lido do recurso; obrigatório
+          in: header
+          name: If-Match
+          schema:
+            description: ETag lido do recurso; obrigatório
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Unidade"
+          description: OK
+          headers:
+            ETag:
+              schema:
+                type:
+                  - string
+                  - "null"
+            Location:
+              schema:
+                type:
+                  - string
+                  - "null"
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Conflict
+        "412":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Precondition Failed
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "428":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Precondition Required
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Reativar unidade
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.gerenciar_empresa
+      x-plano-minimo: E
+  /v1/unidades/{id}/turnos:
+    post:
+      description: Turno por dia da semana no calendário da unidade (RF-ADM-002).
+      operationId: incluirTurno
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntradaTurno"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Turno"
+          description: Created
+          headers:
+            ETag:
+              schema:
+                type:
+                  - string
+                  - "null"
+            Location:
+              schema:
+                type:
+                  - string
+                  - "null"
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Conflict
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Incluir turno
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.gerenciar_empresa
+      x-plano-minimo: E
+  /v1/unidades/{id}/turnos/{turno_id}:
+    delete:
+      description: Com If-Match. O último turno da unidade não é removido (422 validacao_falhou).
+      operationId: removerTurno
+      parameters:
+        - description: Unidade
+          in: path
+          name: id
+          required: true
+          schema:
+            description: Unidade
+            type: string
+        - in: path
+          name: turno_id
+          required: true
+          schema:
+            type: string
+        - description: ETag do turno; obrigatório
+          in: header
+          name: If-Match
+          schema:
+            description: ETag do turno; obrigatório
+            type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Conflict
+        "412":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Precondition Failed
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "428":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Precondition Required
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Remover turno
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.gerenciar_empresa
+      x-plano-minimo: E
+    patch:
+      description: JSON Merge Patch com If-Match (ETag do turno).
+      operationId: alterarTurno
+      parameters:
+        - description: Unidade
+          in: path
+          name: id
+          required: true
+          schema:
+            description: Unidade
+            type: string
+        - in: path
+          name: turno_id
+          required: true
+          schema:
+            type: string
+        - description: ETag do turno; obrigatório
+          in: header
+          name: If-Match
+          schema:
+            description: ETag do turno; obrigatório
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchTurno"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Turno"
+          description: OK
+          headers:
+            ETag:
+              schema:
+                type:
+                  - string
+                  - "null"
+            Location:
+              schema:
+                type:
+                  - string
+                  - "null"
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Conflict
+        "412":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Precondition Failed
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "428":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Precondition Required
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Alterar turno
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.gerenciar_empresa
+      x-plano-minimo: E
+  /v1/usuarios:
+    get:
+      description: Paginada por cursor, ordem -criado_em.
+      operationId: listarUsuarios
+      parameters:
+        - description: Trecho do nome ou do e-mail
+          explode: false
+          in: query
+          name: busca
+          schema:
+            description: Trecho do nome ou do e-mail
+            maxLength: 100
+            type: string
+        - explode: false
+          in: query
+          name: situacao
+          schema:
+            enum:
+              - convidado
+              - ativo
+              - inativo
+            type: string
+        - description: Código do perfil de origem
+          explode: false
+          in: query
+          name: perfil
+          schema:
+            description: Código do perfil de origem
+            maxLength: 40
+            type: string
+        - explode: false
+          in: query
+          name: cursor
+          schema:
+            maxLength: 512
+            type: string
+        - explode: false
+          in: query
+          name: limite
+          schema:
+            default: 50
+            format: int32
+            maximum: 200
+            minimum: 1
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListaResumoUsuario"
+          description: OK
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Listar usuários
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.ler_usuarios
+      x-plano-minimo: E
+    post:
+      description: "O usuário nasce convidado e o convite (7 dias) vai por e-mail (RF-ADM-004). Regras anti-escalada: só se atribui perfil cujas permissões se tem (403 permissao_negada). prestador exige fornecedor_id; locatario, locatario_id. 409 conflito em e-mail já usado na empresa."
+      operationId: criarUsuario
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntradaUsuario"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsuarioCriado"
+          description: Created
+          headers:
+            ETag:
+              schema:
+                type:
+                  - string
+                  - "null"
+            Location:
+              schema:
+                type:
+                  - string
+                  - "null"
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Conflict
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Criar usuário e enviar convite
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.gerenciar_usuarios
+      x-plano-minimo: E
+  /v1/usuarios/eu:
+    get:
+      description: Usuário da credencial, com perfis e permissões avulsas. Vale para os perfis externos. Traz ETag.
+      operationId: obterUsuarioEu
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Usuario"
+          description: OK
+          headers:
+            ETag:
+              schema:
+                type:
+                  - string
+                  - "null"
+            Location:
+              schema:
+                type:
+                  - string
+                  - "null"
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Próprio usuário
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+        - prestador
+        - locatario
+      x-fase: MVP
+      x-modulo: ADM
+      x-plano-minimo: E
+    patch:
+      description: Só nome e telefone. JSON Merge Patch com If-Match.
+      operationId: alterarUsuarioEu
+      parameters:
+        - description: ETag lido do recurso; obrigatório
+          in: header
+          name: If-Match
+          schema:
+            description: ETag lido do recurso; obrigatório
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchEu"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Usuario"
+          description: OK
+          headers:
+            ETag:
+              schema:
+                type:
+                  - string
+                  - "null"
+            Location:
+              schema:
+                type:
+                  - string
+                  - "null"
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Conflict
+        "412":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Precondition Failed
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "428":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Precondition Required
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Alterar os próprios dados
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+        - prestador
+        - locatario
+      x-fase: MVP
+      x-modulo: ADM
+      x-plano-minimo: E
+  /v1/usuarios/{id}:
+    get:
+      description: Com perfis e permissões avulsas. Traz ETag.
+      operationId: obterUsuario
+      parameters:
+        - description: Identificador (UUID)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: Identificador (UUID)
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Usuario"
+          description: OK
+          headers:
+            ETag:
+              schema:
+                type:
+                  - string
+                  - "null"
+            Location:
+              schema:
+                type:
+                  - string
+                  - "null"
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Detalhar usuário
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.ler_usuarios
+      x-plano-minimo: E
+    patch:
+      description: JSON Merge Patch com If-Match. perfis é a lista completa e substitui a atual. Ninguém altera os próprios perfis; só administrador altera administrador; 409 ultimo_administrador ao tirar o perfil do último administrador ativo. E-mail e vínculo externo não mudam (422 campo_somente_leitura no e-mail).
+      operationId: alterarUsuario
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - description: ETag lido do recurso; obrigatório
+          in: header
+          name: If-Match
+          schema:
+            description: ETag lido do recurso; obrigatório
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchUsuario"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Usuario"
+          description: OK
+          headers:
+            ETag:
+              schema:
+                type:
+                  - string
+                  - "null"
+            Location:
+              schema:
+                type:
+                  - string
+                  - "null"
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Conflict
+        "412":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Precondition Failed
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "428":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Precondition Required
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Alterar perfis e dados do usuário
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.gerenciar_usuarios
+      x-plano-minimo: E
+  /v1/usuarios/{id}/desativar:
+    post:
+      description: situacao → inativo, com If-Match; as sessões e os refresh tokens do usuário caem na mesma transação. 409 ultimo_administrador; 409 transicao_invalida se já está inativo.
+      operationId: desativarUsuario
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - description: ETag lido do recurso; obrigatório
+          in: header
+          name: If-Match
+          schema:
+            description: ETag lido do recurso; obrigatório
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Usuario"
+          description: OK
+          headers:
+            ETag:
+              schema:
+                type:
+                  - string
+                  - "null"
+            Location:
+              schema:
+                type:
+                  - string
+                  - "null"
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Conflict
+        "412":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Precondition Failed
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "428":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Precondition Required
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Desativar usuário
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.gerenciar_usuarios
+      x-plano-minimo: E
+  /v1/usuarios/{id}/encerrar-sessoes:
+    post:
+      description: Revoga as sessões web e do app e os refresh tokens do usuário nesta empresa; o logout vai para a trilha.
+      operationId: encerrarSessoesUsuario
+      parameters:
+        - description: Identificador (UUID)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: Identificador (UUID)
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessoesEncerradas"
+          description: OK
+          headers:
+            ETag:
+              schema:
+                type:
+                  - string
+                  - "null"
+            Location:
+              schema:
+                type:
+                  - string
+                  - "null"
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Conflict
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Encerrar as sessões do usuário
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.gerenciar_usuarios
+      x-plano-minimo: E
+  /v1/usuarios/{id}/permissoes:
+    post:
+      description: Permissão do catálogo de RF-ADM-005 concedida a este usuário (usuario_permissao), como pessoa.saude.ler. Ninguém concede a si mesmo; só concede quem tem a permissão, salvo as três que o administrador concede sem ter; usuário externo nunca recebe permissão vedada. A concessão vai para a trilha.
+      operationId: concederPermissaoUsuario
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntradaPermissao"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Usuario"
+          description: Created
+          headers:
+            ETag:
+              schema:
+                type:
+                  - string
+                  - "null"
+            Location:
+              schema:
+                type:
+                  - string
+                  - "null"
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Conflict
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Conceder permissão avulsa
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.gerenciar_usuarios
+      x-plano-minimo: E
+  /v1/usuarios/{id}/permissoes/{permissao}:
+    delete:
+      description: "A retirada vai para a trilha. Permissão que o usuário não tem: 404."
+      operationId: retirarPermissaoUsuario
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: permissao
+          required: true
+          schema:
+            examples:
+              - pessoa.saude.ler
+            maxLength: 60
+            type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Conflict
+        "412":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Precondition Failed
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "428":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Precondition Required
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Retirar permissão avulsa
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.gerenciar_usuarios
+      x-plano-minimo: E
+  /v1/usuarios/{id}/reativar:
+    post:
+      description: inativo → ativo, com If-Match; quem nunca aceitou o convite volta a convidado e recebe convite novo. 409 transicao_invalida se não está inativo.
+      operationId: reativarUsuario
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - description: ETag lido do recurso; obrigatório
+          in: header
+          name: If-Match
+          schema:
+            description: ETag lido do recurso; obrigatório
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsuarioCriado"
+          description: OK
+          headers:
+            ETag:
+              schema:
+                type:
+                  - string
+                  - "null"
+            Location:
+              schema:
+                type:
+                  - string
+                  - "null"
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Conflict
+        "412":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Precondition Failed
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "428":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Precondition Required
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Reativar usuário
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.gerenciar_usuarios
+      x-plano-minimo: E
+  /v1/usuarios/{id}/reenviar-convite:
+    post:
+      description: Revoga o link anterior e envia outro (7 dias). 409 transicao_invalida se o usuário não está convidado; 503 servico_indisponivel se o e-mail não saiu.
+      operationId: reenviarConvite
+      parameters:
+        - description: Identificador (UUID)
+          in: path
+          name: id
+          required: true
+          schema:
+            description: Identificador (UUID)
+            type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Bad Request
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unauthorized
+        "403":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Forbidden
+        "404":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Not Found
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Conflict
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
+      security:
+        - sessao: []
+        - bearer: []
+      summary: Reenviar o convite
+      tags:
+        - ADM — Administração
+      x-escopos-acesso:
+        - interno
+      x-fase: MVP
+      x-modulo: ADM
+      x-permissoes:
+        - adm.gerenciar_usuarios
+      x-plano-minimo: E
   /v1/versao:
     get:
       description: Devolve a versão, o commit curto e a data do build do release em produção (RNF-039).
@@ -100,15 +6609,32 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Dados"
+                $ref: "#/components/schemas/Versao"
           description: OK
-        default:
+        "400":
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problema"
-          description: Error
+          description: Bad Request
+        "422":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problema"
+          description: Internal Server Error
       security: []
       summary: Versão publicada
       tags:
         - Plataforma
+      x-escopos-acesso:
+        - publico
+      x-fase: MVP
+      x-modulo: ADM
+      x-plano-minimo: E

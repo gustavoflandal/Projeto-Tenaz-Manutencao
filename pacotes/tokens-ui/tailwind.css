@@ -1,0 +1,177 @@
+/* Gerado por pacotes/tokens-ui/gerar.mjs a partir de tokens.json. Não edite à mão. */
+
+@theme inline {
+  --color-*: initial;
+  --color-fundo: var(--tz-fundo);
+  --color-superficie: var(--tz-superficie);
+  --color-superficie-elevada: var(--tz-superficie-elevada);
+  --color-superficie-hover: var(--tz-superficie-hover);
+  --color-superficie-selecionada: var(--tz-superficie-selecionada);
+  --color-superficie-esqueleto: var(--tz-superficie-esqueleto);
+  --color-texto: var(--tz-texto);
+  --color-texto-secundario: var(--tz-texto-secundario);
+  --color-texto-terciario: var(--tz-texto-terciario);
+  --color-texto-desabilitado: var(--tz-texto-desabilitado);
+  --color-texto-inverso: var(--tz-texto-inverso);
+  --color-borda: var(--tz-borda);
+  --color-borda-controle: var(--tz-borda-controle);
+  --color-borda-controle-hover: var(--tz-borda-controle-hover);
+  --color-foco: var(--tz-foco);
+  --color-acao-primaria: var(--tz-acao-primaria);
+  --color-acao-primaria-hover: var(--tz-acao-primaria-hover);
+  --color-acao-primaria-pressionada: var(--tz-acao-primaria-pressionada);
+  --color-acao-primaria-texto: var(--tz-acao-primaria-texto);
+  --color-perigo: var(--tz-perigo);
+  --color-perigo-hover: var(--tz-perigo-hover);
+  --color-perigo-texto: var(--tz-perigo-texto);
+  --color-nav-fundo: var(--tz-nav-fundo);
+  --color-nav-texto: var(--tz-nav-texto);
+  --color-nav-texto-secundario: var(--tz-nav-texto-secundario);
+  --color-nav-item-ativo: var(--tz-nav-item-ativo);
+  --color-toast-fundo: var(--tz-toast-fundo);
+  --color-toast-texto: var(--tz-toast-texto);
+  --color-grade-grafico: var(--tz-grade-grafico);
+  --color-serie-1: var(--tz-serie-1);
+  --color-serie-2: var(--tz-serie-2);
+  --color-serie-3: var(--tz-serie-3);
+  --color-veu: var(--tz-veu);
+  --color-status-operando: var(--tz-status-operando);
+  --color-status-operando-fundo: var(--tz-status-operando-fundo);
+  --color-status-operando-texto: var(--tz-status-operando-texto);
+  --color-status-preventiva: var(--tz-status-preventiva);
+  --color-status-preventiva-fundo: var(--tz-status-preventiva-fundo);
+  --color-status-preventiva-texto: var(--tz-status-preventiva-texto);
+  --color-status-atencao: var(--tz-status-atencao);
+  --color-status-atencao-fundo: var(--tz-status-atencao-fundo);
+  --color-status-atencao-texto: var(--tz-status-atencao-texto);
+  --color-status-parado: var(--tz-status-parado);
+  --color-status-parado-fundo: var(--tz-status-parado-fundo);
+  --color-status-parado-texto: var(--tz-status-parado-texto);
+  --color-status-inativo: var(--tz-status-inativo);
+  --color-status-inativo-fundo: var(--tz-status-inativo-fundo);
+  --color-status-inativo-texto: var(--tz-status-inativo-texto);
+  --color-status-operando-sobre-aco: var(--tz-status-operando-sobre-aco);
+  --color-status-preventiva-sobre-aco: var(--tz-status-preventiva-sobre-aco);
+  --color-status-atencao-sobre-aco: var(--tz-status-atencao-sobre-aco);
+  --color-status-parado-sobre-aco: var(--tz-status-parado-sobre-aco);
+  --color-status-inativo-sobre-aco: var(--tz-status-inativo-sobre-aco);
+
+  /* Espaçamento: múltiplos da base de 4 px (espaco-1) */
+  --spacing: var(--tz-espaco-1);
+
+  --radius-*: initial;
+  --radius-xs: var(--tz-raio-xs);
+  --radius-sm: var(--tz-raio-sm);
+  --radius-md: var(--tz-raio-md);
+  --radius-lg: var(--tz-raio-lg);
+  --radius-xl: var(--tz-raio-xl);
+  --radius-total: var(--tz-raio-total);
+
+  --shadow-*: initial;
+  --inset-shadow-*: initial;
+  --drop-shadow-*: initial;
+  --text-shadow-*: initial;
+  --shadow-1: var(--tz-sombra-1);
+  --shadow-2: var(--tz-sombra-2);
+  --shadow-3: var(--tz-sombra-3);
+  --shadow-4: var(--tz-sombra-4);
+
+  --font-*: initial;
+  --font-titulo: var(--tz-fonte-titulo);
+  --font-texto: var(--tz-fonte-texto);
+  --font-dado: var(--tz-fonte-dado);
+
+  /* Tamanho de letra só pelos utilitários texto-* abaixo */
+  --text-*: initial;
+  --leading-*: initial;
+  --tracking-*: initial;
+  --container-*: initial;
+
+  --breakpoint-*: initial;
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+  --breakpoint-2xl: 1536px;
+
+  --ease-*: initial;
+  --ease-padrao: var(--tz-curva-padrao);
+  --ease-entrada: var(--tz-curva-entrada);
+  --ease-saida: var(--tz-curva-saida);
+}
+
+@utility texto-display {
+  font: var(--tz-texto-display);
+  font-stretch: var(--tz-largura-titulo);
+  letter-spacing: var(--tz-titulo-espacamento-letras);
+  text-wrap: balance;
+}
+
+@utility texto-h1 {
+  font: var(--tz-texto-h1);
+  font-stretch: var(--tz-largura-titulo);
+  letter-spacing: var(--tz-titulo-espacamento-letras);
+  text-wrap: balance;
+}
+
+@utility texto-h2 {
+  font: var(--tz-texto-h2);
+  font-stretch: var(--tz-largura-titulo);
+  letter-spacing: var(--tz-titulo-espacamento-letras);
+  text-wrap: balance;
+}
+
+@utility texto-h3 {
+  font: var(--tz-texto-h3);
+}
+
+@utility texto-h4 {
+  font: var(--tz-texto-h4);
+}
+
+@utility texto-corpo {
+  font: var(--tz-texto-corpo);
+}
+
+@utility texto-corpo-p {
+  font: var(--tz-texto-corpo-p);
+}
+
+@utility texto-rotulo {
+  font: var(--tz-texto-rotulo);
+}
+
+@utility texto-botao {
+  font: var(--tz-texto-botao);
+}
+
+@utility texto-legenda {
+  font: var(--tz-texto-legenda);
+}
+
+@utility texto-sobrelinha {
+  font: var(--tz-texto-sobrelinha);
+  font-variant-numeric: tabular-nums;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+@utility texto-dado {
+  font: var(--tz-texto-dado);
+  font-variant-numeric: tabular-nums;
+}
+
+@utility texto-dado-forte {
+  font: var(--tz-texto-dado-forte);
+  font-variant-numeric: tabular-nums;
+}
+
+@utility texto-kpi {
+  font: var(--tz-texto-kpi);
+  font-variant-numeric: tabular-nums;
+}
+
+@utility texto-selo {
+  font: var(--tz-texto-selo);
+  font-variant-numeric: tabular-nums;
+}

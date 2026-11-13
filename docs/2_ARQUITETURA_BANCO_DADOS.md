@@ -1,7 +1,7 @@
 # Arquitetura de Banco de Dados — Tenaz
 
-**Versão:** 0.4 · **Data:** 12/11/2026 · **Status:** Em elaboração
-**Alinhado ao sumário executivo 0.5**
+**Versão:** 0.5 · **Data:** 12/11/2026 · **Status:** Em elaboração
+**Alinhado ao sumário executivo 0.6**
 **Produto:** Tenaz · Gestão de Manutenção e Frota
 **SGBD:** PostgreSQL 16 ou superior (recomendado 18) · **Acesso:** Go com pgx v5 e sqlc (SQL explícito, sem ORM)
 
@@ -12,6 +12,8 @@ A versão 0.2 inclui a entidade `pessoa`, os perfis `comprador`, `plh`, `prestad
 A versão 0.3 inclui o módulo **SRV** (gestão de serviços do prestador, MVP): conta própria da subcontratada com clientes atendidos, equipamentos de clientes, especialidades de técnicos, serviço a realizar e componentes na OS; a conexão entre contas em `plataforma.conexao_empresa`, o vínculo de OS e o processo de sincronização entre contas com papel de banco próprio (risco R5, seção 2.10). Aplica também as decisões da seção 3.6 do sumário 0.4: permissão `os.encerrar`, ação `assumir`, origens da OS e da solicitação, franquias da locação, papéis `posto_combustivel` e `seguradora`, permissão `est.decidir_destino`, peça em trânsito não consumível e o link de uso único com token no fragmento.
 
 **Mudanças da versão 0.4:** configuração por segmento (sumário 0.5, seções 3.6 e 3.7). No MVP: `ativo.fase_ciclo_vida` (`em_implantacao`, `em_operacao`) e `ativo.data_entrada_operacao`, com `em_implantacao` implicando status `inativo` (RF-ATV-013); `bloqueio_ativo.origem` (`manual`, `conformidade`, `regra`) e a liberação automática pelo tipo de documento exigido; na OS, o tipo `implantacao`, a origem `projeto`, `campos_extras` e `causa_externa` (a OS não tem origem `regra`: nenhum efeito de regra abre OS); a origem `regra` na solicitação; as permissões da configuração, de PRJ e de CTR (sumário 3.6); as tabelas `campo_extra_os`, `regra_automacao` e `disparo_regra` (seção 5.13). Na Fase 2: o catálogo global `plataforma.pacote_segmento` e `aplicacao_pacote` (13.11), o módulo **PRJ** com `modelo_projeto`, `modelo_etapa_projeto`, `projeto` e `etapa_projeto` (estados `pendente`, `disponivel`, `em_andamento`, `concluida`, `dispensada`) (13.12), o módulo **CTR** com `contrato_cliente`, `item_contrato_cliente`, `faixa_desconto_contrato`, `medicao_contrato` e a `decisao_exclusao` da parada por causa externa (`pendente`, `aprovada`, `recusada`) (13.13), e a numeração `PJ` e `CT`. `cliente_servico` passa a existir também nas contas com CTR. A lista explícita de tabelas globais ganha seção própria (2.11), e a lista fechada da conexão entre contas registra que campos extras, causa externa, etapa de projeto da OS, fase de ciclo de vida, projeto e contrato nunca atravessam (2.10.5). Nomes sem correspondência no sumário estão marcados como proposta e listados na seção 17.1.
+
+**Mudanças da versão 0.5** (etapa E01, sumário 0.6, migrações `00003` a `00005`): tabelas de autenticação no esquema `plataforma` — `sessao` (campo `canal`), `token_renovacao` (família = sessão do app), `codigo_autorizacao` (PKCE S256), `desafio_mfa` e `token_email` (campo `finalidade`) —, com privilégio por coluna e FK composta para `app.usuario`, e os campos `identidade.falhas_login`, `bloqueada_ate` e `mfa_ativado_em` (5.1); calendário da unidade em `turno_unidade` e `feriado_unidade` (5.1); `acesso_empresa` mantida só por trigger `SECURITY DEFINER`, sem escrita da aplicação; `app.tg_padrao_empresa()` para as colunas padrão da empresa; `escopo_externo` da empresa, da unidade, da pessoa e do usuário, com a policy `escopo_externo_exclusao` que impede escopo de leitura de apagar (2.9.4); `evento_auditoria` particionada por função própria, `plataforma.criar_particoes_mensais()`, sem `pg_partman`, com partição padrão e partições sem privilégio e com RLS forçado (9.5); coluna `ocorrido_no_dispositivo_em` e contexto opcional de token, aparelho e navegador na auditoria (9.2, 9.3); `usuario_permissao` (permissão avulsa), `perfil.perfil_origem` e a lista `app.permissoes_vedadas_externo()`, com os CHECKs e triggers que impedem permissão vedada a usuário externo, também por perfil personalizado derivado (5.1); `usuario.situacao` com `convidado`, `ativo`, `inativo` (sumário 3.6); correções da revisão de isolamento ISO-E01-01 a 06 (17.3), com o papel `tenaz_autenticacao` do [ADR-011 do documento 5](5_ARQUITETURA_SOFTWARE.md#adr-011--papel-de-banco-próprio-para-as-credenciais-de-autenticação) como único a alcançar as tabelas de credencial, auditoria de login contida pela policy `autenticacao_identidade`, revogação das sessões no trigger de `acesso_empresa` e purga por `plataforma.purgar_credenciais_vencidas()`; pendências do backend: `evento_auditoria.escopo` (RF-ADM-011), `identidade.mfa_ultimo_passo` contra reuso de TOTP, `uq_usuario_perfil` parcial e formato de permissão com dígito; evento de autenticação vedado a `tenaz_app`, `tenaz_job` e `tenaz_sinc` (ISO-E01-07); `preparar_tabela` recusa tabela que não seja de `tenaz_dono` (4.5); `USAGE` no esquema `public` devolvido aos papéis do sistema (2.2); `CASE` entre parênteses em `app.conferir_escopo()` (2.9.3). Pendências da etapa na seção 17.3.
 
 Os itens marcados como **Proposta** são decisões de projeto ainda não validadas em implementação e podem mudar até a versão 1.0. Segurança, backup e recuperação de desastre aparecem aqui em alto nível; o detalhe fica em [9_SEGURANCA_CONFIABILIDADE.md](9_SEGURANCA_CONFIABILIDADE.md).
 
@@ -47,7 +49,8 @@ Nomes em negrito são entidades canônicas do sumário executivo. Os demais são
 
 | Módulo | Fase | Tabelas |
 |---|---|---|
-| ADM | MVP | **`empresa`**, **`unidade`**, **`pessoa`**, **`usuario`**, **`perfil`**, `usuario_perfil`, `parametro_empresa`, `token_api`, `contador_documento`, `plataforma.identidade`, `plataforma.acesso_empresa` |
+| ADM | MVP | **`empresa`**, **`unidade`**, **`pessoa`**, **`usuario`**, **`perfil`**, `usuario_perfil`, `usuario_permissao`, `turno_unidade`, `feriado_unidade`, `parametro_empresa`, `token_api`, `contador_documento`, `plataforma.identidade`, `plataforma.acesso_empresa` |
+| ADM (autenticação) | MVP | `plataforma.sessao`, `plataforma.token_renovacao`, `plataforma.codigo_autorizacao`, `plataforma.desafio_mfa`, `plataforma.token_email` |
 | ATV | MVP | **`localizacao`**, **`classe_ativo`**, **`ativo`**, `ativo_veiculo`, `composicao_veicular` |
 | MED | MVP | **`medidor`**, **`leitura_medidor`**, `segmento_medidor` |
 | SOL | MVP | **`solicitacao`** |
@@ -169,11 +172,13 @@ O mesmo esquema e as mesmas migrações rodam no pool e num eventual banco dedic
 | Papel | Login | Atributos | Uso |
 |---|---|---|---|
 | `tenaz_dono` | Não | Dono de todos os objetos de `app` e `plataforma` | Ninguém se conecta com ele |
-| `tenaz_migrador` | Sim | Membro de `tenaz_dono`, `BYPASSRLS` | Só o pipeline de deploy, para migrações e backfills. Credencial no cofre de segredos, nunca no runtime da aplicação |
+| `tenaz_migrador` | Sim | Homologação e produção: membro de `tenaz_dono` e, pela migração `00004`, de `tenaz_credencial`, com `BYPASSRLS`, sem ser superusuário. Desenvolvimento, CI e testes: **superusuário** (é o `POSTGRES_USER` do compose e do testcontainers) | Só o pipeline de deploy, para migrações e backfills. Credencial no cofre de segredos, nunca no runtime da aplicação. Ver a nota abaixo da tabela |
 | `tenaz_app` | Sim | `NOBYPASSRLS`, sem `CREATEROLE`, não é dono nem membro do dono | API e workers que atendem requisições |
 | `tenaz_job` | Sim | `NOBYPASSRLS` | Jobs agendados (geração de preventivas, alertas de vencimento, KPIs, arquivamento). Percorre as empresas uma a uma (seção 2.7) |
 | `tenaz_leitura` | Sim | `NOBYPASSRLS`, só `SELECT` | Réplica de leitura: painéis, relatórios, exportações |
-| `tenaz_manutencao` | Sim | Membro de `tenaz_dono`, `NOBYPASSRLS` | Criação e remoção de partições (pg_partman), `VACUUM` e `ANALYZE` manuais. Não lê dado de empresa: as policies não o incluem |
+| `tenaz_manutencao` | Sim | Membro de `tenaz_dono`, `NOBYPASSRLS` | Criação de partições (`plataforma.criar_particoes_mensais()`, seção 9.5) e remoção de partição arquivada, `VACUUM` e `ANALYZE` manuais. Não lê dado de empresa: as policies não o incluem. Não lê credencial: as tabelas de autenticação, sem RLS, pertencem a `tenaz_credencial`, de quem ele não é membro (ISO-E01-08). **Mas, como membro do dono dos esquemas, altera estrutura**: pode apagar e recriar tabelas de credencial, desligar triggers e tirar o RLS forçado das tabelas de `app`; risco aberto ISO-E01-09 (seção 17.3) |
+| `tenaz_credencial` | Não | `NOBYPASSRLS`, sem membros além de quem aplica migração; nem `tenaz_dono` nem `tenaz_manutencao` são membros dele | Dono das sete tabelas de credencial de `plataforma` e das funções `SECURITY DEFINER` que as tocam (`tg_acesso_empresa`, `purgar_credenciais_vencidas`). Existe porque essas tabelas não têm RLS: com dono `tenaz_dono`, o `tenaz_manutencao`, que herda do dono, leria todas as credenciais (ISO-E01-08). Nasce na migração `00004` |
+| `tenaz_autenticacao` | Não (o usuário de conexão `tenaz_autenticacao_conexao` herda o papel) | `NOBYPASSRLS`, sem objetos, sem privilégio padrão em `app`, sem relação de membro com `tenaz_dono`, `tenaz_app` ou `tenaz_job`; só os privilégios da seção 5.1 | Pacote de autenticação, num pool próprio ([ADR-011 do documento 5](5_ARQUITETURA_SOFTWARE.md#adr-011--papel-de-banco-próprio-para-as-credenciais-de-autenticação)): o único papel que alcança `identidade`, `acesso_empresa`, `sessao`, `token_renovacao`, `codigo_autorizacao`, `desafio_mfa` e `token_email`, e que grava os eventos de login na trilha. Nasce na migração `00005` |
 | `tenaz_sinc` | Não (o usuário de conexão `tenaz_sinc_conexao` herda o papel) | `NOBYPASSRLS`, sem privilégio padrão em `app`; só os privilégios de tabela e de coluna listados na seção 2.10.4 | Processo de sincronização entre contas conectadas (SRV). Entra em uma empresa por transação, pelo `NaEmpresa`. Único papel que lê `plataforma.conexao_empresa` diretamente |
 
 ```sql
@@ -185,9 +190,21 @@ CREATE ROLE tenaz_leitura       LOGIN NOBYPASSRLS NOINHERIT;
 CREATE ROLE tenaz_manutencao    LOGIN NOBYPASSRLS IN ROLE tenaz_dono;
 CREATE ROLE tenaz_sinc          NOLOGIN NOBYPASSRLS;      -- privilégios explícitos na seção 2.10.4
 CREATE ROLE tenaz_sinc_conexao  LOGIN NOBYPASSRLS IN ROLE tenaz_sinc;   -- usuário de conexão do sincronizador
+-- ADR-011, migração 00005 (a 00001 já estava em main): papel das credenciais e seu usuário de conexão
+CREATE ROLE tenaz_credencial            NOLOGIN NOBYPASSRLS;   -- 00004: dono das credenciais (ISO-E01-08)
+CREATE ROLE tenaz_autenticacao          NOLOGIN NOBYPASSRLS;
+CREATE ROLE tenaz_autenticacao_conexao  LOGIN NOBYPASSRLS IN ROLE tenaz_autenticacao;
 
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
+-- As extensões (citext, pg_trgm, btree_gin, btree_gist) moram em public. O REVOKE acima tira também
+-- o USAGE; sem ele, tenaz_dono não acha o tipo citext e tenaz_app resolveria citext = citext como
+-- text = text, pelo cast implícito, diferenciando maiúsculas em silêncio. Volta só o USAGE, só para
+-- os papéis do sistema (migração 00004); o CREATE continua fora de PUBLIC (CVE-2018-1058).
+GRANT USAGE ON SCHEMA public TO tenaz_dono, tenaz_app, tenaz_job, tenaz_leitura, tenaz_sinc;
+GRANT USAGE ON SCHEMA public TO tenaz_autenticacao;          -- 00005: citext de identidade.email
 GRANT USAGE ON SCHEMA app TO tenaz_app, tenaz_job, tenaz_leitura;
+GRANT USAGE ON SCHEMA plataforma TO tenaz_app, tenaz_job;   -- funções seguras da conexão, catálogos e a função de purga;
+                                                            -- nenhum privilégio nas tabelas de credencial (seção 5.1)
 
 ALTER DEFAULT PRIVILEGES FOR ROLE tenaz_dono IN SCHEMA app
   GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO tenaz_app, tenaz_job;
@@ -199,6 +216,8 @@ ALTER DEFAULT PRIVILEGES FOR ROLE tenaz_dono IN SCHEMA app
 -- tenaz_sinc fica fora dos privilégios padrão: cada tabela que ele toca recebe
 -- GRANT explícito na migração que a cria, conferido pelo teste de catálogo (seção 2.10.9).
 ```
+
+**O migrador em cada ambiente.** Em homologação e produção, o `tenaz_migrador` não é superusuário: é membro de `tenaz_dono` (00001) e de `tenaz_credencial` (00004, que concede o papel a quem aplica a migração quando ele ainda não é membro) e tem `BYPASSRLS`. Em desenvolvimento, no CI e nos testes, ele é o usuário criado pela imagem do PostgreSQL (`POSTGRES_USER` do compose de `infra/docker/` e do testcontainers) e, portanto, **superusuário**: as guardas `pg_has_role(...)` das migrações já dão verdadeiro, e nenhuma concessão de papel é feita (por isso `tenaz_credencial` aparece sem membros no banco local). Consequências: (1) os papéis e privilégios que as migrações criam valem igual nos dois casos, porque toda migração age por `SET ROLE` e os testes de isolamento rodam com `SET LOCAL ROLE` para os papéis de runtime, nunca como migrador; (2) um ensaio feito numa sessão do migrador local aceita `SET ROLE` para qualquer papel, inclusive para os de que um papel de runtime não é membro: a prova de que um papel não assume outro precisa de login real com o papel, não de `SET ROLE` a partir do superusuário; (3) erro de privilégio que só apareceria com o migrador não superusuário (por exemplo, conceder papel ou alterar dono sem ser membro) não é pego localmente, e fica coberto pela primeira aplicação em homologação (seção 14.4).
 
 Em provedor gerenciado que não permita conceder `BYPASSRLS`, o migrador recebe uma policy explícita `TO tenaz_migrador USING (true) WITH CHECK (true)` em cada tabela, criada pelo mesmo procedimento da seção 4.5. O efeito é o mesmo e fica visível no catálogo.
 
@@ -246,13 +265,27 @@ CREATE POLICY empresa_propria ON app.empresa
   FOR ALL TO tenaz_app, tenaz_leitura
   USING (id = app.empresa_atual()) WITH CHECK (id = app.empresa_atual());
 
--- jobs listam as empresas para percorrê-las uma a uma; não alteram
+-- jobs listam as empresas para percorrê-las uma a uma, FORA da transação de uma empresa; dentro dela,
+-- veem só a da transação (ISO-E01-04: USING (true) deixava o job, no contexto de A, ler B)
 CREATE POLICY empresa_listagem_job ON app.empresa
-  FOR SELECT TO tenaz_job USING (true);
+  FOR SELECT TO tenaz_job USING (app.empresa_atual() IS NULL OR id = app.empresa_atual());
 CREATE POLICY empresa_propria_job ON app.empresa
   FOR UPDATE TO tenaz_job
   USING (id = app.empresa_atual()) WITH CHECK (id = app.empresa_atual());
+
+-- Escopo externo: prestador, locatário e link leem a empresa contratante, não a alteram nem apagam.
+-- Sem ela, empresa_propria (FOR ALL) deixaria um prestador editar a razão social. tenaz_job fica fora:
+-- ele lista as empresas antes de abrir a transação de cada uma, portanto sem escopo.
+CREATE POLICY escopo_externo ON app.empresa AS RESTRICTIVE
+  FOR ALL TO tenaz_app, tenaz_leitura
+  USING (app.escopo_atual() IN ('interno', 'prestador', 'locatario', 'link'))
+  WITH CHECK (app.escopo_interno());
+CREATE POLICY escopo_externo_exclusao ON app.empresa AS RESTRICTIVE
+  FOR DELETE TO tenaz_app, tenaz_leitura USING (app.escopo_interno());
+REVOKE INSERT, DELETE ON app.empresa FROM tenaz_job;   -- o job não cria nem apaga empresa
 ```
+
+A criação da conta (RF-ADM-001) abre a transação com o id da empresa nova, gerado no Go, em `app.empresa_id`, com escopo `interno` e sem usuário; é assim que o `INSERT` passa no `WITH CHECK` de `empresa_propria`, e a unidade inicial, os perfis padrão, a pessoa e o usuário do responsável nascem na mesma transação.
 
 A tabela `evento_auditoria` tem só policies de `SELECT` e `INSERT` (seção 9).
 
@@ -341,7 +374,9 @@ Regras:
 - **Nunca `SET` nem `set_config(..., false)`.** Uma variável de sessão sobrevive à devolução da conexão ao pool e vaza a empresa para a requisição seguinte. `SET LOCAL app.empresa_id = '...'` é equivalente a `set_config(..., true)`, mas não aceita parâmetro; por isso o helper usa `set_config`.
 - O helper funciona igual com pgxpool direto e com PgBouncer em modo transação, porque o contexto vive dentro da transação.
 - A réplica de leitura usa um segundo pool (`poolLeitura`) com o mesmo helper e `AccessMode: pgx.ReadOnly`.
+- As credenciais de login usam outro pool, `poolAutenticacao`, conectado como `tenaz_autenticacao_conexao` (papel `tenaz_autenticacao`), só no modo `tenaz api` e só pelo pacote de autenticação ([ADR-011 do documento 5](5_ARQUITETURA_SOFTWARE.md#adr-011--papel-de-banco-próprio-para-as-credenciais-de-autenticação); documento 5, seção 6.9). Ele **não** usa o `NaEmpresa` nem chama `app.conferir_escopo()`: abre transação sem empresa, para achar a credencial por hash, e-mail ou id, ou na trilha de uma empresa, definindo só `app.empresa_id`, `app.origem`, `app.ip`, `app.user_agent` e `app.request_id`, para gravar o evento de login junto da mudança de credencial (seção 9.1). Recusa ser chamado dentro de uma transação do `NaEmpresa`, e nunca há empresa de negócio e credencial na mesma transação.
 - O sincronizador entre contas usa um terceiro pool (`poolSincronizacao`), conectado como `tenaz_sinc_conexao` (papel `tenaz_sinc`), com o mesmo helper. Ele é o único que define `app.conexao_empresa_id` (seção 2.10).
+- Contexto opcional da auditoria, lido por `app.tg_auditar()` (seção 9.3) e gravado como nulo quando ausente: `app.token_api_id` (requisição por token de API), `app.dispositivo_id` e `app.ocorrido_no_dispositivo_em` (comando do app, com o instante do aparelho, RF-ADM-011) e `app.user_agent`. Entram no mesmo lote do `set_config`, com o mesmo `is_local = true`.
 - As consultas sqlc repetem o filtro, por defesa em profundidade e para o planejador:
 
 ```sql
@@ -382,9 +417,12 @@ Efeitos colaterais desejados:
 | Unicidade global | Erro de duplicidade revela dado de outra empresa | Toda unicidade de negócio é composta com `empresa_id` (TAG, placa, número de OS) |
 | View comum | Roda com os papéis do dono da view; com nossas policies, devolve zero linhas ou, se o dono tiver `BYPASSRLS`, tudo | Toda view em `app` é criada `WITH (security_invoker = true)` |
 | View materializada | Não aceita RLS | Proibida em `app` para dados de empresa; agregados ficam em tabelas com RLS (seção 12) |
-| Função `SECURITY DEFINER` | Roda com os papéis do dono | Proibida em `app`, salvo lista aprovada no teste de catálogo. Em `plataforma`, só as funções da conexão entre contas (seção 2.10.3), todas com `search_path` fixo e filtro por `app.empresa_atual()` |
+| Função `SECURITY DEFINER` | Roda com os papéis do dono | Proibida em `app`, salvo lista aprovada no teste de catálogo. Em `plataforma`, só as funções da conexão entre contas (seção 2.10.3), com filtro por `app.empresa_atual()`, o trigger `plataforma.tg_acesso_empresa()` (5.1), `plataforma.purgar_credenciais_vencidas()` (5.1, executada só pelo `tenaz_job`) e `plataforma.criar_particoes_mensais()` (9.5); todas com `search_path` fixo, `EXECUTE` revogado de `PUBLIC` e nomes qualificados |
+| Tabela sem RLS lida pelo dono ou por quem herda dele (ISO-E01-08) | O dono não passa por RLS, e numa tabela sem RLS o privilégio do dono é tudo: o `tenaz_manutencao`, membro de `tenaz_dono` com herança, lia as sete tabelas de credencial, com `senha_hash` | Credenciais com dono próprio, `tenaz_credencial`, sem membros de runtime; `tenaz_dono` recebe só `REFERENCES (id)` em `identidade`, para a FK de `app.usuario`. Toda tabela futura de `plataforma` com dado sensível e sem RLS segue a mesma regra (seção 17.3, E01-14) |
+| Credencial global lida ou forjada por qualquer módulo (ISO-E01-02) | Sem RLS nas tabelas de autenticação, um papel de negócio com privilégio nelas lê `senha_hash` e segredo de MFA de todas as identidades e cria sessão válida para usuário de outra empresa | Só o papel `tenaz_autenticacao`, num pool exclusivo do pacote de autenticação, alcança as sete tabelas; `tenaz_app`, `tenaz_job`, `tenaz_leitura` e `tenaz_sinc` recebem "permissão negada" ([ADR-011 do documento 5](5_ARQUITETURA_SOFTWARE.md#adr-011--papel-de-banco-próprio-para-as-credenciais-de-autenticação); seção 5.1) |
+| Escopo que só lê apaga a linha | O `WITH CHECK` não alcança o `DELETE`: uma policy restritiva `FOR ALL` que libera leitura a um escopo externo libera também a exclusão | Policy restritiva `escopo_externo_exclusao` `FOR DELETE USING (app.escopo_interno())` em toda tabela com leitura externa (seção 2.9.4) |
 | `TRUNCATE` | Ignora RLS | Nunca concedido |
-| Partição acessada diretamente | Policies do pai não valem na partição | Aplicação sem privilégio nas partições (pg_partman com `inherit_privileges = false`); teste de catálogo |
+| Partição acessada diretamente | Policies do pai não valem na partição | Partição criada por `plataforma.criar_particoes_mensais()` com `REVOKE ALL` dos papéis da aplicação e RLS habilitado e forçado, sem policy: o acesso direto devolve "permissão negada" e, se alguém conceder privilégio por engano, zero linhas (seção 9.5); teste de catálogo |
 | `COPY tabela TO` | Não é permitido com RLS | Exportação usa `COPY (SELECT ...) TO` |
 | Mensagem de erro do PostgreSQL | O `DETAIL` de violação mostra valores | A API nunca repassa `DETAIL`; erros viram códigos de domínio |
 | Réplica de leitura | — | Réplica física herda as mesmas policies; mesmo helper |
@@ -392,94 +430,55 @@ Efeitos colaterais desejados:
 ### 2.7 Jobs e acesso da equipe Tenaz
 
 - **Jobs por empresa.** O `tenaz_job` lista as empresas ativas (`SELECT id FROM app.empresa WHERE situacao IN ('teste','ativa')`) e, para cada uma, abre uma transação com `NaEmpresa`. Geração de preventivas, alertas de vencimento, recálculo de KPIs, contagem para cobrança e exportação para arquivo seguem esse padrão. Nenhum job roda com `BYPASSRLS`.
-- **Manutenção física.** Criar e remover partições é DDL e roda como `tenaz_manutencao`, que é membro do dono mas não lê nenhuma linha. A remoção de partição de auditoria só acontece depois que o job de arquivamento (como `tenaz_job`, por empresa) confirmou o arquivo (seção 9.5).
+- **Manutenção física.** Criar e remover partições é DDL e roda como `tenaz_manutencao`, que é membro do dono mas não lê nenhuma linha: as tabelas de `app` têm RLS forçado sem policy para ele, e as de credencial, sem RLS, pertencem a `tenaz_credencial`, de quem ele não é membro (ISO-E01-08). Não ler não é o mesmo que não alterar: como membro de `tenaz_dono`, dono dos esquemas `app` e `plataforma`, ele pode mudar a estrutura (risco ISO-E01-09, seção 17.3). A remoção de partição de auditoria só acontece depois que o job de arquivamento (como `tenaz_job`, por empresa) confirmou o arquivo (seção 9.5).
 - **Suporte.** A equipe Tenaz não acessa dados de cliente direto no banco. O suporte usa a própria aplicação, com autorização do administrador da empresa, por tempo limitado, e cada ação fica na auditoria com `ator_tipo = 'suporte_tenaz'`. O acesso de emergência com a credencial do migrador é procedimento do documento 9.
 
 ### 2.8 Teste automatizado de vazamento entre empresas
 
-O sumário fixa a meta "zero vazamento em testes automatizados a cada build" (risco R2). O teste roda no CI contra um PostgreSQL real (testcontainers), depois de aplicar todas as migrações do zero. Ele tem três partes.
+O sumário fixa a meta "zero vazamento em testes automatizados a cada build" (risco R2). O teste roda no CI contra um PostgreSQL real (testcontainers), depois de aplicar todas as migrações do zero. Esta seção descreve o que a suíte de `backend/testes/vazamento/` verifica hoje; ela e este texto mudam juntos. Dono da suíte: `tenaz-isolamento`.
 
-**Parte 1: catálogo.** Consultas que precisam devolver zero linhas:
+**Parte 1: catálogo.** Consultas que precisam devolver zero linhas, cada uma conferindo o catálogo do banco migrado:
 
-```sql
--- 1. Toda tabela de app com empresa_id tem RLS ligado, forçado e ao menos uma policy
-SELECT c.oid::regclass AS tabela
-FROM pg_class c
-JOIN pg_namespace n ON n.oid = c.relnamespace
-JOIN pg_attribute a ON a.attrelid = c.oid AND a.attname = 'empresa_id' AND NOT a.attisdropped
-WHERE n.nspname = 'app'
-  AND c.relkind IN ('r', 'p')
-  AND NOT c.relispartition
-  AND (NOT c.relrowsecurity OR NOT c.relforcerowsecurity
-       OR NOT EXISTS (SELECT 1 FROM pg_policy p WHERE p.polrelid = c.oid));
+| # | Verificação |
+|---|---|
+| 1 | Toda tabela com `empresa_id` (o pai, nas particionadas) tem RLS habilitado e forçado, a policy permissiva `isolamento_empresa` `FOR ALL`, aplicável ao `tenaz_app`, com o texto exato `(empresa_id = app.empresa_atual())` em `USING` e em `WITH CHECK`, e a restritiva `escopo_externo`. Tabela com exceção versionada em `excecoes_cobertura.txt` troca essa regra por uma forma mais estrita, que é conferida: hoje só a forma `somente_insercao` (`evento_auditoria`: permissivas só de `SELECT` e `INSERT` com o predicado exato da empresa, nenhuma de `UPDATE` nem `DELETE`, leitura só interna, nenhum papel da aplicação com `UPDATE`, `DELETE` ou `TRUNCATE`, trigger `app.tg_somente_insercao` em `UPDATE` e `DELETE`) |
+| 1-b | Toda policy permissiva de tabela com `empresa_id` usa exatamente o predicado da empresa. Permissivas se somam com `OR`: uma segunda, mais larga, abriria a tabela mesmo com `isolamento_empresa` intacta |
+| 2 e 8 | Toda tabela fora do RLS por empresa, em qualquer esquema que não seja de sistema, está em `tabelas_globais.txt` com uma classe: `tenant` (`app.empresa`), `credencial` (as sete tabelas de autenticação), `catalogo` ou `controle` (`plataforma.migracao`). Linha da lista sem tabela no banco também é erro |
+| 3 | Nenhum papel de execução, `tenaz_manutencao` incluído, tem `BYPASSRLS` nem é superusuário |
+| 3-b | As relações de membro de e para os papéis de execução são exatamente as de `relacoes_de_membro.txt`, com as opções `INHERIT` e `SET`; fica de fora só a concessão pura de `ADMIN`, que o PostgreSQL 16+ dá a quem cria o papel sem ser superusuário e que não transfere privilégio |
+| 4 | Toda partição tem RLS habilitado e forçado, nenhuma policy permissiva, nenhum privilégio de papel da aplicação (`SELECT`, `INSERT`, `UPDATE`, `DELETE`, `TRUNCATE`, `REFERENCES`, `TRIGGER`) e todos os triggers do pai |
+| 5 | Em todo esquema que não seja de sistema: nenhuma view sem `security_invoker` e nenhuma view materializada |
+| 6 | Toda função `SECURITY DEFINER` está em `funcoes_security_definer.txt`, com os executores aprovados ali, `search_path` exatamente `pg_catalog, pg_temp` e sem `EXECUTE` para `PUBLIC` |
+| 7 | Nenhuma unicidade em `app` sem `empresa_id` como primeira coluna (salvo `app.empresa`) |
+| 8-b | `privilegios.txt` descreve, nos dois sentidos, todo privilégio em objeto fora de `app` concedido a papel `tenaz_*` ou a `PUBLIC`, todo privilégio do sincronizador, da autenticação e de `tenaz_credencial` em qualquer objeto, e os privilégios de esquema. Privilégio a mais alarga a superfície; a menos, a lista deixou de descrever o banco |
+| 9 | Dono `tenaz_dono` em todo objeto de `app` e `plataforma`, exceto as sete tabelas de credencial (com os índices e os tipos de linha delas) e as funções `plataforma.tg_acesso_empresa()` e `plataforma.purgar_credenciais_vencidas()`, de dono `tenaz_credencial` (ISO-E01-08). Tabela de `plataforma` sem RLS e de dono `tenaz_dono` só pode ser da classe `catalogo` ou `controle` |
+| 10 | Nenhum papel da aplicação tem `TRUNCATE`, `TRIGGER`, `REFERENCES` nem `CREATE` em esquema nenhum |
+| 11 | O acesso de escopo externo, por comando, é exatamente o de `tabelas_acesso_externo.txt`: a suíte calcula das policies quais comandos de cada tabela não estão travados por uma restritiva `app.escopo_interno()` para o `tenaz_app` |
 
--- 2. Toda tabela de app sem empresa_id está na lista permitida
-SELECT c.oid::regclass FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-WHERE n.nspname = 'app' AND c.relkind IN ('r', 'p') AND NOT c.relispartition
-  AND NOT EXISTS (SELECT 1 FROM pg_attribute a
-                  WHERE a.attrelid = c.oid AND a.attname = 'empresa_id' AND NOT a.attisdropped)
-  AND c.relname NOT IN ('empresa');           -- a única tabela de app sem empresa_id (lista da seção 2.11)
+Toda consulta tem prova de detector numa transação desfeita: a suíte cria de propósito o defeito que a consulta procura e exige que ela o acuse. Achado demonstrado e devolvido ao dono da migração fica em `achadosAbertos`: falha no CI e mantém o portão de isolamento vermelho; quando o defeito some, o teste pede a retirada do item.
 
--- 3. Nenhum papel de execução tem BYPASSRLS ou é superusuário
-SELECT rolname FROM pg_roles
-WHERE rolname IN ('tenaz_app', 'tenaz_job', 'tenaz_leitura', 'tenaz_manutencao', 'tenaz_sinc', 'tenaz_sinc_conexao')
-  AND (rolbypassrls OR rolsuper);
+As seis listas versionadas, com revisão de código obrigatória pelo `tenaz-isolamento`: `tabelas_globais.txt` (com classe), `excecoes_cobertura.txt`, `tabelas_acesso_externo.txt`, `funcoes_security_definer.txt`, `privilegios.txt` e `relacoes_de_membro.txt`.
 
--- 4. A aplicação não tem privilégio direto em partições
-SELECT c.oid::regclass FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-WHERE n.nspname = 'app' AND c.relispartition
-  AND (has_table_privilege('tenaz_app', c.oid, 'SELECT')
-       OR has_table_privilege('tenaz_leitura', c.oid, 'SELECT'));
-
--- 5. Nenhuma view sem security_invoker e nenhuma view materializada em app
-SELECT c.oid::regclass FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-WHERE n.nspname = 'app'
-  AND (c.relkind = 'm'
-       OR (c.relkind = 'v' AND NOT coalesce(c.reloptions @> ARRAY['security_invoker=true'], false)));
-
--- 6. Nenhuma função SECURITY DEFINER fora da lista aprovada (em app, nenhuma; em plataforma,
---    só as da seção 2.10.3), e toda função SECURITY DEFINER com search_path fixo
-SELECT p.oid::regprocedure FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-WHERE n.nspname IN ('app', 'plataforma') AND p.prosecdef
-  AND (p.oid::regprocedure::text <> ALL ($1::text[])     -- $1: lista aprovada, arquivo versionado
-       OR NOT coalesce(p.proconfig::text LIKE '%search_path=%', false));
-
--- 7. Nenhuma unicidade em app sem empresa_id como primeira coluna
-SELECT i.indexrelid::regclass FROM pg_index i
-JOIN pg_class c ON c.oid = i.indrelid JOIN pg_namespace n ON n.oid = c.relnamespace
-JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = i.indkey[0]
-WHERE n.nspname = 'app' AND i.indisunique AND c.relname <> 'empresa' AND a.attname <> 'empresa_id';
-
--- 8. Toda tabela de plataforma está na lista explícita de tabelas globais (seção 2.11), e os papéis de
---    execução não escrevem nos catálogos só leitura ($2: lista versionada, revisada em revisão de código)
-SELECT c.oid::regclass FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-WHERE n.nspname = 'plataforma' AND c.relkind IN ('r', 'p') AND NOT c.relispartition
-  AND (c.relname <> ALL ($2::text[])
-       OR (c.relname IN ('pacote_segmento', 'grupo_campo_conexao', 'catalogo_campo_conexao')
-           AND (has_table_privilege('tenaz_app', c.oid, 'INSERT') OR has_table_privilege('tenaz_app', c.oid, 'UPDATE')
-                OR has_table_privilege('tenaz_job', c.oid, 'INSERT') OR has_table_privilege('tenaz_job', c.oid, 'UPDATE'))));
-```
-
-**Parte 2: dados.** Um gerador de fixtures cria as empresas A e B com pelo menos uma linha em **cada** tabela de `app` (o teste falha se alguma tabela ficar vazia, o que obriga a manter o gerador junto com as migrações). Conectado como `tenaz_app`, para cada tabela:
+**Parte 2: dados.** Um gerador de fixtures cria as empresas A e B com pelo menos uma linha em **cada** tabela de `app` (o teste falha se alguma tabela ficar vazia, o que obriga a manter o gerador junto com as migrações); as credenciais são gravadas pelo `tenaz_autenticacao`, como no serviço. A tabela de verificações abaixo é gerada do catálogo, tabela a tabela, para `tenaz_app`, `tenaz_job` e `tenaz_leitura`:
 
 | Verificação | Esperado |
 |---|---|
 | Sem contexto: `SELECT count(*)` | 0 |
-| Contexto A: `SELECT count(*) WHERE empresa_id = B` | 0 |
+| Contexto A: `SELECT count(*) WHERE empresa_id = B`, e busca pelo id de uma linha de B | 0 |
 | Contexto A: `SELECT count(*)` | Igual ao total de linhas de A |
-| Contexto A: `UPDATE ... SET versao = versao WHERE empresa_id = B` | 0 linhas afetadas |
-| Contexto A: `DELETE ... WHERE empresa_id = B` (em savepoint desfeito) | 0 linhas afetadas |
-| Contexto A: `INSERT` de cópia de uma linha com `empresa_id = B` | Erro `42501` (violação de policy) |
+| Contexto A: `UPDATE ... WHERE empresa_id = B` | 0 linhas afetadas |
+| Contexto A: `DELETE ... WHERE empresa_id = B` (em transação desfeita) | 0 linhas afetadas |
+| Contexto A: `INSERT` de cópia de uma linha de B | Recusa de policy (row-level security, `42501`) para quem tem `INSERT`; falta de privilégio (`42501`) para quem não tem |
 | Contexto A: `INSERT` com `empresa_id = A` e FK apontando para linha de B | Erro `23503` (FK composta) |
-| Contexto A, `COMMIT`, mesma conexão física, sem novo contexto: `SELECT count(*)` | 0 (prova que o contexto não vazou no pool) |
+| Contexto que não vaza no pool | Provado com o `db.NaEmpresa` real e um pool de uma conexão: depois do `COMMIT`, e também depois de transação abortada, a mesma conexão física sem novo contexto vê 0 linhas |
 
-**Parte 3: API.** Para cada rota da API v1, o teste chama a rota com o token de A usando IDs de B. O esperado é `404`, nunca `403`, para não confirmar que o ID existe.
+**Parte 3: API.** Para cada rota da API v1, o teste chama a rota com o token de A usando IDs de B. O esperado é `404`, nunca `403`, para não confirmar que o ID existe. **Pendente**: dono `tenaz-isolamento`, antes do aceite de E01.
 
 **Parte 4: escopo externo.** Teste do prestador, do locatário e do link de uso único dentro da mesma empresa (risco R4), descrito na seção 2.9.5.
 
 **Parte 5: conexão entre contas.** Teste com três contas (cliente, subcontratada conectada e subcontratada não conectada) para o risco R5, descrito na seção 2.10.9.
 
-O build falha em qualquer violação. A lista de exceções (tabelas sem `empresa_id`, funções `SECURITY DEFINER`, tabelas com acesso externo) fica num arquivo versionado com revisão obrigatória.
+O build falha em qualquer violação.
 
 ### 2.9 Isolamento do prestador e do locatário (risco R4)
 
@@ -536,7 +535,7 @@ AS $$ SELECT app.escopo_atual() = 'interno' $$;
 
 Regras do contexto:
 
-- O escopo vem da sessão autenticada: no login (ou na validação do token da API), o serviço lê `usuario.fornecedor_id` e `usuario.locatario_id` e grava o escopo na sessão do servidor. Nenhum cabeçalho, parâmetro ou corpo da requisição define escopo.
+- O escopo vem da credencial autenticada, resolvido no servidor **a cada requisição**: o middleware acha a sessão (`plataforma.sessao`) ou o token da API, e lê `usuario.fornecedor_id` e `usuario.locatario_id` na mesma leitura que carrega os perfis e as permissões. A sessão não guarda o escopo nem os ids externos: uma mudança no cadastro vale na requisição seguinte, e `app.conferir_escopo()` confere de novo dentro da transação. Nenhum cabeçalho, parâmetro ou corpo da requisição define escopo.
 - Jobs, integrações por token da API e o suporte rodam com escopo `interno`. Token da API ligado a usuário prestador ou locatário não é permitido (o serviço de tokens recusa).
 - O serviço de autenticação lê o usuário e os perfis antes de existir sessão, com ator `sistema`, sem `usuario_id` e escopo `interno`; é o único ponto em que dados de um usuário externo são lidos com escopo interno, e o módulo não expõe consultas a outras tabelas.
 - O link de uso único não tem usuário: o segredo apresentado é transformado em sha256 e vira o contexto `app.link_hash`; a OS visível é a do link que tem esse hash (seção 5.8).
@@ -557,8 +556,11 @@ BEGIN
   IF app.escopo_atual() IS NULL OR app.escopo_atual() NOT IN ('interno', 'prestador', 'locatario', 'link') THEN
     RAISE EXCEPTION 'escopo ausente ou inválido' USING ERRCODE = '42501';
   END IF;
+  IF app.empresa_atual() IS NULL THEN
+    RAISE EXCEPTION 'empresa ausente no contexto' USING ERRCODE = '42501';
+  END IF;
   IF app.usuario_atual() IS NULL THEN
-    -- jobs (interno) e link de uso único (link); o link exige o hash
+    -- jobs e serviço de autenticação (interno) e link de uso único (link); o link exige o hash
     IF app.escopo_atual() = 'link' AND app.link_hash_atual() IS NULL THEN
       RAISE EXCEPTION 'link sem segredo' USING ERRCODE = '42501';
     END IF;
@@ -569,20 +571,22 @@ BEGIN
   END IF;
   SELECT u.fornecedor_id, u.locatario_id, u.situacao INTO v_fornecedor, v_locatario, v_situacao
   FROM app.usuario u
-  WHERE u.empresa_id = app.empresa_atual() AND u.id = app.usuario_atual();
+  WHERE u.empresa_id = app.empresa_atual() AND u.id = app.usuario_atual() AND u.excluido_em IS NULL;
   IF NOT FOUND OR v_situacao <> 'ativo'
      OR v_fornecedor IS DISTINCT FROM app.fornecedor_atual()
      OR v_locatario  IS DISTINCT FROM app.locatario_atual()
-     OR app.escopo_atual() <> CASE WHEN v_fornecedor IS NOT NULL THEN 'prestador'
-                                   WHEN v_locatario  IS NOT NULL THEN 'locatario'
-                                   ELSE 'interno' END THEN
+     -- o CASE vai entre parênteses: dentro de um IF do PL/pgSQL, o primeiro THEN sem parêntese
+     -- encerra a condição e a função não compila
+     OR app.escopo_atual() <> (CASE WHEN v_fornecedor IS NOT NULL THEN 'prestador'
+                                    WHEN v_locatario  IS NOT NULL THEN 'locatario'
+                                    ELSE 'interno' END) THEN
     RAISE EXCEPTION 'escopo da sessão diverge do cadastro do usuário' USING ERRCODE = '42501';
   END IF;
 END
 $$;
 ```
 
-O custo é uma busca pela chave primária por transação, enviada no mesmo lote do `set_config`.
+O custo é uma busca pela chave primária por transação, enviada no mesmo lote do `set_config`. A função entrou em duas etapas: a migração `00002` cria a parte que não depende de cadastro, e a `00004` a substitui por esta, com `CREATE OR REPLACE`, quando `app.usuario` passa a existir. Usuário inexistente, excluído, `convidado` ou `inativo` recusa a transação, inclusive no escopo `interno`. O bloqueio temporário por falhas de login não é situação do usuário: é `identidade.bloqueada_ate`, conferido no login (sumário 3.6).
 
 #### 2.9.4 Policies de escopo
 
@@ -705,7 +709,47 @@ CREATE POLICY escopo_externo ON app.campo_extra_os AS RESTRICTIVE
 CREATE POLICY escopo_externo_leitura ON app.evento_auditoria AS RESTRICTIVE
   FOR SELECT TO tenaz_app, tenaz_job, tenaz_leitura
   USING (app.escopo_interno());
+
+-- Leitura para os quatro escopos, gravação só interna (unidade; a empresa segue o mesmo molde, seção 2.3)
+CREATE POLICY escopo_externo ON app.unidade AS RESTRICTIVE
+  FOR ALL TO tenaz_app, tenaz_job, tenaz_leitura
+  USING (app.escopo_atual() IN ('interno', 'prestador', 'locatario', 'link'))
+  WITH CHECK (app.escopo_interno());
+
+-- Usuário: o externo vê a si mesmo e os colegas do mesmo fornecedor ou locatário, e só altera a
+-- própria linha sem trocar o vínculo (senão um prestador apagaria o próprio fornecedor_id e viraria interno)
+CREATE POLICY escopo_externo ON app.usuario AS RESTRICTIVE
+  FOR ALL TO tenaz_app, tenaz_job, tenaz_leitura
+  USING (app.escopo_interno()
+    OR (app.escopo_atual() = 'prestador' AND (id = app.usuario_atual() OR fornecedor_id = app.fornecedor_atual()))
+    OR (app.escopo_atual() = 'locatario' AND (id = app.usuario_atual() OR locatario_id = app.locatario_atual())))
+  WITH CHECK (app.escopo_interno()
+    OR (app.escopo_atual() = 'prestador' AND id = app.usuario_atual() AND fornecedor_id = app.fornecedor_atual())
+    OR (app.escopo_atual() = 'locatario' AND id = app.usuario_atual() AND locatario_id = app.locatario_atual()));
+
+-- Pessoa: as do fornecedor (inclusive técnicos sem login) e as ligadas aos usuários visíveis.
+-- A subconsulta passa pela policy de usuario, que não consulta pessoa: sem ciclo.
+CREATE POLICY escopo_externo ON app.pessoa AS RESTRICTIVE
+  FOR ALL TO tenaz_app, tenaz_job, tenaz_leitura
+  USING (app.escopo_interno()
+    OR (app.escopo_atual() = 'prestador' AND fornecedor_id = app.fornecedor_atual())
+    OR (app.escopo_atual() IN ('prestador', 'locatario')
+        AND id IN (SELECT u.pessoa_id FROM app.usuario u WHERE u.pessoa_id IS NOT NULL)))
+  WITH CHECK (app.escopo_interno());
+
+-- Escopo que só lê não apaga: o WITH CHECK não alcança o DELETE (empresa, unidade, usuario, pessoa)
+CREATE POLICY escopo_externo_exclusao ON app.usuario AS RESTRICTIVE
+  FOR DELETE TO tenaz_app, tenaz_job, tenaz_leitura
+  USING (app.escopo_interno());
+-- Cadastro de usuário é só interno: o INSERT fica fechado por desenho, não por acaso de chave
+CREATE POLICY escopo_externo_insercao ON app.usuario AS RESTRICTIVE
+  FOR INSERT TO tenaz_app, tenaz_job, tenaz_leitura
+  WITH CHECK (app.escopo_interno());
 ```
+
+**Colunas que o usuário externo altera (ISO-E01-01).** O RLS corta linhas, não colunas: com a policy acima, o prestador ou o locatário alteraria na própria linha `pessoa_id` (e passaria a ler, pela policy de `pessoa`, o CPF da pessoa interna que ligou a si), `custo_hora`, `unidade_padrao_id`, `email` ou `situacao`. O trigger `trg_usuario_colunas_externo` (seção 5.1) recusa com `42501` qualquer mudança, fora do escopo interno, que não seja de `nome` ou `telefone`. A lista é de permitidas: coluna nova nasce proibida para externo. Foi escolhido em vez de "`UPDATE` só para interno" porque o `PATCH /v1/usuarios/eu` do prestador e do locatário precisa alterar nome e telefone.
+
+**Exclusão por escopo externo.** Uma policy restritiva `FOR ALL` cujo `USING` libera um escopo externo libera também o `DELETE`, porque o `WITH CHECK` só vale para a linha nova de `INSERT` e `UPDATE`. Toda tabela em que um escopo externo só lê, ou só altera a própria linha, recebe também a restritiva `escopo_externo_exclusao` `FOR DELETE USING (app.escopo_interno())`. Em E01: `empresa`, `unidade`, `usuario` e `pessoa`. As policies desta seção para tabelas de etapas futuras (`almoxarifado`, `ativo`, `campo_extra_os` e as demais com leitura externa) seguem a mesma regra na migração que as criar; ponto registrado na seção 17.3 para revisão de isolamento.
 
 Desempenho:
 
@@ -809,7 +853,7 @@ A plataforma guarda só o que é da relação entre as duas empresas e precisa e
 
 #### 2.10.3 Quem lê a conexão: papel próprio e funções seguras
 
-`plataforma.conexao_empresa` não tem `GRANT` para `tenaz_app`, `tenaz_job` nem `tenaz_leitura`. Só o `tenaz_sinc` tem `SELECT`. Cada conta lê e altera as **suas** conexões por funções `SECURITY DEFINER` do esquema `plataforma`, com `search_path` fixo, que filtram por `app.empresa_atual()` e exigem escopo `interno`. São as únicas funções `SECURITY DEFINER` do projeto (lista aprovada do teste de catálogo, seção 2.8). As ações de API exigem, além disso, a permissão `srv.gerenciar_conexao` (padrão `administrador` e `gestor`), conferida no Go antes da chamada.
+`plataforma.conexao_empresa` não tem `GRANT` para `tenaz_app`, `tenaz_job` nem `tenaz_leitura`. Só o `tenaz_sinc` tem `SELECT`. Cada conta lê e altera as **suas** conexões por funções `SECURITY DEFINER` do esquema `plataforma`, com `search_path` fixo, que filtram por `app.empresa_atual()` e exigem escopo `interno`. Com o trigger `plataforma.tg_acesso_empresa()` e a função de purga `plataforma.purgar_credenciais_vencidas()` (seção 5.1, [ADR-011 do documento 5](5_ARQUITETURA_SOFTWARE.md#adr-011--papel-de-banco-próprio-para-as-credenciais-de-autenticação)) e a função de partições `plataforma.criar_particoes_mensais()` (seção 9.5), formam a lista aprovada de funções `SECURITY DEFINER` do teste de catálogo (seção 2.8). As ações de API exigem, além disso, a permissão `srv.gerenciar_conexao` (padrão `administrador` e `gestor`), conferida no Go antes da chamada.
 
 ```sql
 -- Contexto do sincronizador: conexão em processamento
@@ -1214,15 +1258,19 @@ Um teste de propriedades complementa o cenário fixo: sequências aleatórias de
 
 ### 2.11 Tabelas globais (fora do RLS por empresa)
 
-Tabela sem `empresa_id` só existe se estiver nesta lista, que é a mesma do arquivo versionado lido pelas consultas 2 e 8 do teste de catálogo (seção 2.8). Entrar na lista exige revisão de código e a aprovação de isolamento. Nenhuma delas guarda dado de negócio de uma empresa.
+Tabela fora do RLS por empresa só existe se estiver nesta lista, que é a mesma do arquivo versionado `tabelas_globais.txt`, lido pelas consultas 2 e 8 do teste de catálogo (seção 2.8). Cada linha do arquivo tem uma classe: `tenant` (`empresa`), `credencial` (as sete tabelas de autenticação, de dono `tenaz_credencial`), `catalogo` ou `controle` (`migracao`); tabela de `plataforma` sem RLS de dono `tenaz_dono` só pode ser `catalogo` ou `controle` (consulta 9). Entrar na lista exige revisão de código e a aprovação de isolamento. Nenhuma delas guarda dado de negócio de uma empresa.
 
 | Tabela | Esquema | Conteúdo | Quem lê | Quem grava |
 |---|---|---|---|---|
 | `empresa` | `app` | O próprio tenant | Policies próprias por `id` (seção 2.3) | Serviço de contas |
-| `identidade`, `acesso_empresa` | `plataforma` | Login global e em quais empresas ele entra | Módulo de autenticação | Módulo de autenticação |
+| `identidade` | `plataforma` | Login global: e-mail, hash da senha, segundo fator, falhas e bloqueio | Só o pacote de autenticação, pelo papel `tenaz_autenticacao` | `tenaz_autenticacao`: `INSERT` e `UPDATE` por coluna, sem `id` nem `criado_em` |
+| `acesso_empresa` | `plataforma` | Em quais empresas a identidade entra, e com qual usuário | `tenaz_autenticacao` (só `SELECT`) | Só o trigger `plataforma.tg_acesso_empresa()`, a partir de `app.usuario` |
+| `sessao`, `token_renovacao`, `codigo_autorizacao`, `desafio_mfa`, `token_email` | `plataforma` | Credenciais de sessão e de uso único, só como hash (seção 5.1). `desafio_mfa` e `token_renovacao` não têm `empresa_id`; as demais têm, fixado na criação | `tenaz_autenticacao` | `tenaz_autenticacao`: `INSERT` e `UPDATE` só nas colunas de ciclo de vida, nenhum `DELETE`; revogação pelo trigger de `acesso_empresa`; purga só por `plataforma.purgar_credenciais_vencidas()`, executada pelo `tenaz_job` |
 | `grupo_campo_conexao`, `catalogo_campo_conexao` | `plataforma` | Lista fechada da conexão entre contas (seção 2.10.5) | `tenaz_app`, `tenaz_sinc` (só leitura) | Migração, gerada de `campos_conexao.yaml` |
 | `conexao_empresa` | `plataforma` | Relação entre duas empresas (seção 2.10) | Só `tenaz_sinc` e as funções seguras | Funções seguras |
 | `pacote_segmento` | `plataforma` | Catálogo de pacotes de segmento mantido pela Tenaz (seção 13.11, Fase 2) | `tenaz_app`, `tenaz_job` (só leitura, só pacotes publicados) | Migração, gerada dos arquivos versionados dos pacotes |
+
+As tabelas de autenticação estão fora do RLS porque são lidas antes de a empresa ser conhecida: o cookie, o refresh token, o código OAuth e o link do e-mail chegam sem empresa. Sem RLS, o privilégio é a defesa ([ADR-011 do documento 5](5_ARQUITETURA_SOFTWARE.md#adr-011--papel-de-banco-próprio-para-as-credenciais-de-autenticação)): só o `tenaz_autenticacao` as alcança, e os papéis de negócio recebem "permissão negada", não zero linhas. Somam-se as três regras de desenho (seção 5.1): nenhum segredo guardado, só o sha256; empresa fixada na criação, sem `UPDATE` nessas colunas; FK composta para `app.usuario (empresa_id, id, identidade_id)`.
 
 Catálogos que a empresa edita (códigos de falha, tipos de documento, perfis, classes) não são globais: são copiados para a empresa com `empresa_id` (seção 14.2). O mesmo vale para tudo o que um pacote de segmento cria: ao ser aplicado, o pacote vira configuração comum da empresa, com `empresa_id` e RLS, e o catálogo global continua só leitura.
 
@@ -1250,8 +1298,16 @@ erDiagram
     identidade |o--o{ usuario : "entra como"
     identidade ||--o{ acesso_empresa : "acessa"
     usuario ||--o{ usuario_perfil : "recebe"
+    usuario ||--o{ usuario_permissao : "recebe avulsa"
     perfil ||--o{ usuario_perfil : "atribuido em"
     unidade |o--o{ usuario_perfil : "restringe a"
+    unidade ||--o{ turno_unidade : "trabalha em"
+    unidade ||--o{ feriado_unidade : "folga em"
+    usuario ||--o{ sessao : "entra por"
+    sessao ||--o{ token_renovacao : "familia de"
+    usuario ||--o{ codigo_autorizacao : "autoriza"
+    identidade ||--o{ desafio_mfa : "confirma"
+    usuario |o--o{ token_email : "convidado por"
 
     empresa {
         uuid id PK
@@ -1301,6 +1357,12 @@ erDiagram
         text codigo UK
         text_array permissoes
     }
+    usuario_permissao {
+        uuid empresa_id PK,FK
+        uuid id PK
+        uuid usuario_id FK
+        text permissao
+    }
     usuario_perfil {
         uuid empresa_id PK,FK
         uuid id PK
@@ -1321,7 +1383,59 @@ erDiagram
         text entidade
         uuid entidade_id
     }
+    turno_unidade {
+        uuid empresa_id PK,FK
+        uuid id PK
+        uuid unidade_id FK
+        smallint dia_semana
+        time hora_inicio
+        time hora_fim
+    }
+    feriado_unidade {
+        uuid empresa_id PK,FK
+        uuid id PK
+        uuid unidade_id FK
+        date data_feriado
+        text descricao
+    }
+    sessao {
+        uuid id PK
+        text canal
+        bytea token_hash UK
+        uuid empresa_id FK
+        uuid usuario_id FK
+        uuid identidade_id FK
+        timestamptz expira_em
+    }
+    token_renovacao {
+        uuid id PK
+        uuid familia_id FK
+        bytea token_hash UK
+        timestamptz usado_em
+    }
+    codigo_autorizacao {
+        uuid id PK
+        bytea codigo_hash UK
+        uuid empresa_id FK
+        uuid usuario_id FK
+        text desafio_pkce
+    }
+    desafio_mfa {
+        uuid id PK
+        bytea token_hash UK
+        uuid identidade_id FK
+        smallint tentativas
+    }
+    token_email {
+        uuid id PK
+        bytea token_hash UK
+        text finalidade
+        uuid empresa_id FK
+        uuid usuario_id FK
+    }
 ```
+
+`sessao`, `token_renovacao`, `codigo_autorizacao`, `desafio_mfa` e `token_email`, como `identidade` e `acesso_empresa`, ficam no esquema `plataforma`, fora do RLS por empresa (seção 2.11). As FKs de `sessao`, `codigo_autorizacao` e `acesso_empresa` para `usuario` são compostas por `(empresa_id, usuario_id, identidade_id)`.
 
 ### 3.2 Ativos e medidores (ATV, MED)
 
@@ -2126,8 +2240,8 @@ CREATE EXTENSION IF NOT EXISTS citext;      -- e-mail sem diferença de maiúscu
 CREATE EXTENSION IF NOT EXISTS btree_gist;  -- EXCLUDE com uuid + intervalo (composicao_veicular)
 CREATE EXTENSION IF NOT EXISTS btree_gin;   -- GIN composto (empresa_id, texto)
 CREATE EXTENSION IF NOT EXISTS pg_trgm;     -- busca por trecho em TAG, nome e descrição
-CREATE SCHEMA IF NOT EXISTS partman;
-CREATE EXTENSION IF NOT EXISTS pg_partman SCHEMA partman;  -- criação e remoção de partições
+-- Sem pg_partman: não acompanha a imagem oficial do PostgreSQL. Partições mensais por
+-- plataforma.criar_particoes_mensais() (seção 9.5).
 -- Fase 2: CREATE EXTENSION vector;          -- pgvector (IA)
 -- Fase 3: CREATE EXTENSION timescaledb;     -- só se o provedor oferecer (seção 13.6)
 
@@ -2204,7 +2318,7 @@ $$;
 
 ### 4.5 Procedimento de preparação de tabela
 
-Toda migração que cria uma tabela de negócio termina chamando este procedimento. Ele liga o RLS, cria a policy padrão, o trigger das colunas padrão e, se pedido, o trigger de auditoria (seção 9.3).
+Toda migração que cria uma tabela de negócio termina chamando este procedimento. Ele liga o RLS, cria a policy padrão, o trigger das colunas padrão e, se pedido, o trigger de auditoria (seção 9.3). Antes de tudo, recusa tabela cujo dono não seja `tenaz_dono`: o `FORCE ROW LEVEL SECURITY` não vale para o dono, e uma tabela criada sem o `SET ROLE` da migração contornaria o RLS. A suíte de vazamento cobra a mesma regra no CI; o procedimento a cobra no instante do erro.
 
 ```sql
 CREATE PROCEDURE app.preparar_tabela(
@@ -2216,6 +2330,13 @@ CREATE PROCEDURE app.preparar_tabela(
 LANGUAGE plpgsql
 AS $$
 BEGIN
+  IF p_escopo NOT IN ('interno', 'proprio') THEN
+    RAISE EXCEPTION 'p_escopo inválido: %', p_escopo USING ERRCODE = '22023';
+  END IF;
+  IF (SELECT c.relowner FROM pg_catalog.pg_class c WHERE c.oid = p_tabela) <> 'tenaz_dono'::regrole THEN
+    RAISE EXCEPTION 'a tabela % não pertence a tenaz_dono; a migração esqueceu o SET ROLE tenaz_dono', p_tabela
+      USING ERRCODE = '42501';
+  END IF;
   EXECUTE format('ALTER TABLE %s ENABLE ROW LEVEL SECURITY', p_tabela);
   EXECUTE format('ALTER TABLE %s FORCE ROW LEVEL SECURITY', p_tabela);
   EXECUTE format('DROP POLICY IF EXISTS isolamento_empresa ON %s', p_tabela);
@@ -2228,8 +2349,6 @@ BEGIN
     EXECUTE format(
       'CREATE POLICY escopo_externo ON %s AS RESTRICTIVE FOR ALL TO tenaz_app, tenaz_job, tenaz_leitura '
       'USING (app.escopo_interno()) WITH CHECK (app.escopo_interno())', p_tabela);
-  ELSIF p_escopo <> 'proprio' THEN
-    RAISE EXCEPTION 'p_escopo inválido: %', p_escopo;
   END IF;
   EXECUTE format(
     'CREATE TRIGGER trg_padrao BEFORE INSERT OR UPDATE ON %s '
@@ -2241,6 +2360,9 @@ BEGIN
   END IF;
 END
 $$;
+-- DDL de migração: nenhum papel da aplicação executa (os privilégios padrão dariam EXECUTE)
+REVOKE ALL ON PROCEDURE app.preparar_tabela(regclass, boolean, text, text)
+  FROM PUBLIC, tenaz_app, tenaz_job, tenaz_leitura;
 ```
 
 Tabelas de alto volume (`leitura_medidor`, `checklist_resposta`, `evento_telematica`) chamam o procedimento com `p_auditar => false`. A auditoria delas é feita no nível do fato agregado (a execução do checklist, a revisão de uma leitura).
@@ -2270,6 +2392,7 @@ CREATE TABLE app.empresa (
   cnpj                     char(14),
   plano                    text        DEFAULT 'essencial',   -- nulo: conta só do plano Serviços
   srv_habilitado           boolean     NOT NULL DEFAULT false, -- módulo SRV, plano Serviços (sumário 2.2)
+  mfa_obrigatorio          boolean     NOT NULL DEFAULT false, -- MFA exigido de todos os usuários, ligado pelo administrador (RF-ADM-006; sumário 3.6)
   situacao                 text        NOT NULL DEFAULT 'teste',
   fuso_horario             text        NOT NULL DEFAULT 'America/Sao_Paulo',
   retencao_auditoria_anos  smallint    NOT NULL DEFAULT 5,
@@ -2287,10 +2410,38 @@ CREATE TABLE app.empresa (
   CONSTRAINT ck_empresa_retencao CHECK (retencao_auditoria_anos BETWEEN 5 AND 30),
   CONSTRAINT ck_empresa_cnpj CHECK (cnpj ~ '^[0-9]{14}$')
 );
--- RLS e policies próprias: seção 2.3. Não usa preparar_tabela nem trg_padrao (não tem empresa_id);
--- versao e atualizado_em são mantidos pela consulta de atualização. Trigger de auditoria criado à parte:
--- CREATE TRIGGER trg_auditoria AFTER INSERT OR UPDATE OR DELETE ON app.empresa
---   FOR EACH ROW EXECUTE FUNCTION app.tg_auditar('id');
+-- RLS e policies próprias: seção 2.3. Não usa preparar_tabela (não tem empresa_id) nem app.tg_padrao(),
+-- que compara NEW.empresa_id e falharia na execução. As colunas padrão ficam com uma versão própria,
+-- que torna o id imutável, pelo mesmo motivo que tg_padrao torna empresa_id imutável.
+CREATE FUNCTION app.tg_padrao_empresa() RETURNS trigger
+  LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    NEW.versao := 1; NEW.criado_em := now();
+    NEW.criado_por := coalesce(NEW.criado_por, app.usuario_atual());
+    NEW.atualizado_em := NEW.criado_em; NEW.atualizado_por := NEW.criado_por;
+  ELSE
+    IF NEW.id IS DISTINCT FROM OLD.id THEN
+      RAISE EXCEPTION 'o id da empresa é imutável' USING ERRCODE = '42501';
+    END IF;
+    NEW.versao := OLD.versao + 1; NEW.criado_em := OLD.criado_em; NEW.criado_por := OLD.criado_por;
+    NEW.atualizado_em := now(); NEW.atualizado_por := app.usuario_atual();
+  END IF;
+  NEW.alterado_xid := pg_current_xact_id();
+  RETURN NEW;
+END
+$$;
+CREATE TRIGGER trg_padrao BEFORE INSERT OR UPDATE ON app.empresa
+  FOR EACH ROW EXECUTE FUNCTION app.tg_padrao_empresa();
+CREATE TRIGGER trg_auditoria AFTER INSERT OR UPDATE OR DELETE ON app.empresa
+  FOR EACH ROW EXECUTE FUNCTION app.tg_auditar('id');
+-- mfa_obrigatorio: o tenaz_autenticacao não lê app.empresa (ADR-011). O login lê a empresa no passo 2 do
+-- documento 5 (seção 6.9), pelo pool da aplicação, em NaEmpresa(empresa escolhida, interno, sem usuário),
+-- sob empresa_propria; o serviço exige o desafio de MFA antes do passo 3. Nenhum privilégio novo no banco.
+-- O CNPJ é alterado pelo administrador (sumário 3.6); a troca com conexão entre contas: seção 17.3, E01-13.
+-- Na criação da conta, o responsável recebe os perfis administrador e gestor, e os turnos da unidade
+-- inicial são informados pelo próprio cliente, sem turno padrão (sumário 3.6; ver "pelo menos um turno").
 
 -- Unidade: planta, filial, base ou loja
 CREATE TABLE app.unidade (
@@ -2309,11 +2460,53 @@ CREATE TABLE app.unidade (
   atualizado_em timestamptz NOT NULL DEFAULT now(), atualizado_por uuid, excluido_em timestamptz,
   CONSTRAINT pk_unidade PRIMARY KEY (empresa_id, id),
   CONSTRAINT fk_unidade_empresa FOREIGN KEY (empresa_id) REFERENCES app.empresa (id),
-  CONSTRAINT ck_unidade_situacao CHECK (situacao IN ('ativa', 'inativa'))
+  CONSTRAINT ck_unidade_situacao CHECK (situacao IN ('ativa', 'inativa')),
+  CONSTRAINT ck_unidade_cnpj CHECK (cnpj ~ '^[0-9]{14}$')
 );
 CREATE UNIQUE INDEX uq_unidade_codigo ON app.unidade (empresa_id, codigo) WHERE excluido_em IS NULL;
 CREATE INDEX ix_unidade_sync ON app.unidade (empresa_id, alterado_xid);
 CALL app.preparar_tabela('app.unidade', p_escopo => 'proprio');
+-- escopo_externo (leitura para os quatro escopos) e escopo_externo_exclusao: seção 2.9.4
+
+-- Calendário de trabalho da unidade (RF-ADM-002): turnos por dia da semana
+CREATE TABLE app.turno_unidade (
+  empresa_id   uuid     NOT NULL,
+  id           uuid     NOT NULL DEFAULT app.uuid_v7(),
+  unidade_id   uuid     NOT NULL,
+  dia_semana   smallint NOT NULL,          -- ISO 8601, como extract(isodow): 1 = segunda ... 7 = domingo
+  hora_inicio  time     NOT NULL,
+  hora_fim     time     NOT NULL,          -- menor que o início: termina no dia seguinte; 24:00 = meia-noite
+  nome         text,                       -- ex.: "1º turno"
+  versao bigint NOT NULL DEFAULT 1, alterado_xid xid8 NOT NULL DEFAULT pg_current_xact_id(),
+  criado_em timestamptz NOT NULL DEFAULT now(), criado_por uuid,
+  atualizado_em timestamptz NOT NULL DEFAULT now(), atualizado_por uuid, excluido_em timestamptz,
+  CONSTRAINT pk_turno_unidade PRIMARY KEY (empresa_id, id),
+  CONSTRAINT fk_turno_unidade_unidade FOREIGN KEY (empresa_id, unidade_id) REFERENCES app.unidade (empresa_id, id),
+  CONSTRAINT ck_turno_unidade_dia CHECK (dia_semana BETWEEN 1 AND 7),
+  CONSTRAINT ck_turno_unidade_horario CHECK (hora_inicio < time '24:00' AND hora_fim <> hora_inicio)
+);
+-- calendário por unidade (tela e tempo requerido dos KPIs) e trava contra turno repetido
+CREATE UNIQUE INDEX uq_turno_unidade_inicio ON app.turno_unidade (empresa_id, unidade_id, dia_semana, hora_inicio)
+  WHERE excluido_em IS NULL;
+CALL app.preparar_tabela('app.turno_unidade');
+
+-- Feriados da unidade (RF-ADM-002); o nacional é gravado em cada unidade pelo serviço
+CREATE TABLE app.feriado_unidade (
+  empresa_id    uuid  NOT NULL,
+  id            uuid  NOT NULL DEFAULT app.uuid_v7(),
+  unidade_id    uuid  NOT NULL,
+  data_feriado  date  NOT NULL,
+  descricao     text  NOT NULL,
+  versao bigint NOT NULL DEFAULT 1, alterado_xid xid8 NOT NULL DEFAULT pg_current_xact_id(),
+  criado_em timestamptz NOT NULL DEFAULT now(), criado_por uuid,
+  atualizado_em timestamptz NOT NULL DEFAULT now(), atualizado_por uuid, excluido_em timestamptz,
+  CONSTRAINT pk_feriado_unidade PRIMARY KEY (empresa_id, id),
+  CONSTRAINT fk_feriado_unidade_unidade FOREIGN KEY (empresa_id, unidade_id) REFERENCES app.unidade (empresa_id, id),
+  CONSTRAINT ck_feriado_unidade_descricao CHECK (btrim(descricao) <> '')
+);
+CREATE UNIQUE INDEX uq_feriado_unidade_data ON app.feriado_unidade (empresa_id, unidade_id, data_feriado)
+  WHERE excluido_em IS NULL;
+CALL app.preparar_tabela('app.feriado_unidade');
 
 -- Identidade de login, global. Uma pessoa com o mesmo e-mail em duas empresas
 -- tem uma identidade e dois usuários. Sem dado de negócio, sem RLS.
@@ -2323,27 +2516,75 @@ CREATE TABLE plataforma.identidade (
   email                 citext      NOT NULL,
   senha_hash            text,                 -- argon2id; nulo quando só usa SSO
   mfa_segredo_cifrado   bytea,                -- cifrado com chave do KMS
+  mfa_ativado_em        timestamptz,          -- TOTP confirmado; nulo: sem segundo fator
+  mfa_ultimo_passo      bigint,               -- último passo TOTP aceito (RFC 6238, 5.2): o mesmo código não
+                                              -- vale duas vezes dentro da janela
   email_verificado_em   timestamptz,
-  bloqueada_em          timestamptz,
+  falhas_login          smallint    NOT NULL DEFAULT 0,  -- falhas seguidas; zera no login certo
+  bloqueada_ate         timestamptz,          -- bloqueio temporário após 5 falhas (RF-ADM-006)
+  bloqueada_em          timestamptz,          -- bloqueio administrativo, até desbloqueio explícito
   ultimo_login_em       timestamptz,
   criado_em             timestamptz NOT NULL DEFAULT now(),
   atualizado_em         timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT pk_identidade PRIMARY KEY (id),
-  CONSTRAINT uq_identidade_email UNIQUE (email)
+  CONSTRAINT uq_identidade_email UNIQUE (email),
+  CONSTRAINT ck_identidade_falhas CHECK (falhas_login >= 0),
+  CONSTRAINT ck_identidade_mfa CHECK (mfa_ativado_em IS NULL OR mfa_segredo_cifrado IS NOT NULL),
+  CONSTRAINT ck_identidade_mfa_passo CHECK (mfa_ultimo_passo >= 0)
+);
+-- Falha de senha ou de TOTP, num único UPDATE, para duas tentativas simultâneas não se perderem:
+--   UPDATE plataforma.identidade SET falhas_login = falhas_login + 1,
+--     bloqueada_ate = CASE WHEN falhas_login + 1 >= 5 THEN now() + <duração> END, atualizado_em = now()
+--   WHERE id = $1;
+-- A duração, progressiva, é do serviço (documento 9, seção 5.3). Login certo zera falhas_login.
+-- Código TOTP certo só vale se o passo for maior que o último aceito, no mesmo UPDATE, para que o mesmo
+-- código (ou um anterior) não sirva duas vezes dentro da janela de tolerância:
+--   UPDATE plataforma.identidade SET mfa_ultimo_passo = $2
+--   WHERE id = $1 AND (mfa_ultimo_passo IS NULL OR mfa_ultimo_passo < $2) RETURNING id;
+-- Zero linhas: código já usado. Reativar o MFA (segredo novo) volta mfa_ultimo_passo a nulo.
+
+-- Em quais empresas a identidade entra. Mantida SÓ pelo trigger em app.usuario: a aplicação lê,
+-- nunca grava. Expõe só o vínculo, nunca dado de negócio. A FK composta garante que o acesso aponta
+-- para um usuário daquela empresa cuja identidade é a mesma.
+CREATE TABLE plataforma.acesso_empresa (
+  identidade_id uuid        NOT NULL,
+  empresa_id    uuid        NOT NULL,
+  usuario_id    uuid        NOT NULL,
+  habilitado    boolean     NOT NULL DEFAULT true,   -- usuario ativo e não excluído
+  atualizado_em timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT pk_acesso_empresa PRIMARY KEY (identidade_id, empresa_id),
+  CONSTRAINT fk_acesso_empresa_identidade FOREIGN KEY (identidade_id)
+    REFERENCES plataforma.identidade (id) ON DELETE CASCADE,
+  CONSTRAINT fk_acesso_empresa_usuario FOREIGN KEY (empresa_id, usuario_id, identidade_id)
+    REFERENCES app.usuario (empresa_id, id, identidade_id) ON DELETE CASCADE
 );
 
--- Em quais empresas a identidade entra. Mantida por trigger em app.usuario.
--- Expõe só o vínculo, nunca dado de negócio.
-CREATE TABLE plataforma.acesso_empresa (
-  identidade_id uuid        NOT NULL REFERENCES plataforma.identidade (id),
-  empresa_id    uuid        NOT NULL REFERENCES app.empresa (id),
-  usuario_id    uuid        NOT NULL,
-  habilitado    boolean     NOT NULL DEFAULT true,
-  atualizado_em timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT pk_acesso_empresa PRIMARY KEY (identidade_id, empresa_id)
-);
-GRANT USAGE ON SCHEMA plataforma TO tenaz_app;
-GRANT SELECT, INSERT, UPDATE ON plataforma.identidade, plataforma.acesso_empresa TO tenaz_app;
+-- SECURITY DEFINER para que tenaz_app não tenha escrita na tabela: se tivesse, um defeito de código
+-- poderia gravar acesso a qualquer empresa. Com o trigger, o acesso só nasce de uma linha real de
+-- app.usuario, que já passou pelo WITH CHECK da policy da empresa da transação. search_path fixo,
+-- pg_temp por último, nomes qualificados; lista aprovada da seção 2.8, consulta 6.
+CREATE FUNCTION plataforma.tg_acesso_empresa() RETURNS trigger
+  LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = pg_catalog, pg_temp
+AS $$
+BEGIN
+  INSERT INTO plataforma.acesso_empresa (identidade_id, empresa_id, usuario_id, habilitado, atualizado_em)
+  VALUES (NEW.identidade_id, NEW.empresa_id, NEW.id,
+          NEW.situacao = 'ativo' AND NEW.excluido_em IS NULL, pg_catalog.now())
+  ON CONFLICT (identidade_id, empresa_id) DO UPDATE
+    SET usuario_id = EXCLUDED.usuario_id, habilitado = EXCLUDED.habilitado, atualizado_em = EXCLUDED.atualizado_em;
+  RETURN NULL;
+END
+$$;
+REVOKE ALL ON FUNCTION plataforma.tg_acesso_empresa() FROM PUBLIC;
+-- trigger criado depois de app.usuario:
+-- CREATE TRIGGER trg_acesso_empresa AFTER INSERT OR UPDATE OF identidade_id, situacao, excluido_em
+--   ON app.usuario FOR EACH ROW WHEN (NEW.identidade_id IS NOT NULL)
+--   EXECUTE FUNCTION plataforma.tg_acesso_empresa();
+
+-- Nenhum privilégio do tenaz_app nem do tenaz_job em identidade e acesso_empresa: só o tenaz_autenticacao
+-- as alcança (ADR-011); os GRANT estão no bloco de autenticação, no fim desta seção.
+GRANT USAGE ON SCHEMA plataforma TO tenaz_app, tenaz_job;
 
 -- Pessoa: colaborador ou terceiro que executa, conduz ou responde por algo
 -- (técnico, motorista, condutor eventual, técnico de fornecedor, PLH). Pode ou não ter usuário.
@@ -2372,21 +2613,24 @@ CREATE TABLE app.pessoa (
   CONSTRAINT ck_pessoa_cpf CHECK (cpf ~ '^[0-9]{11}$'),
   CONSTRAINT ck_pessoa_vinculo CHECK (vinculo IN ('empregado', 'terceiro', 'autonomo')),
   CONSTRAINT ck_pessoa_fornecedor CHECK (fornecedor_id IS NULL OR vinculo = 'terceiro'),
-  CONSTRAINT ck_pessoa_situacao CHECK (situacao IN ('ativa', 'inativa', 'desligada'))
+  -- sumário 3.6: só ativa ou inativa; pessoa inativa nunca é excluída e
+  -- continua ligada ao histórico dos serviços
+  CONSTRAINT ck_pessoa_situacao CHECK (situacao IN ('ativa', 'inativa'))
 );
 CREATE UNIQUE INDEX uq_pessoa_cpf ON app.pessoa (empresa_id, cpf) WHERE cpf IS NOT NULL AND excluido_em IS NULL;
 CREATE INDEX ix_pessoa_nome ON app.pessoa USING gin (empresa_id, nome gin_trgm_ops);
 CREATE INDEX ix_pessoa_fornecedor ON app.pessoa (empresa_id, fornecedor_id) WHERE fornecedor_id IS NOT NULL;
 CREATE INDEX ix_pessoa_sync ON app.pessoa (empresa_id, alterado_xid);
 CALL app.preparar_tabela('app.pessoa', p_escopo => 'proprio');   -- prestador vê as pessoas do seu fornecedor
--- fk para fornecedor: seção 5.8
+-- escopo_externo e escopo_externo_exclusao: seção 2.9.4
+-- fk para fornecedor: seção 5.8, na migração de fornecedor (E06), com NOT VALID + VALIDATE (seção 17.3)
 
 -- Usuário: login de acesso. Pode estar ligado a uma pessoa (técnico, motorista, PLH);
 -- usuário de prestador fica ligado ao fornecedor e usuário de locatário, ao locatário.
 CREATE TABLE app.usuario (
   empresa_id         uuid    NOT NULL,
   id                 uuid    NOT NULL DEFAULT app.uuid_v7(),
-  identidade_id      uuid,
+  identidade_id      uuid,                   -- nulo até o convite ser aceito; depois, imutável
   pessoa_id          uuid,                   -- opcional
   fornecedor_id      uuid,                   -- perfil prestador
   locatario_id       uuid,                   -- perfil locatario (fase 2)
@@ -2400,11 +2644,14 @@ CREATE TABLE app.usuario (
   criado_em timestamptz NOT NULL DEFAULT now(), criado_por uuid,
   atualizado_em timestamptz NOT NULL DEFAULT now(), atualizado_por uuid, excluido_em timestamptz,
   CONSTRAINT pk_usuario PRIMARY KEY (empresa_id, id),
+  -- alvo das FKs compostas de sessao, codigo_autorizacao e acesso_empresa
+  CONSTRAINT uq_usuario_id_identidade UNIQUE (empresa_id, id, identidade_id),
   CONSTRAINT fk_usuario_empresa FOREIGN KEY (empresa_id) REFERENCES app.empresa (id),
   CONSTRAINT fk_usuario_identidade FOREIGN KEY (identidade_id) REFERENCES plataforma.identidade (id),
   CONSTRAINT fk_usuario_pessoa FOREIGN KEY (empresa_id, pessoa_id) REFERENCES app.pessoa (empresa_id, id),
   CONSTRAINT fk_usuario_unidade FOREIGN KEY (empresa_id, unidade_padrao_id) REFERENCES app.unidade (empresa_id, id),
-  CONSTRAINT ck_usuario_situacao CHECK (situacao IN ('convidado', 'ativo', 'bloqueado', 'desligado')),
+  -- sumário 3.6; o bloqueio temporário por falhas é da identidade (identidade.bloqueada_ate)
+  CONSTRAINT ck_usuario_situacao CHECK (situacao IN ('convidado', 'ativo', 'inativo')),
   CONSTRAINT ck_usuario_externo CHECK (num_nonnulls(fornecedor_id, locatario_id) <= 1)
 );
 CREATE UNIQUE INDEX uq_usuario_identidade ON app.usuario (empresa_id, identidade_id) WHERE identidade_id IS NOT NULL;
@@ -2415,15 +2662,19 @@ CREATE INDEX ix_usuario_fornecedor ON app.usuario (empresa_id, fornecedor_id) WH
 CREATE INDEX ix_usuario_locatario ON app.usuario (empresa_id, locatario_id) WHERE locatario_id IS NOT NULL;
 CREATE INDEX ix_usuario_sync ON app.usuario (empresa_id, alterado_xid);
 CALL app.preparar_tabela('app.usuario', p_escopo => 'proprio');  -- externo vê a si mesmo e os colegas do mesmo fornecedor ou locatário
--- fks para fornecedor (seção 5.8) e locatario (seção 13.10)
+-- escopo_externo e escopo_externo_exclusao: seção 2.9.4; trg_acesso_empresa: acima
+-- fks para fornecedor (seção 5.8, E06) e locatario (seção 13.10, fase 2), com NOT VALID + VALIDATE (seção 17.3)
 
--- Perfil: conjunto de permissões. Os 12 perfis padrão são criados com a empresa.
+-- Perfil: conjunto de permissões. Os 12 perfis padrão são criados com a empresa, pelo serviço,
+-- a partir do catálogo de permissões versionado no código (documento 1), e não por migração (seção 14.2).
 CREATE TABLE app.perfil (
   empresa_id   uuid    NOT NULL,
   id           uuid    NOT NULL DEFAULT app.uuid_v7(),
   codigo       text    NOT NULL,
   nome         text    NOT NULL,
   padrao       boolean NOT NULL DEFAULT false,
+  perfil_origem text,                         -- perfil padrão de que deriva (no padrão, o próprio código);
+                                              -- nulo: personalizado sem origem, sempre interno
   permissoes   text[]  NOT NULL DEFAULT '{}',   -- <módulo>.<ação>, ex.: {'os.executar','os.encerrar','est.decidir_destino'}
   versao bigint NOT NULL DEFAULT 1, alterado_xid xid8 NOT NULL DEFAULT pg_current_xact_id(),
   criado_em timestamptz NOT NULL DEFAULT now(), criado_por uuid,
@@ -2437,10 +2688,48 @@ CREATE TABLE app.perfil (
   -- dados de saúde ficam fora de todo perfil padrão (sumário 3.1)
   CONSTRAINT ck_perfil_saude CHECK (NOT padrao OR NOT ('pessoa.saude.ler' = ANY (permissoes))),
   -- a liberação de OS nunca é dada a usuário externo (sumário 3.6)
-  CONSTRAINT ck_perfil_externo_encerrar CHECK (codigo NOT IN ('prestador', 'locatario')
-                                               OR NOT ('os.encerrar' = ANY (permissoes)))
+  CONSTRAINT ck_perfil_origem CHECK (perfil_origem IN
+    ('administrador', 'gestor', 'planejador', 'tecnico', 'almoxarife', 'comprador', 'plh', 'motorista',
+     'solicitante', 'visualizador', 'prestador', 'locatario')),
+  CONSTRAINT ck_perfil_padrao_origem CHECK (NOT padrao OR perfil_origem = codigo),
+  -- a liberação de OS nunca é dada a usuário externo (sumário 3.6), nem por perfil derivado de externo
+  CONSTRAINT ck_perfil_externo_encerrar CHECK (coalesce(perfil_origem, codigo) NOT IN ('prestador', 'locatario')
+                                               OR NOT ('os.encerrar' = ANY (permissoes))),
+  -- nem nenhuma das demais vedadas a externo (lista abaixo)
+  CONSTRAINT ck_perfil_externo_vedadas CHECK (coalesce(perfil_origem, codigo) NOT IN ('prestador', 'locatario')
+                                              OR NOT (permissoes && app.permissoes_vedadas_externo()))
 );
 CALL app.preparar_tabela('app.perfil');
+
+-- O tipo do perfil, coalesce(perfil_origem, codigo), não muda depois de criado (ISO-E01-03): senão um
+-- perfil já atribuído a prestador viraria interno e receberia os.encerrar, e os CHECKs e o trigger de
+-- atribuição, que olham o tipo no momento da gravação, não veriam a atribuição antiga. perfil_origem e
+-- padrao também ficam imutáveis. Mudar de tipo é criar outro perfil.
+CREATE FUNCTION app.tg_perfil_tipo() RETURNS trigger
+  LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NEW.perfil_origem IS DISTINCT FROM OLD.perfil_origem
+     OR NEW.padrao IS DISTINCT FROM OLD.padrao
+     OR coalesce(NEW.perfil_origem, NEW.codigo) IS DISTINCT FROM coalesce(OLD.perfil_origem, OLD.codigo) THEN
+    RAISE EXCEPTION 'o tipo do perfil (origem, padrão) é imutável depois de criado' USING ERRCODE = '42501';
+  END IF;
+  RETURN NEW;
+END
+$$;
+CREATE TRIGGER trg_perfil_tipo BEFORE UPDATE OF codigo, perfil_origem, padrao ON app.perfil
+  FOR EACH ROW EXECUTE FUNCTION app.tg_perfil_tipo();
+-- criada antes da tabela, na migração: os CHECKs acima a usam
+-- CREATE FUNCTION app.permissoes_vedadas_externo() RETURNS text[] LANGUAGE sql IMMUTABLE PARALLEL SAFE
+-- AS $$ SELECT ARRAY['os.encerrar',
+--   'adm.gerenciar_regras', 'adm.gerenciar_configuracao', 'atv.colocar_em_operacao',
+--   'prj.gerenciar', 'prj.dispensar_etapa', 'prj.ajustar_medicao', 'ctr.gerenciar', 'ctr.fechar_medicao',
+--   'ctr.reabrir_medicao', 'srv.gerenciar_conexao', 'pessoa.saude.ler',
+--   -- grupo Admin do catálogo de RF-ADM-005
+--   'adm.gerenciar_empresa', 'adm.gerenciar_plano', 'adm.gerenciar_usuarios', 'adm.gerenciar_perfis',
+--   'adm.gerenciar_parametros', 'adm.ler_auditoria', 'adm.gerenciar_sso', 'adm.exportar',
+--   'con.gerenciar_tipos_documento', 'int.gerenciar_tokens', 'int.gerenciar_webhooks',
+--   'int.gerenciar_conexoes_telematica', 'int.gerenciar_erp', 'ia.gerenciar']::text[] $$;
 
 -- Usuário pode ter vários perfis; unidade_id nulo = todas as unidades
 CREATE TABLE app.usuario_perfil (
@@ -2453,14 +2742,21 @@ CREATE TABLE app.usuario_perfil (
   criado_em timestamptz NOT NULL DEFAULT now(), criado_por uuid,
   atualizado_em timestamptz NOT NULL DEFAULT now(), atualizado_por uuid, excluido_em timestamptz,
   CONSTRAINT pk_usuario_perfil PRIMARY KEY (empresa_id, id),
-  CONSTRAINT uq_usuario_perfil UNIQUE NULLS NOT DISTINCT (empresa_id, usuario_id, perfil_id, unidade_id),
   CONSTRAINT fk_usuario_perfil_usuario FOREIGN KEY (empresa_id, usuario_id) REFERENCES app.usuario (empresa_id, id),
   CONSTRAINT fk_usuario_perfil_perfil FOREIGN KEY (empresa_id, perfil_id) REFERENCES app.perfil (empresa_id, id),
   CONSTRAINT fk_usuario_perfil_unidade FOREIGN KEY (empresa_id, unidade_id) REFERENCES app.unidade (empresa_id, id)
 );
+-- quem tem um perfil: contagem de técnicos cobrados, último administrador (RF-ADM-004)
+-- uma atribuição ativa por usuário, perfil e unidade (nula = todas); parcial, como as demais unicidades:
+-- retirar o perfil (excluido_em) e atribuí-lo de novo não colide; é também o índice dos perfis do usuário
+CREATE UNIQUE INDEX uq_usuario_perfil ON app.usuario_perfil (empresa_id, usuario_id, perfil_id, unidade_id)
+  NULLS NOT DISTINCT WHERE excluido_em IS NULL;
+CREATE INDEX ix_usuario_perfil_perfil ON app.usuario_perfil (empresa_id, perfil_id) WHERE excluido_em IS NULL;
 CALL app.preparar_tabela('app.usuario_perfil');
 
--- Usuário externo só tem o perfil do seu tipo; usuário interno nunca recebe perfil externo
+-- Usuário externo só tem o perfil do seu tipo; usuário interno nunca recebe perfil externo.
+-- Perfil ou usuário não encontrado (inclusive id de outra empresa, invisível pelo RLS): deixa passar,
+-- e a FK composta recusa com 23503, que é o erro que a suíte de vazamento espera (seção 2.8).
 CREATE FUNCTION app.tg_usuario_perfil_externo() RETURNS trigger
   LANGUAGE plpgsql
 AS $$
@@ -2469,10 +2765,19 @@ DECLARE
   v_fornecedor uuid;
   v_locatario  uuid;
 BEGIN
-  SELECT p.codigo INTO v_codigo FROM app.perfil p
+  IF NEW.excluido_em IS NOT NULL THEN
+    RETURN NEW;                       -- retirar um perfil nunca cria incompatibilidade
+  END IF;
+  -- o tipo do perfil é o da origem: personalizado derivado de prestador é de prestador
+  SELECT coalesce(p.perfil_origem, p.codigo) INTO v_codigo FROM app.perfil p
   WHERE p.empresa_id = NEW.empresa_id AND p.id = NEW.perfil_id;
+  IF NOT FOUND THEN RETURN NEW; END IF;
+  -- FOR SHARE: trava a linha do usuário até o fim da transação; sem ela, em READ COMMITTED, esta
+  -- atribuição e uma troca de vínculo simultânea (tg_usuario_vinculo) passariam as duas (ISO-E01-06)
   SELECT u.fornecedor_id, u.locatario_id INTO v_fornecedor, v_locatario FROM app.usuario u
-  WHERE u.empresa_id = NEW.empresa_id AND u.id = NEW.usuario_id;
+  WHERE u.empresa_id = NEW.empresa_id AND u.id = NEW.usuario_id
+  FOR SHARE;
+  IF NOT FOUND THEN RETURN NEW; END IF;
   IF (v_codigo = 'prestador') IS DISTINCT FROM (v_fornecedor IS NOT NULL)
      OR (v_codigo = 'locatario') IS DISTINCT FROM (v_locatario IS NOT NULL) THEN
     RAISE EXCEPTION 'perfil % incompatível com o vínculo externo do usuário', v_codigo USING ERRCODE = '23514';
@@ -2482,15 +2787,118 @@ END
 $$;
 CREATE TRIGGER trg_usuario_perfil_externo BEFORE INSERT OR UPDATE ON app.usuario_perfil
   FOR EACH ROW EXECUTE FUNCTION app.tg_usuario_perfil_externo();
--- um trigger simétrico em app.usuario impede mudar fornecedor_id ou locatario_id de quem já tem perfis
+
+-- Trigger simétrico em app.usuario: quem já tem perfil não troca de vínculo externo, e a identidade,
+-- uma vez definida, não muda (trocar identidade_id seria entregar a conta a outro login; para trocar,
+-- desliga-se o usuário e cria-se outro). A consulta a usuario_perfil roda sob o RLS de quem grava: um
+-- usuário externo não a enxerga, mas também não chega aqui com vínculo trocado, porque o WITH CHECK
+-- de escopo_externo em usuario o recusa antes (seção 2.9.4).
+CREATE FUNCTION app.tg_usuario_vinculo() RETURNS trigger
+  LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF OLD.identidade_id IS NOT NULL AND NEW.identidade_id IS DISTINCT FROM OLD.identidade_id THEN
+    RAISE EXCEPTION 'a identidade do usuário é imutável depois de definida' USING ERRCODE = '42501';
+  END IF;
+  IF (NEW.fornecedor_id IS DISTINCT FROM OLD.fornecedor_id OR NEW.locatario_id IS DISTINCT FROM OLD.locatario_id)
+     AND EXISTS (SELECT 1 FROM app.usuario_perfil up
+                 WHERE up.empresa_id = NEW.empresa_id AND up.usuario_id = NEW.id AND up.excluido_em IS NULL) THEN
+    RAISE EXCEPTION 'o usuário tem perfis; o vínculo externo não pode mudar' USING ERRCODE = '23514';
+  END IF;
+  -- interno com permissão avulsa vedada (ex.: pessoa.saude.ler) não vira externo
+  IF (NEW.fornecedor_id IS NOT NULL OR NEW.locatario_id IS NOT NULL)
+     AND (NEW.fornecedor_id IS DISTINCT FROM OLD.fornecedor_id OR NEW.locatario_id IS DISTINCT FROM OLD.locatario_id)
+     AND EXISTS (SELECT 1 FROM app.usuario_permissao pu
+                 WHERE pu.empresa_id = NEW.empresa_id AND pu.usuario_id = NEW.id AND pu.excluido_em IS NULL
+                   AND pu.permissao = ANY (app.permissoes_vedadas_externo())) THEN
+    RAISE EXCEPTION 'o usuário tem permissão avulsa vedada a usuário externo' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END
+$$;
+CREATE TRIGGER trg_usuario_vinculo BEFORE UPDATE OF identidade_id, fornecedor_id, locatario_id ON app.usuario
+  FOR EACH ROW EXECUTE FUNCTION app.tg_usuario_vinculo();
+
+-- Fora do escopo interno, só nome e telefone mudam (ISO-E01-01, seção 2.9.4). As colunas padrão,
+-- mantidas por trg_padrao (que roda antes, pela ordem alfabética), ficam fora da comparação.
+CREATE FUNCTION app.tg_usuario_colunas_externo() RETURNS trigger
+  LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_livres text[] := ARRAY['nome', 'telefone', 'versao', 'alterado_xid', 'atualizado_em', 'atualizado_por'];
+BEGIN
+  IF app.escopo_atual() IN ('prestador', 'locatario', 'link')
+     AND (to_jsonb(NEW) - v_livres) IS DISTINCT FROM (to_jsonb(OLD) - v_livres) THEN
+    RAISE EXCEPTION 'fora do escopo interno, o usuário só altera nome e telefone' USING ERRCODE = '42501';
+  END IF;
+  RETURN NEW;
+END
+$$;
+CREATE TRIGGER trg_usuario_colunas_externo BEFORE UPDATE ON app.usuario
+  FOR EACH ROW EXECUTE FUNCTION app.tg_usuario_colunas_externo();
+
+-- Permissão avulsa concedida a um usuário (RF-ADM-005; sumário 3.2 e 3.6), como pessoa.saude.ler.
+-- Auditada: cada concessão e retirada é evento (RF-ADM-011). Retirar é exclusão lógica.
+-- O formato é conferido aqui; a existência do código no catálogo de RF-ADM-005, no Go.
+CREATE TABLE app.usuario_permissao (
+  empresa_id  uuid NOT NULL,
+  id          uuid NOT NULL DEFAULT app.uuid_v7(),
+  usuario_id  uuid NOT NULL,
+  permissao   text NOT NULL,                -- <módulo>.<ação>; exceção aceita: pessoa.saude.ler
+  versao bigint NOT NULL DEFAULT 1, alterado_xid xid8 NOT NULL DEFAULT pg_current_xact_id(),
+  criado_em timestamptz NOT NULL DEFAULT now(), criado_por uuid,
+  atualizado_em timestamptz NOT NULL DEFAULT now(), atualizado_por uuid, excluido_em timestamptz,
+  CONSTRAINT pk_usuario_permissao PRIMARY KEY (empresa_id, id),
+  CONSTRAINT fk_usuario_permissao_usuario FOREIGN KEY (empresa_id, usuario_id) REFERENCES app.usuario (empresa_id, id),
+  -- a ação começa por letra e aceita dígito depois dela (con.gerenciar_nr13); os 117 códigos do
+  -- catálogo de RF-ADM-005 passam neste padrão
+  CONSTRAINT ck_usuario_permissao_formato CHECK (permissao ~ '^[a-z]{2,3}\.[a-z][a-z0-9_]*[a-z0-9]$'
+                                                 OR permissao = 'pessoa.saude.ler')
+);
+-- uma concessão ativa por usuário e permissão; também o índice da leitura a cada requisição
+CREATE UNIQUE INDEX uq_usuario_permissao ON app.usuario_permissao (empresa_id, usuario_id, permissao)
+  WHERE excluido_em IS NULL;
+CALL app.preparar_tabela('app.usuario_permissao');
+
+-- Usuário externo nunca recebe permissão vedada, nem avulsa. Usuário não encontrado: a FK recusa (23503).
+CREATE FUNCTION app.tg_usuario_permissao_externo() RETURNS trigger
+  LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_fornecedor uuid;
+  v_locatario  uuid;
+BEGIN
+  IF NEW.excluido_em IS NOT NULL OR NOT (NEW.permissao = ANY (app.permissoes_vedadas_externo())) THEN
+    RETURN NEW;
+  END IF;
+  -- FOR SHARE: trava a linha do usuário até o fim da transação; sem ela, em READ COMMITTED, esta
+  -- atribuição e uma troca de vínculo simultânea (tg_usuario_vinculo) passariam as duas (ISO-E01-06)
+  SELECT u.fornecedor_id, u.locatario_id INTO v_fornecedor, v_locatario FROM app.usuario u
+  WHERE u.empresa_id = NEW.empresa_id AND u.id = NEW.usuario_id
+  FOR SHARE;
+  IF NOT FOUND THEN RETURN NEW; END IF;
+  IF v_fornecedor IS NOT NULL OR v_locatario IS NOT NULL THEN
+    RAISE EXCEPTION 'permissão % é vedada a usuário externo', NEW.permissao USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END
+$$;
+CREATE TRIGGER trg_usuario_permissao_externo BEFORE INSERT OR UPDATE ON app.usuario_permissao
+  FOR EACH ROW EXECUTE FUNCTION app.tg_usuario_permissao_externo();
 ```
+
+**Permissões vedadas a usuário externo, no banco.** O catálogo de RF-ADM-005 (documento 1) é a lista completa e vive no Go; o banco guarda só o invariante barato: o usuário `prestador` ou `locatario` nunca recebe `os.encerrar`, as nove permissões da configuração, de PRJ e de CTR, `srv.gerenciar_conexao`, `pessoa.saude.ler` nem permissão do grupo Admin. São três barreiras, sobre a mesma lista `app.permissoes_vedadas_externo()`: `ck_perfil_externo_vedadas` (e `ck_perfil_externo_encerrar`, a do sumário) no perfil cuja origem é externa; `trg_usuario_permissao_externo` na permissão avulsa; e `trg_usuario_vinculo`, que impede um interno com permissão avulsa vedada de virar externo. A lista é `IMMUTABLE` para caber em `CHECK`; mudá-la é `CREATE OR REPLACE` mais a recriação dos dois CHECKs com `NOT VALID` e `VALIDATE`, porque um `CHECK` não reconfere sozinho as linhas antigas.
+
+**Perfil derivado de externo.** `perfil.perfil_origem` diz de que perfil padrão um perfil deriva (no padrão, o próprio código, `ck_perfil_padrao_origem`). Externo é o perfil com `coalesce(perfil_origem, codigo)` em `prestador` ou `locatario`: assim `ck_perfil_externo_encerrar`, `ck_perfil_externo_vedadas` e `trg_usuario_perfil_externo` pegam também o perfil personalizado derivado de `prestador` ou `locatario` (Fase 2), que o código sozinho não revela. A regra "derivado só contém permissões do conjunto padrão da origem" (RF-ADM-005, proposta) fica no Go, porque depende do catálogo inteiro.
+
+**Calendário da unidade: "pelo menos um turno" fica no serviço, não no banco** (RF-ADM-002). Três motivos. Não é invariante de integridade: unidade sem turno tem comportamento definido, porque o tempo requerido dos KPIs cai no regime 24×7 quando não há calendário (D9). A regra cruza duas tabelas e exigiria um trigger de restrição adiado em `unidade` e em `turno_unidade` (inclusive na exclusão lógica do último turno), rodando sob o RLS de quem grava. E a criação da conta já cria a unidade inicial; com a regra no banco, seria preciso um turno padrão, e o dono do produto decidiu que não há padrão: os turnos da unidade inicial são informados pelo cliente na criação (sumário 3.6). O serviço recusa salvar a unidade ativa sem turno (`422 validacao_falhou`) e a criação da conta pede o calendário no mesmo passo. Turnos sobrepostos no mesmo dia também são validação do serviço: o banco só impede dois turnos com o mesmo início (`uq_turno_unidade_inicio`), porque o turno que atravessa a meia-noite não cabe num `EXCLUDE` simples de intervalo.
 
 Base de cobrança (sumário 2.1), contada pelo job de cobrança, empresa por empresa, com o maior número diário do ciclo:
 
 - **Técnico cobrado:** usuário em situação `ativo` com o perfil `tecnico`, mais o usuário ativo com o perfil `prestador` (que executa OS). O link de uso único não tem usuário e não conta. O técnico de uma subcontratada com conta própria não é usuário do cliente e não conta no cliente; conta na conta da subcontratada (plano Serviços, sumário 2.2), onde `gestor` e `planejador` sem perfil `tecnico` não pagam.
 - **Veículo cobrado:** ativo do tipo `veiculo` com `propriedade <> 'de_cliente'`, `status_operacional <> 'inativo'` e `excluido_em IS NULL`. Equipamento ou veículo de cliente atendido, na conta da subcontratada, não é cobrado. Veículo `em_implantacao` tem status `inativo` (`ck_ativo_fase_status`, seção 5.2) e, portanto, também não é cobrado até a entrada em operação.
 
-A liberação (encerramento) de OS é a permissão `os.encerrar`, presente por padrão nos perfis `gestor` e `planejador` e nunca em `prestador` nem `locatario`. As permissões seguem o formato `<módulo>.<ação>`; `pessoa.saude.ler` é a exceção já aceita. O destino de peça com defeito (conserto, sucata ou devolução) exige `est.decidir_destino`, padrão em `gestor`, `planejador` e `almoxarife` (seção 13.9). A leitura de dados de saúde é a permissão `pessoa.saude.ler`, que nenhum perfil padrão tem (`ck_perfil_saude`); o administrador a concede num perfil criado pela empresa. O helper `NaEmpresa` repassa essa permissão ao banco (`app.saude`), e as policies da seção 5.10 escondem os documentos sensíveis de quem não a tem.
+A liberação (encerramento) de OS é a permissão `os.encerrar`, presente por padrão nos perfis `gestor` e `planejador` e nunca em `prestador` nem `locatario`. As permissões seguem o formato `<módulo>.<ação>`; `pessoa.saude.ler` é a exceção já aceita. O destino de peça com defeito (conserto, sucata ou devolução) exige `est.decidir_destino`, padrão em `gestor`, `planejador` e `almoxarife` (seção 13.9). A leitura de dados de saúde é a permissão `pessoa.saude.ler`, que nenhum perfil padrão tem (`ck_perfil_saude`); o administrador a concede usuário a usuário, como permissão avulsa em `usuario_permissao`, com registro na auditoria (RF-ADM-005), ou num perfil personalizado. O helper `NaEmpresa` repassa essa permissão ao banco (`app.saude`), e as policies da seção 5.10 escondem os documentos sensíveis de quem não a tem.
 
 Permissões da configuração por segmento, de PRJ e de CTR (sumário 3.6), conferidas no Go como `os.encerrar`: `adm.gerenciar_regras` (criar, alterar e ativar `regra_automacao`), `adm.gerenciar_configuracao` (definições de `campo_extra_os` e aplicação de pacotes de segmento), `atv.colocar_em_operacao` e, na Fase 2, `prj.gerenciar` (modelos e projetos: criar, iniciar, suspender, retomar, concluir, cancelar), `prj.dispensar_etapa`, `prj.ajustar_medicao`, `ctr.gerenciar` (contratos e itens), `ctr.fechar_medicao` (fechar a medição e decidir as exclusões, `decisao_exclusao`) e `ctr.reabrir_medicao`. Padrão: `administrador` e `gestor`; `planejador` recebe também `atv.colocar_em_operacao` e `prj.gerenciar`. Nenhuma delas entra nos perfis `prestador` e `locatario`.
 
@@ -2562,6 +2970,254 @@ CREATE POLICY escopo_externo ON app.contador_documento AS RESTRICTIVE FOR ALL TO
   USING (app.escopo_interno() OR (app.escopo_atual() = 'locatario' AND tipo = 'SS'))
   WITH CHECK (app.escopo_interno() OR (app.escopo_atual() = 'locatario' AND tipo = 'SS'));
 ```
+
+#### Autenticação (esquema `plataforma`)
+
+Nomes aprovados pelo dono do produto na etapa E01 (sumário 0.6, seção 3.2). As tabelas ficam fora do RLS por empresa porque são consultadas antes de a empresa ser conhecida (seção 2.11). Sem RLS, o privilégio é a defesa, e o isolamento vem de quatro regras, válidas para todas:
+
+0. **Dono próprio** (ISO-E01-08). As sete tabelas e as funções `tg_acesso_empresa` e `purgar_credenciais_vencidas` pertencem a `tenaz_credencial`, `NOLOGIN`, sem membros de runtime. Sem RLS, o dono lê tudo; com dono `tenaz_dono`, o `tenaz_manutencao`, que herda do dono, leria as credenciais. A migração faz `SET ROLE tenaz_credencial` para criá-las e volta a `SET ROLE tenaz_dono` antes de terminar, porque o goose grava a versão com o papel corrente. O `tenaz_dono` recebe `REFERENCES (id)` em `identidade` (FK de `app.usuario.identidade_id`) e `EXECUTE` em `tg_acesso_empresa` (para criar o trigger em `app.usuario`); `tenaz_credencial` recebe `REFERENCES (empresa_id, id, identidade_id)` em `app.usuario` (FKs compostas). Caminhos descartados: RLS forçado com policy só para `tenaz_autenticacao` barraria as duas funções `SECURITY DEFINER`, e dar policy ao dono reabriria o acesso ao `tenaz_manutencao`; tirar a herança do `tenaz_manutencao` deixaria o dono e quem pode assumi-lo lendo.
+0. **Papel próprio** ([ADR-011 do documento 5](5_ARQUITETURA_SOFTWARE.md#adr-011--papel-de-banco-próprio-para-as-credenciais-de-autenticação); documento 5, seção 6.9). Só o `tenaz_autenticacao`, num pool exclusivo do pacote de autenticação, alcança as sete tabelas (`identidade` e `acesso_empresa`, da migração `00004`, e as cinco abaixo, da `00005`). `tenaz_app`, `tenaz_job`, `tenaz_leitura` e `tenaz_sinc` não têm privilégio nenhum nelas e recebem "permissão negada". Achado ISO-E01-02 da revisão de isolamento: com o privilégio no `tenaz_app`, qualquer módulo de negócio lia `senha_hash` e segredo de MFA de todas as identidades e criava sessão válida para usuário de outra empresa; as três regras seguintes impediam mover uma credencial de empresa, não lê-la nem forjá-la.
+1. **Nenhum segredo guardado.** Cookie, CSRF, refresh token, código OAuth, desafio de MFA e link de e-mail são valores aleatórios de 256 bits; o banco guarda só o sha256 (`ck_*_hash` confere os 32 bytes), e o serviço compara em tempo constante. Quem lê a tabela não se passa por ninguém.
+2. **Empresa fixada na criação.** O `tenaz_autenticacao` não tem `UPDATE` em `empresa_id`, `usuario_id`, `identidade_id`, `canal` nem nos hashes; só nas colunas de ciclo de vida (uso, consumo, revogação). Trocar de empresa (`POST /v1/auth/trocar-empresa`, documento 3, seção 4.7) é criar outra sessão e revogar a anterior. É assim que uma sessão nunca serve a duas empresas.
+3. **FK composta para o usuário.** `(empresa_id, usuario_id, identidade_id) REFERENCES app.usuario (empresa_id, id, identidade_id)`: a sessão e o código só existem para a identidade que é de fato a do usuário naquela empresa. A verificação de FK ignora o RLS, o que aqui é desejado: confere o cadastro, não o contexto.
+
+A cada transação, `app.conferir_escopo()` ainda confere que o usuário da sessão existe, está `ativo` e tem o vínculo externo do escopo (seção 2.9.3): usuário inativado perde o acesso na requisição seguinte, mesmo com sessão viva.
+
+```sql
+-- Sessão web ou do app (documento 3, seções 4.2 e 4.3).
+-- Web: cookie __Host-tenaz_sessao com identificador de 256 bits (aqui, o sha256); CSRF também como hash.
+--   Inatividade de 12 h (ou menos, por parâmetro da empresa), conferida pelo serviço contra ultimo_uso_em;
+--   máximo de 7 dias, com teto no CHECK.
+-- App: sessão do aparelho. O id é o claim sid do access token e a família dos refresh tokens. Sem cookie
+--   nem CSRF. expira_em acompanha o refresh token vigente: 30 dias de inatividade, empurrado a cada
+--   renovação (RNF-017).
+CREATE TABLE plataforma.sessao (
+  id              uuid        NOT NULL DEFAULT app.uuid_v7(),
+  canal           text        NOT NULL,
+  token_hash      bytea,                    -- web: sha256 do identificador do cookie
+  csrf_hash       bytea,                    -- web: sha256 do token CSRF
+  identidade_id   uuid        NOT NULL,
+  empresa_id      uuid        NOT NULL,
+  usuario_id      uuid        NOT NULL,
+  dispositivo_id  uuid,                     -- app: aparelho; FK quando app.dispositivo existir
+  ip              inet,
+  user_agent      text,
+  criado_em       timestamptz NOT NULL DEFAULT now(),
+  ultimo_uso_em   timestamptz NOT NULL DEFAULT now(),
+  expira_em       timestamptz NOT NULL,
+  revogada_em     timestamptz,
+  CONSTRAINT pk_sessao PRIMARY KEY (id),
+  CONSTRAINT fk_sessao_identidade FOREIGN KEY (identidade_id) REFERENCES plataforma.identidade (id) ON DELETE CASCADE,
+  CONSTRAINT fk_sessao_usuario FOREIGN KEY (empresa_id, usuario_id, identidade_id)
+    REFERENCES app.usuario (empresa_id, id, identidade_id) ON DELETE CASCADE,
+  CONSTRAINT ck_sessao_canal CHECK (canal IN ('web', 'app')),
+  CONSTRAINT ck_sessao_web CHECK ((canal = 'web') = (token_hash IS NOT NULL AND csrf_hash IS NOT NULL)),
+  CONSTRAINT ck_sessao_hash CHECK (octet_length(token_hash) = 32 AND octet_length(csrf_hash) = 32),
+  CONSTRAINT ck_sessao_validade CHECK (expira_em > criado_em
+                                       AND (canal <> 'web' OR expira_em <= criado_em + interval '7 days'))
+);
+CREATE UNIQUE INDEX uq_sessao_token ON plataforma.sessao (token_hash) WHERE token_hash IS NOT NULL;  -- cada requisição web
+CREATE INDEX ix_sessao_usuario ON plataforma.sessao (empresa_id, usuario_id) WHERE revogada_em IS NULL; -- encerrar sessões do usuário
+CREATE INDEX ix_sessao_identidade ON plataforma.sessao (identidade_id) WHERE revogada_em IS NULL;       -- troca de senha: todas as empresas
+CREATE INDEX ix_sessao_expira ON plataforma.sessao (expira_em);                                          -- purga
+
+-- Refresh token rotativo do app. Cada renovação marca usado_em e cria o sucessor, com o mesmo familia_id.
+-- Reapresentar token já usado revoga a família: todos os tokens do familia_id e a sessão de id familia_id.
+CREATE TABLE plataforma.token_renovacao (
+  id           uuid        NOT NULL DEFAULT app.uuid_v7(),
+  familia_id   uuid        NOT NULL,       -- a sessão do app
+  anterior_id  uuid,                       -- o token que este substituiu
+  token_hash   bytea       NOT NULL,       -- sha256 do refresh token (tnz_rt_...)
+  criado_em    timestamptz NOT NULL DEFAULT now(),
+  expira_em    timestamptz NOT NULL,       -- criado_em + 30 dias de inatividade
+  usado_em     timestamptz,
+  revogado_em  timestamptz,
+  CONSTRAINT pk_token_renovacao PRIMARY KEY (id),
+  CONSTRAINT uq_token_renovacao_hash UNIQUE (token_hash),
+  CONSTRAINT fk_token_renovacao_familia FOREIGN KEY (familia_id) REFERENCES plataforma.sessao (id) ON DELETE CASCADE,
+  -- SET NULL: apagar um token antigo nunca leva o sucessor vivo; a purga é pela sessão
+  CONSTRAINT fk_token_renovacao_anterior FOREIGN KEY (anterior_id) REFERENCES plataforma.token_renovacao (id) ON DELETE SET NULL,
+  CONSTRAINT ck_token_renovacao_hash CHECK (octet_length(token_hash) = 32),
+  CONSTRAINT ck_token_renovacao_validade CHECK (expira_em > criado_em AND expira_em <= criado_em + interval '30 days')
+);
+CREATE INDEX ix_token_renovacao_familia ON plataforma.token_renovacao (familia_id);   -- revogação da família
+CREATE INDEX ix_token_renovacao_anterior ON plataforma.token_renovacao (anterior_id) WHERE anterior_id IS NOT NULL;
+
+-- Código de autorização OAuth 2.1 com PKCE S256: uso único, vida curta. A empresa é escolhida na tela
+-- de autorização e fica fixa no código. Código reapresentado depois de usado revoga a sessão que gerou.
+CREATE TABLE plataforma.codigo_autorizacao (
+  id             uuid        NOT NULL DEFAULT app.uuid_v7(),
+  codigo_hash    bytea       NOT NULL,
+  identidade_id  uuid        NOT NULL,
+  empresa_id     uuid        NOT NULL,
+  usuario_id     uuid        NOT NULL,
+  cliente_oauth  text        NOT NULL,     -- client_id
+  uri_retorno    text        NOT NULL,     -- redirect_uri, conferida byte a byte na troca
+  desafio_pkce   text        NOT NULL,     -- code_challenge: base64url de sha256, 43 caracteres; só S256
+  criado_em      timestamptz NOT NULL DEFAULT now(),
+  expira_em      timestamptz NOT NULL,
+  usado_em       timestamptz,
+  sessao_id      uuid,                     -- sessão criada na troca
+  CONSTRAINT pk_codigo_autorizacao PRIMARY KEY (id),
+  CONSTRAINT uq_codigo_autorizacao_hash UNIQUE (codigo_hash),
+  CONSTRAINT fk_codigo_autorizacao_identidade FOREIGN KEY (identidade_id) REFERENCES plataforma.identidade (id) ON DELETE CASCADE,
+  CONSTRAINT fk_codigo_autorizacao_usuario FOREIGN KEY (empresa_id, usuario_id, identidade_id)
+    REFERENCES app.usuario (empresa_id, id, identidade_id) ON DELETE CASCADE,
+  CONSTRAINT fk_codigo_autorizacao_sessao FOREIGN KEY (sessao_id) REFERENCES plataforma.sessao (id) ON DELETE SET NULL,
+  CONSTRAINT ck_codigo_autorizacao_hash CHECK (octet_length(codigo_hash) = 32),
+  CONSTRAINT ck_codigo_autorizacao_cliente CHECK (cliente_oauth IN ('tenaz-app')),
+  CONSTRAINT ck_codigo_autorizacao_pkce CHECK (desafio_pkce ~ '^[A-Za-z0-9_-]{43}$'),
+  CONSTRAINT ck_codigo_autorizacao_validade CHECK (expira_em > criado_em AND expira_em <= criado_em + interval '10 minutes'),
+  CONSTRAINT ck_codigo_autorizacao_uso CHECK (sessao_id IS NULL OR usado_em IS NOT NULL)
+);
+CREATE INDEX ix_codigo_autorizacao_sessao ON plataforma.codigo_autorizacao (sessao_id) WHERE sessao_id IS NOT NULL;
+CREATE INDEX ix_codigo_autorizacao_expira ON plataforma.codigo_autorizacao (expira_em);
+
+-- Desafio de MFA: entre a senha certa e o TOTP. Ainda sem empresa (a escolha vem depois do segundo fator).
+-- O desafio_id da API é um segredo de 256 bits; aqui, o sha256. O CHECK é o teto de tentativas.
+CREATE TABLE plataforma.desafio_mfa (
+  id             uuid        NOT NULL DEFAULT app.uuid_v7(),
+  token_hash     bytea       NOT NULL,
+  identidade_id  uuid        NOT NULL,
+  canal          text        NOT NULL,
+  tentativas     smallint    NOT NULL DEFAULT 0,
+  ip             inet,
+  criado_em      timestamptz NOT NULL DEFAULT now(),
+  expira_em      timestamptz NOT NULL,
+  concluido_em   timestamptz,
+  CONSTRAINT pk_desafio_mfa PRIMARY KEY (id),
+  CONSTRAINT uq_desafio_mfa_hash UNIQUE (token_hash),
+  CONSTRAINT fk_desafio_mfa_identidade FOREIGN KEY (identidade_id) REFERENCES plataforma.identidade (id) ON DELETE CASCADE,
+  CONSTRAINT ck_desafio_mfa_hash CHECK (octet_length(token_hash) = 32),
+  CONSTRAINT ck_desafio_mfa_canal CHECK (canal IN ('web', 'app')),
+  CONSTRAINT ck_desafio_mfa_tentativas CHECK (tentativas BETWEEN 0 AND 5),
+  CONSTRAINT ck_desafio_mfa_validade CHECK (expira_em > criado_em AND expira_em <= criado_em + interval '10 minutes')
+);
+CREATE INDEX ix_desafio_mfa_identidade ON plataforma.desafio_mfa (identidade_id);
+CREATE INDEX ix_desafio_mfa_expira ON plataforma.desafio_mfa (expira_em);
+
+-- Link enviado por e-mail. Convite: de uma empresa e de um usuário (que nasce convidado, sem identidade).
+-- Redefinição de senha e verificação de e-mail: da identidade, sem empresa.
+CREATE TABLE plataforma.token_email (
+  id             uuid        NOT NULL DEFAULT app.uuid_v7(),
+  token_hash     bytea       NOT NULL,
+  finalidade     text        NOT NULL,
+  email          citext      NOT NULL,     -- destino no momento do envio
+  identidade_id  uuid,
+  empresa_id     uuid,
+  usuario_id     uuid,
+  criado_em      timestamptz NOT NULL DEFAULT now(),
+  expira_em      timestamptz NOT NULL,
+  usado_em       timestamptz,
+  revogado_em    timestamptz,              -- novo envio revoga o anterior
+  CONSTRAINT pk_token_email PRIMARY KEY (id),
+  CONSTRAINT uq_token_email_hash UNIQUE (token_hash),
+  CONSTRAINT fk_token_email_identidade FOREIGN KEY (identidade_id) REFERENCES plataforma.identidade (id) ON DELETE CASCADE,
+  CONSTRAINT fk_token_email_usuario FOREIGN KEY (empresa_id, usuario_id) REFERENCES app.usuario (empresa_id, id) ON DELETE CASCADE,
+  CONSTRAINT ck_token_email_hash CHECK (octet_length(token_hash) = 32),
+  CONSTRAINT ck_token_email_finalidade CHECK (finalidade IN ('convite', 'redefinicao_senha', 'verificacao_email')),
+  CONSTRAINT ck_token_email_alvo CHECK (CASE finalidade
+      WHEN 'convite' THEN empresa_id IS NOT NULL AND usuario_id IS NOT NULL
+      ELSE identidade_id IS NOT NULL AND empresa_id IS NULL AND usuario_id IS NULL END),
+  -- tetos (proposta): convite 7 dias, verificação 24 horas, redefinição 1 hora
+  CONSTRAINT ck_token_email_validade CHECK (expira_em > criado_em AND expira_em <= criado_em + CASE finalidade
+      WHEN 'convite' THEN interval '7 days' WHEN 'verificacao_email' THEN interval '24 hours' ELSE interval '1 hour' END)
+);
+CREATE INDEX ix_token_email_usuario ON plataforma.token_email (empresa_id, usuario_id) WHERE usuario_id IS NOT NULL;
+CREATE INDEX ix_token_email_identidade ON plataforma.token_email (identidade_id) WHERE identidade_id IS NOT NULL;
+CREATE INDEX ix_token_email_expira ON plataforma.token_email (expira_em);
+
+-- Privilégios (ADR-011): tudo tirado de todos, e ao tenaz_autenticacao só o necessário. SELECT e INSERT,
+-- UPDATE só no ciclo de vida, nenhum DELETE nem TRUNCATE.
+GRANT USAGE ON SCHEMA app, plataforma TO tenaz_autenticacao;
+GRANT EXECUTE ON FUNCTION app.uuid_v7(), app.empresa_atual() TO tenaz_autenticacao;
+REVOKE ALL ON plataforma.identidade, plataforma.acesso_empresa, plataforma.sessao, plataforma.token_renovacao,
+              plataforma.codigo_autorizacao, plataforma.desafio_mfa, plataforma.token_email
+  FROM PUBLIC, tenaz_app, tenaz_job, tenaz_leitura, tenaz_sinc;
+GRANT SELECT, INSERT ON plataforma.identidade TO tenaz_autenticacao;
+GRANT UPDATE (email, senha_hash, mfa_segredo_cifrado, mfa_ativado_em, mfa_ultimo_passo, email_verificado_em, falhas_login,
+              bloqueada_ate, bloqueada_em, ultimo_login_em, atualizado_em)
+  ON plataforma.identidade TO tenaz_autenticacao;               -- id e criado_em nunca mudam
+GRANT SELECT ON plataforma.acesso_empresa TO tenaz_autenticacao; -- a escrita é só do trigger
+GRANT SELECT, INSERT ON plataforma.sessao, plataforma.token_renovacao, plataforma.codigo_autorizacao,
+                        plataforma.desafio_mfa, plataforma.token_email TO tenaz_autenticacao;
+GRANT UPDATE (ultimo_uso_em, expira_em, revogada_em) ON plataforma.sessao TO tenaz_autenticacao;
+GRANT UPDATE (usado_em, revogado_em) ON plataforma.token_renovacao TO tenaz_autenticacao;
+GRANT UPDATE (usado_em, sessao_id) ON plataforma.codigo_autorizacao TO tenaz_autenticacao;
+GRANT UPDATE (tentativas, concluido_em) ON plataforma.desafio_mfa TO tenaz_autenticacao;
+GRANT UPDATE (usado_em, revogado_em) ON plataforma.token_email TO tenaz_autenticacao;
+
+-- Revogação na inativação (ADR-011, decisão 6). CREATE OR REPLACE da função da seção 5.1 (acesso_empresa),
+-- mesmo search_path e mesmo upsert: quando o acesso fica desabilitado (usuário que deixa de estar ativo, ou
+-- excluído), revoga na mesma transação as sessões abertas dele naquela empresa e os refresh tokens das
+-- famílias revogadas. O ADM não toca tabela de credencial; app.conferir_escopo() é a segunda barreira.
+CREATE OR REPLACE FUNCTION plataforma.tg_acesso_empresa() RETURNS trigger
+  LANGUAGE plpgsql SECURITY DEFINER
+  SET search_path = pg_catalog, pg_temp
+AS $$
+DECLARE
+  v_habilitado boolean := NEW.situacao = 'ativo' AND NEW.excluido_em IS NULL;
+BEGIN
+  INSERT INTO plataforma.acesso_empresa (identidade_id, empresa_id, usuario_id, habilitado, atualizado_em)
+  VALUES (NEW.identidade_id, NEW.empresa_id, NEW.id, v_habilitado, pg_catalog.now())
+  ON CONFLICT (identidade_id, empresa_id) DO UPDATE
+    SET usuario_id = EXCLUDED.usuario_id, habilitado = EXCLUDED.habilitado, atualizado_em = EXCLUDED.atualizado_em;
+  IF NOT v_habilitado THEN
+    WITH revogadas AS (
+      UPDATE plataforma.sessao s SET revogada_em = pg_catalog.now()
+      WHERE s.empresa_id = NEW.empresa_id AND s.usuario_id = NEW.id AND s.revogada_em IS NULL
+      RETURNING s.id)
+    UPDATE plataforma.token_renovacao t SET revogado_em = pg_catalog.now()
+    WHERE t.familia_id IN (SELECT r.id FROM revogadas r) AND t.revogado_em IS NULL;
+  END IF;
+  RETURN NULL;
+END
+$$;
+
+-- Purga das credenciais vencidas há mais de 30 dias (proposta: o prazo da investigação de incidente).
+-- SECURITY DEFINER e sem parâmetro: não recebe dado da requisição. Só o tenaz_job executa, num job diário;
+-- ele não tem privilégio nas tabelas. A ordem respeita as FKs; a sessão leva por cascata o resto da família.
+CREATE FUNCTION plataforma.purgar_credenciais_vencidas() RETURNS bigint
+  LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+  SET search_path = pg_catalog, pg_temp
+AS $$
+DECLARE
+  v_limite timestamptz := pg_catalog.now() - interval '30 days';
+  v_n bigint; v_total bigint := 0;
+BEGIN
+  DELETE FROM plataforma.codigo_autorizacao WHERE expira_em < v_limite; GET DIAGNOSTICS v_n = ROW_COUNT; v_total := v_total + v_n;
+  DELETE FROM plataforma.desafio_mfa        WHERE expira_em < v_limite; GET DIAGNOSTICS v_n = ROW_COUNT; v_total := v_total + v_n;
+  DELETE FROM plataforma.token_email        WHERE expira_em < v_limite; GET DIAGNOSTICS v_n = ROW_COUNT; v_total := v_total + v_n;
+  DELETE FROM plataforma.token_renovacao    WHERE expira_em < v_limite; GET DIAGNOSTICS v_n = ROW_COUNT; v_total := v_total + v_n;
+  DELETE FROM plataforma.sessao             WHERE expira_em < v_limite; GET DIAGNOSTICS v_n = ROW_COUNT; v_total := v_total + v_n;
+  RETURN v_total;
+END
+$$;
+REVOKE ALL ON FUNCTION plataforma.purgar_credenciais_vencidas() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION plataforma.purgar_credenciais_vencidas() TO tenaz_job;
+```
+
+Consumo atômico, no mesmo molde do link de uso único (D16): `UPDATE ... SET usado_em = now() WHERE <hash> = $1 AND usado_em IS NULL AND revogado_em IS NULL AND expira_em > now() RETURNING ...`. Zero linhas com o hash existente é reuso, expiração ou revogação; no refresh token, reuso revoga a família. O desafio de MFA conta a tentativa no mesmo `UPDATE` que confere `tentativas < 5`, e cada código errado conta também em `identidade.falhas_login`. Duas renovações simultâneas do mesmo refresh token (nova tentativa do app depois de queda de rede) contam como reuso e derrubam a sessão; por isso o app precisa serializar a renovação (ponto da seção 17.3 para o app offline).
+
+| Objeto | `tenaz_autenticacao` | `tenaz_app`, `tenaz_job`, `tenaz_leitura`, `tenaz_sinc` |
+|---|---|---|
+| `identidade` | `SELECT`, `INSERT`, `UPDATE` por coluna (sem `id`, `criado_em`; com `mfa_ultimo_passo`) | — |
+| `acesso_empresa` | `SELECT` | — (escrita só pelo trigger) |
+| `sessao` | `SELECT`, `INSERT`, `UPDATE (ultimo_uso_em, expira_em, revogada_em)` | — |
+| `token_renovacao` | `SELECT`, `INSERT`, `UPDATE (usado_em, revogado_em)` | — |
+| `codigo_autorizacao` | `SELECT`, `INSERT`, `UPDATE (usado_em, sessao_id)` | — |
+| `desafio_mfa` | `SELECT`, `INSERT`, `UPDATE (tentativas, concluido_em)` | — |
+| `token_email` | `SELECT`, `INSERT`, `UPDATE (usado_em, revogado_em)` | — |
+| `app.evento_auditoria` | `INSERT` por coluna, sem `SELECT` (seção 9.2) | inalterado |
+| `plataforma.purgar_credenciais_vencidas()` | — | `EXECUTE` só para `tenaz_job` |
+
+Os nomes de coluna dos `UPDATE` do documento 5 (seção 6.9) conferem com o DDL acima, sem divergência.
+
+**Operações que atravessam os dois pools** (convite, aceite do convite, troca de empresa, login com evento nas demais empresas) são sequências de transações, na ordem do documento 5, seção 6.9: a credencial de uso único é consumida por último, e cada passo é idempotente. Inativar usuário é só da aplicação: a revogação vem do trigger.
+
+A revogação por "versão de sessão no token" do documento 9 (seção 5.3) é atendida pela própria linha: o access token do app leva `sid`, e a sessão é lida a cada requisição, junto com os perfis; `revogada_em` preenchida vale na hora. Troca de senha, bloqueio e inativação revogam por `ix_sessao_identidade` ou `ix_sessao_usuario`.
+
+O login por telefone e código (RF-ADM-006) fica fora até a escolha do provedor de SMS (pendência P11 do sumário); quando entrar, cabe uma finalidade nova num token próprio, sem mudar estas tabelas.
 
 ### 5.2 ATV — Ativos
 
@@ -2912,7 +3568,7 @@ CREATE INDEX ix_leitura_medidor_revisao ON app.leitura_medidor (empresa_id, lido
   WHERE situacao = 'pendente_revisao';
 CREATE INDEX ix_leitura_medidor_sync ON app.leitura_medidor (empresa_id, alterado_xid);
 CALL app.preparar_tabela('app.leitura_medidor', p_auditar => false, p_escopo => 'proprio');
--- partições mensais criadas pelo pg_partman (seção 7.5)
+-- partições mensais criadas por plataforma.criar_particoes_mensais() (seções 7.5 e 9.5)
 
 -- Troca de medidor, volta do mostrador ou ajuste: define o novo offset
 CREATE TABLE app.segmento_medidor (
@@ -5699,20 +6355,12 @@ A telemática pode enviar odômetro a cada minuto. **Proposta:** o conector grav
 
 ### 7.5 Particionamento
 
-`leitura_medidor` é particionada por mês em `lido_em` desde a primeira migração, porque converter uma tabela grande em particionada depois exige reescrita. As partições são criadas pelo pg_partman:
+`leitura_medidor` é particionada por mês em `lido_em` desde a primeira migração, porque converter uma tabela grande em particionada depois exige reescrita. **Proposta (a confirmar em E03 com `tenaz-plataforma-sre`):** as partições são criadas pela mesma função de `evento_auditoria` (seção 9.5), sem `pg_partman`, que não acompanha a imagem oficial do PostgreSQL. A migração de `leitura_medidor` acrescenta a tabela à lista fechada da função, por `CREATE OR REPLACE`, e faz a chamada inicial:
 
 ```sql
-SELECT partman.create_parent(
-  p_parent_table  => 'app.leitura_medidor',
-  p_control       => 'lido_em',
-  p_interval      => '1 month',
-  p_premake       => 3,
-  p_default_table => true);
-
-UPDATE partman.part_config
-SET inherit_privileges = false,   -- a aplicação acessa só pelo pai, onde o RLS vale
-    retention = NULL               -- leituras não expiram (seção 15)
-WHERE parent_table = 'app.leitura_medidor';
+SELECT plataforma.criar_particoes_mensais('app.leitura_medidor', 3);
+-- partição padrão, mês corrente e três à frente; sem privilégio da aplicação e com RLS forçado.
+-- Leituras não expiram (seção 15): nenhuma partição de leitura_medidor é removida.
 ```
 
 - A importação de histórico com datas anteriores à primeira partição cria antes as partições do período, para não encher a partição padrão.
@@ -5793,7 +6441,8 @@ ALTER TABLE app.contador_documento VALIDATE CONSTRAINT ck_contador_documento_tip
 | Evento | Como |
 |---|---|
 | Inclusão, alteração e exclusão em tabelas de negócio | Trigger genérico `trg_auditoria` (seção 9.3), com só os campos alterados |
-| Login, falha de login, logout, MFA | Gravado pelo serviço de autenticação |
+| Login, falha de login, logout, MFA | Gravado pelo próprio `tenaz_autenticacao` ([ADR-011 do documento 5](5_ARQUITETURA_SOFTWARE.md#adr-011--papel-de-banco-próprio-para-as-credenciais-de-autenticação)), com `entidade = 'identidade'`, na trilha de **cada empresa** em que a identidade tem acesso habilitado (`acesso_empresa`): o login acontece antes da escolha da empresa, e o administrador de cada uma vê as tentativas contra o seu usuário. Na empresa da sessão, o evento vai na mesma transação que cria a sessão e zera as falhas; nas demais, uma transação por empresa, que não cita as outras. Falha com e-mail inexistente não tem empresa: vai só para o log de segurança (documento 9), nunca para a trilha. O `tenaz_app` não grava evento de autenticação |
+| Troca de senha, ativação de MFA | `acao = 'alteracao'`, `entidade = 'identidade'`, `campos_alterados` com o nome do campo e sem `antes` nem `depois`, gravado pelo `tenaz_autenticacao` em cada empresa da identidade (RF-ADM-006) |
 | Exportação de dados, relatório com dado pessoal | Gravado pelo serviço |
 | Visualização de dado sensível (CPF, ASO) | Gravado pelo serviço |
 | Alteração de perfil ou permissão | Trigger em `usuario_perfil` e `perfil` |
@@ -5830,6 +6479,8 @@ CREATE TABLE app.evento_auditoria (
   user_agent        text,
   request_id        text,                     -- na sincronização entre contas: o mensagem_id (seção 2.10.8)
   conexao_empresa_id uuid,                    -- evento gravado pela sincronização entre contas
+  ocorrido_no_dispositivo_em timestamptz,     -- instante do aparelho, na ação feita offline (RF-ADM-011)
+  escopo            text,                     -- escopo de acesso da credencial (RF-ADM-011); nulo sem contexto
   transacao         xid8        NOT NULL DEFAULT pg_current_xact_id(),
   CONSTRAINT pk_evento_auditoria PRIMARY KEY (empresa_id, ocorrido_em, id),
   CONSTRAINT ck_evento_auditoria_ator CHECK (ator_tipo IN ('usuario', 'sistema', 'integracao', 'suporte_tenaz',
@@ -5838,12 +6489,15 @@ CREATE TABLE app.evento_auditoria (
     'logout', 'exportacao', 'visualizacao_sensivel', 'acesso_suporte', 'revisao', 'sincronizacao')),
   -- evento da sincronização sempre diz de qual conexão veio
   CONSTRAINT ck_evento_auditoria_conexao CHECK (ator_tipo <> 'sincronizacao_conexao' OR conexao_empresa_id IS NOT NULL),
-  CONSTRAINT ck_evento_auditoria_origem CHECK (origem IN ('web', 'app', 'api', 'job', 'importacao'))
+  CONSTRAINT ck_evento_auditoria_origem CHECK (origem IN ('web', 'app', 'api', 'job', 'importacao')),
+  CONSTRAINT ck_evento_auditoria_escopo CHECK (escopo IN ('interno', 'prestador', 'locatario', 'link'))
 ) PARTITION BY RANGE (ocorrido_em);
 
 -- antes e depois são comprimidos com lz4 (parâmetro do servidor default_toast_compression = 'lz4')
 
+-- histórico de um registro na tela do registro; o filtro por período usa a chave primária
 CREATE INDEX ix_evento_auditoria_entidade ON app.evento_auditoria (empresa_id, entidade, entidade_id, ocorrido_em DESC);
+-- filtro por usuário na tela de auditoria
 CREATE INDEX ix_evento_auditoria_usuario  ON app.evento_auditoria (empresa_id, usuario_id, ocorrido_em DESC);
 
 ALTER TABLE app.evento_auditoria ENABLE ROW LEVEL SECURITY;
@@ -5852,21 +6506,69 @@ CREATE POLICY auditoria_leitura ON app.evento_auditoria
   FOR SELECT TO tenaz_app, tenaz_job, tenaz_leitura
   USING (empresa_id = app.empresa_atual());
 CREATE POLICY auditoria_insercao ON app.evento_auditoria
-  FOR INSERT TO tenaz_app, tenaz_job, tenaz_sinc
+  FOR INSERT TO tenaz_app, tenaz_job, tenaz_sinc, tenaz_autenticacao   -- tenaz_autenticacao: 00005, ADR-011
   WITH CHECK (empresa_id = app.empresa_atual());
+
+-- Evento de autenticação (entidade 'identidade') é só do tenaz_autenticacao: os papéis de negócio e o
+-- sincronizador não o gravam nem por INSERT direto (ISO-E01-07). O tg_auditar nunca produz essa entidade.
+CREATE POLICY auditoria_sem_autenticacao ON app.evento_auditoria AS RESTRICTIVE
+  FOR INSERT TO tenaz_app, tenaz_job, tenaz_sinc
+  WITH CHECK (entidade <> 'identidade');
+
+-- Autenticação (ADR-011): só eventos da identidade, só quatro ações, e o usuário do evento é, em acesso_empresa,
+-- o daquela identidade naquela empresa. As restritivas escopo_externo_insercao (tenaz_app, tenaz_job) e
+-- conexao_sinc (tenaz_sinc) não alcançam o tenaz_autenticacao, que grava sem escopo definido.
+CREATE POLICY autenticacao_identidade ON app.evento_auditoria AS RESTRICTIVE
+  FOR INSERT TO tenaz_autenticacao
+  WITH CHECK (ator_tipo = 'usuario' AND entidade = 'identidade'
+              AND acao IN ('login', 'login_falho', 'logout', 'alteracao')
+              AND EXISTS (SELECT 1 FROM plataforma.acesso_empresa a
+                          WHERE a.identidade_id = evento_auditoria.entidade_id
+                            AND a.empresa_id = evento_auditoria.empresa_id
+                            AND a.usuario_id = evento_auditoria.usuario_id));
 -- o sincronizador grava, mas não lê a trilha
 CREATE POLICY conexao_sinc ON app.evento_auditoria AS RESTRICTIVE
   FOR INSERT TO tenaz_sinc
   WITH CHECK (conexao_empresa_id = app.conexao_atual() AND ator_tipo = 'sincronizacao_conexao');
 
-REVOKE ALL ON app.evento_auditoria FROM tenaz_app, tenaz_job, tenaz_leitura;
+-- escopo externo: grava pelo trigger, nunca lê (seção 2.9.4)
+CREATE POLICY escopo_externo_leitura ON app.evento_auditoria AS RESTRICTIVE
+  FOR SELECT TO tenaz_app, tenaz_job, tenaz_leitura
+  USING (app.escopo_interno());
+-- e só grava evento em nome de si mesmo (nulo no link): o INSERT direto não atribui o evento a outra pessoa
+CREATE POLICY escopo_externo_insercao ON app.evento_auditoria AS RESTRICTIVE
+  FOR INSERT TO tenaz_app, tenaz_job
+  WITH CHECK (app.escopo_interno()
+              OR (usuario_id IS NOT DISTINCT FROM app.usuario_atual()
+                  AND escopo IS NOT DISTINCT FROM app.escopo_atual()));   -- nem se passa por interno
+
+REVOKE ALL ON app.evento_auditoria FROM PUBLIC, tenaz_app, tenaz_job, tenaz_leitura;
 GRANT SELECT, INSERT ON app.evento_auditoria TO tenaz_app, tenaz_job;
 GRANT SELECT ON app.evento_auditoria TO tenaz_leitura;
-GRANT INSERT ON app.evento_auditoria TO tenaz_sinc;
+-- o sincronizador recebe INSERT por coluna, como em toda tabela que ele toca (seção 2.10.4): exatamente
+-- as colunas que tg_auditar lista; faltando uma, toda escrita auditada dele falharia com 42501 (ISO-E01-05)
+GRANT INSERT (empresa_id, ator_tipo, usuario_id, token_api_id, acao, entidade, entidade_id, entidade_chave,
+              antes, depois, campos_alterados, origem, ip, dispositivo_id, user_agent, request_id,
+              conexao_empresa_id, ocorrido_no_dispositivo_em, escopo)
+  ON app.evento_auditoria TO tenaz_sinc;
+-- o papel das credenciais grava os eventos de login, por coluna e sem leitura da trilha (ADR-011);
+-- sem a coluna escopo: o evento é da identidade e acontece antes de o escopo ser resolvido, então fica nulo
+GRANT INSERT (empresa_id, ator_tipo, usuario_id, acao, entidade, entidade_id, depois, campos_alterados,
+              origem, ip, dispositivo_id, user_agent, request_id)
+  ON app.evento_auditoria TO tenaz_autenticacao;
 
+-- trigger de linha de tabela particionada é clonado em cada partição, inclusive nas criadas depois
 CREATE TRIGGER trg_somente_insercao BEFORE UPDATE OR DELETE ON app.evento_auditoria
   FOR EACH ROW EXECUTE FUNCTION app.tg_somente_insercao();
+-- TRUNCATE ignora RLS e trigger de linha. A trava trg_somente_insercao_truncate (BEFORE TRUNCATE FOR
+-- EACH STATEMENT) fica em cada partição, criada por criar_particoes_mensais, e não no pai: trigger de
+-- comando não é clonado, e o TRUNCATE do pai recursa nas partições e dispara a trava de cada uma.
+
+-- partição padrão, mês corrente e três à frente (seção 9.5)
+SELECT plataforma.criar_particoes_mensais('app.evento_auditoria', 3);
 ```
+
+`evento_auditoria` não recebe a policy `isolamento_empresa` `FOR ALL` das demais tabelas: tem uma policy por comando e nenhuma de `UPDATE` nem de `DELETE`, que é a primeira camada da imutabilidade (seção 9.4). `app.tg_somente_insercao()` é criada nesta mesma migração (`00003`) e serve também a `transicao_status_os`, `assinatura_eletronica` e às demais tabelas somente inserção.
 
 ### 9.3 Trigger genérico
 
@@ -5877,7 +6579,8 @@ AS $$
 DECLARE
   v_coluna_chave text   := TG_ARGV[0];
   v_ignorar      text[] := ARRAY['versao', 'alterado_xid', 'atualizado_em', 'atualizado_por'];
-  v_omitir       text[] := ARRAY['segredo_hash', 'mfa_segredo_cifrado', 'token_hash'];   -- nunca vão para a trilha
+  v_omitir       text[] := ARRAY['segredo_hash', 'token_hash', 'codigo_hash', 'csrf_hash', 'convite_hash',
+                                 'senha_hash', 'mfa_segredo_cifrado'];   -- nunca vão para a trilha
   v_antes        jsonb;
   v_depois       jsonb;
   v_linha        jsonb;
@@ -5913,12 +6616,14 @@ BEGIN
   v_chave := v_linha ->> v_coluna_chave;
 
   INSERT INTO app.evento_auditoria
-    (empresa_id, ator_tipo, usuario_id, acao, entidade, entidade_id, entidade_chave,
-     antes, depois, campos_alterados, origem, ip, request_id, conexao_empresa_id)
+    (empresa_id, ator_tipo, usuario_id, token_api_id, acao, entidade, entidade_id, entidade_chave,
+     antes, depois, campos_alterados, origem, ip, dispositivo_id, user_agent, request_id,
+     conexao_empresa_id, ocorrido_no_dispositivo_em, escopo)
   VALUES
     (coalesce(v_linha ->> 'empresa_id', v_linha ->> 'id')::uuid,   -- a tabela empresa não tem empresa_id
      coalesce(nullif(current_setting('app.ator_tipo', true), ''), 'sistema'),
      app.usuario_atual(),
+     nullif(current_setting('app.token_api_id', true), '')::uuid,
      v_acao,
      TG_TABLE_NAME,
      CASE WHEN v_chave ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN v_chave::uuid END,
@@ -5926,12 +6631,18 @@ BEGIN
      v_antes, v_depois, v_campos,
      nullif(current_setting('app.origem', true), ''),
      nullif(current_setting('app.ip', true), '')::inet,
+     nullif(current_setting('app.dispositivo_id', true), '')::uuid,
+     nullif(current_setting('app.user_agent', true), ''),
      nullif(current_setting('app.request_id', true), ''),
-     app.conexao_atual());                    -- nulo fora do sincronizador
+     app.conexao_atual(),                     -- nulo fora do sincronizador
+     nullif(current_setting('app.ocorrido_no_dispositivo_em', true), '')::timestamptz,
+     app.escopo_atual());                     -- RF-ADM-011; nulo sem contexto
   RETURN NULL;
 END
 $$;
 ```
+
+O contexto opcional (`app.token_api_id`, `app.dispositivo_id`, `app.user_agent`, `app.ocorrido_no_dispositivo_em`) é o da seção 2.4; ausente, vira nulo. O escopo de acesso (`interno`, `prestador`, `locatario`, `link`), que o RF-ADM-011 exige no evento, vem de `app.escopo_atual()`; é nulo só sem contexto (migração, manutenção) e nos eventos de login do `tenaz_autenticacao`, que são da identidade e precedem a resolução do escopo. O `tenaz_sinc` recebe `INSERT` também nessa coluna, porque o trigger sempre a lista. Com ele, o evento gerado pelo trigger leva o token de API, o aparelho e o instante do aparelho que o RF-ADM-011 pede, e não só o evento gravado pelo serviço.
 
 O trigger roda com o papel de quem escreveu (`tenaz_app` ou `tenaz_job`), então a policy de `INSERT` confere que o evento é da empresa da transação. O evento grava na mesma transação do fato: se o fato for desfeito, o evento também é. Exclusões lógicas aparecem como `alteracao` do campo `excluido_em`.
 
@@ -5943,6 +6654,8 @@ O trigger roda com o papel de quem escreveu (`tenaz_app` ou `tenaz_job`), então
 2. **Trigger.** `trg_somente_insercao` rejeita `UPDATE` e `DELETE` até para o dono e para o migrador. Desligar o trigger é DDL, que só o pipeline executa e que fica registrado no histórico de migrações e no log do banco.
 3. **Remoção só por partição inteira.** Linhas nunca são apagadas uma a uma. Uma partição mensal só é removida pelo `tenaz_manutencao` depois do arquivamento confirmado (seção 9.5).
 4. **Selo diário.** Um job calcula, por empresa e dia, um hash encadeado dos eventos e grava em `selo_auditoria` e no armazenamento imutável. Alterar um evento antigo, mesmo com acesso de superusuário, quebra a cadeia.
+
+Verificado pela suíte de vazamento (seção 2.8): os moldes das restritivas de inserção em `evento_auditoria` — `auditoria_sem_autenticacao` (nenhum evento de identidade pelos papéis de negócio e pelo sincronizador), `escopo_externo_insercao` (o externo só grava em nome próprio e com o próprio escopo) e `conexao_sinc` (o sincronizador só grava evento da conexão em processamento) — e a corrida de atribuição de perfil contra a troca de vínculo (ISO-E01-06), provada com `55P03` (espera de trava): a atribuição segura a linha do usuário com `FOR SHARE`, e a troca de vínculo concorrente não passa por ela.
 
 ```sql
 CREATE TABLE app.selo_auditoria (
@@ -5959,14 +6672,28 @@ CREATE TABLE app.selo_auditoria (
 -- RLS padrão; somente inserção (mesmo trigger de evento_auditoria).
 ```
 
+**`selo_auditoria` não entra em E01.** Entra na mesma migração do job do selo, que não faz parte de E01 (proposta: antes do primeiro release candidato, em E11; data a fixar pelo orquestrador). Criar a tabela agora deixaria uma tabela sem escritor, que a suíte de vazamento exige preencher com dados de fixture (seção 2.8, parte 2) sem que nenhum código a use. Não há perda: os eventos continuam no banco, e o primeiro cálculo do selo percorre os dias desde a primeira partição e monta a cadeia inteira. Até lá, valem as três primeiras camadas.
+
 O selo de um dia é calculado com uma hora de folga após a meia-noite UTC, para incluir transações que começaram antes da virada (`ocorrido_em` é o início da transação).
 
 ### 9.5 Partições, retenção e arquivamento
 
-- `evento_auditoria` tem partições mensais criadas pelo pg_partman, com `inherit_privileges = false`.
+- **Partições sem `pg_partman`.** A extensão não acompanha a imagem oficial do PostgreSQL (pendência da etapa 011). As partições mensais, em UTC, são criadas por `plataforma.criar_particoes_mensais(p_tabela, p_meses_a_frente, p_desde)`, migração `00003`:
+  - `SECURITY DEFINER` de dono `tenaz_dono`, para que toda partição tenha o mesmo dono do pai (partição de outro dono escaparia do RLS forçado e da suíte de propriedade), com `search_path = pg_catalog, pg_temp`, nomes qualificados, `lock_timeout` de 3 s e `TimeZone = 'UTC'` (os limites das partições são escritos como texto e não podem depender do fuso de quem chama);
+  - `p_desde` limitado a 120 meses antes do mês corrente, para uma chamada não criar centenas de tabelas por engano;
+  - nas tabelas somente inserção, cada partição recebe a trava de TRUNCATE `trg_somente_insercao_truncate`, que barra também o TRUNCATE do pai, inclusive pelo dono;
+  - lista fechada de tabelas (hoje só `app.evento_auditoria`): não aceita tabela arbitrária, para não virar "crie qualquer coisa como dono" para quem tem `EXECUTE`;
+  - `EXECUTE` revogado de `PUBLIC` e concedido só a `tenaz_manutencao`, que roda o job mensal; a migração chama como dono;
+  - `CREATE TABLE ... (LIKE pai)` seguido de `ATTACH PARTITION`, que trava o pai em `SHARE UPDATE EXCLUSIVE`, e não `CREATE TABLE ... PARTITION OF`, que exige `ACCESS EXCLUSIVE` e pararia a gravação de auditoria;
+  - toda partição nasce com `REVOKE ALL` dos papéis da aplicação (os privilégios padrão do esquema a teriam liberado) e com RLS habilitado e forçado, sem policy: acesso direto devolve "permissão negada" e, com privilégio dado por engano, zero linhas. Pelo pai, valem as policies do pai;
+  - idempotente: devolve quantas partições criou e pula as que existem.
+- **Partição padrão** (`evento_auditoria_padrao`), rede de segurança: recebe o que cair fora das mensais (job que não rodou, relógio adiantado), em vez de a gravação falhar e levar junto a transação do fato. Deve ficar vazia; o monitoramento olha `pg_stat_user_tables.n_live_tup` dela, sem ler dado. Se tiver linhas do mês que a função for criar, o `ATTACH` falha com `23514` e nada se perde; o procedimento manual, como `tenaz_migrador`, é: desanexar a partição padrão, criar e anexar a mensal, copiar para ela as linhas do mês, recriar a padrão vazia e descartar a antiga (o `trg_somente_insercao` impede apagar linha a linha, por desenho).
+- O job mensal (`tenaz_manutencao`) mantém sempre três meses à frente; a migração já cria o mês corrente e os três seguintes.
 - **Proposta:** as partições dos últimos 24 meses ficam no banco, para consulta imediata na tela de auditoria.
 - Todo mês, o job de arquivamento (como `tenaz_job`, empresa por empresa) exporta a partição que completou 24 meses: `COPY (SELECT ... WHERE empresa_id = $1 AND ocorrido_em >= $2 AND ocorrido_em < $3) TO STDOUT`, em JSON Lines compactado, com manifesto (quantidade de linhas, sha256, selos do período). O arquivo vai para `auditoria/empresas/<empresa_id>/<AAAA-MM>.jsonl.gz` num bucket com bloqueio de objeto em modo de conformidade, retido até `mês do evento + empresa.retencao_auditoria_anos`.
 - O job registra cada arquivo em `app.arquivo_auditoria` (empresa, mês, chave, linhas, sha256, `retido_ate`). Só depois que todas as empresas com eventos no mês estão arquivadas e conferidas (contagem do arquivo igual à da partição), o `tenaz_manutencao` faz `DETACH PARTITION ... CONCURRENTLY` e `DROP TABLE`.
+- **Efeito de não usar `pg_partman` no arquivamento:** não há retenção automática, e isso é desejado — nenhuma partição de auditoria cai por configuração, só depois do arquivo conferido. A remoção não cabe na função de criação: `DETACH ... CONCURRENTLY` não roda dentro de função nem de transação. É um passo próprio do job de arquivamento, como `tenaz_manutencao`, que pode remover a partição por ser membro do dono.
+- **`arquivo_auditoria` não entra em E01.** A primeira partição só completa 24 meses em novembro de 2028; a tabela entra com o job de arquivamento, antes disso.
 - A retenção é de **5 anos no mínimo** (`ck_empresa_retencao`), configurável para mais por empresa. O bucket apaga o arquivo depois do prazo pelo ciclo de vida.
 - Consulta a período arquivado: a tela oferece "solicitar auditoria de período antigo"; um job restaura o arquivo numa tabela temporária da sessão ou entrega o arquivo ao cliente.
 
@@ -8465,15 +9192,16 @@ Regras do CTR:
 
 ### 14.2 Convenções
 
-- Diretório `db/migracoes/`, arquivos `AAAAMMDDHHMMSS_descricao.sql` (ex.: `20261112140000_cria_ordem_servico.sql`). O CI rejeita migração com data anterior à última já aplicada no `main`.
+- Diretório `backend/db/migracoes/`, arquivos `NNNNN_descricao.sql`, numeração sequencial de cinco dígitos (ex.: `00004_adm.sql`), como as migrações de E00 e E01. Dois ramos com o mesmo número colidem no merge, e o goose recusa migração fora de ordem; a data no nome, prevista na versão 0.4, foi abandonada em E00.
 - Uma preocupação por arquivo. Toda tabela nova vem, no mesmo arquivo, com índices, `CALL app.preparar_tabela(...)` e triggers específicos.
-- Toda migração começa com:
+- As tabelas de credencial e as funções que as tocam são criadas com `SET ROLE tenaz_credencial` (ISO-E01-08), e a migração volta a `SET ROLE tenaz_dono` antes de terminar, porque o goose grava a versão na tabela de controle com o papel corrente.
+- Toda migração, da `00002` em diante, começa com o bloco abaixo. A `00001` é a exceção: cria os próprios papéis. Os limites são `SET LOCAL` porque o goose roda cada arquivo numa transação e o limite não deve sobreviver na conexão. O `SET ROLE` sobrevive, e por isso a migração que precisar agir como o dono do esquema `public` (a `00004`) faz `RESET ROLE` antes.
 
 ```sql
 -- +goose Up
 SET ROLE tenaz_dono;
-SET lock_timeout = '3s';          -- desiste em vez de enfileirar tráfego atrás de uma trava
-SET statement_timeout = '60s';
+SET LOCAL lock_timeout = '3s';          -- desiste em vez de enfileirar tráfego atrás de uma trava
+SET LOCAL statement_timeout = '60s';
 ```
 
 - Migração aplicada nunca é editada; correção é uma nova migração.
@@ -8502,7 +9230,7 @@ A versão N da aplicação precisa funcionar com o esquema N e N+1. Toda mudanç
 ### 14.4 Pipeline
 
 1. **CI:** sobe PostgreSQL limpo, aplica todas as migrações do zero, roda o lint de migrações (squawk, para detectar operação que trava tabela), confere que o código gerado pelo sqlc está atualizado, roda o teste de vazamento da seção 2.8 e os testes de integração.
-2. **Deploy:** o pipeline, com o papel `tenaz_migrador`, roda `goose up` antes de atualizar a aplicação. Com várias células (seção 15), aplica célula por célula, começando por uma célula canário.
+2. **Deploy:** o pipeline, com o papel `tenaz_migrador` (não superusuário em homologação e produção; superusuário só em desenvolvimento, CI e testes, seção 2.2), roda `goose up` antes de atualizar a aplicação. Com várias células (seção 15), aplica célula por célula, começando por uma célula canário.
 3. **Registro:** o goose mantém a tabela de versões (`goose_db_version`) em cada banco.
 
 ---
@@ -8676,6 +9404,10 @@ Visão em alto nível. Procedimentos, responsáveis e testes estão no documento
 | S24 | Recusa ou devolução da OS pela subcontratada conectada (não vai atender) | 3.5 | Sem ação definida; hoje o cliente retira o fornecedor. Definir no documento 4 |
 | S25 | Assinatura do cliente na conta do cliente | 3.5 | **Proposta:** linha de `assinatura_eletronica` com `conexao_empresa_id` e assinante externo, mais o PDF assinado como anexo (2.10.5). Confirmar com a pendência P1 |
 | S26 | Conexão iniciada pela subcontratada | 3.5 | Fora do MVP: só o cliente convida (documento 3) |
+| S36 | Nomes da etapa E01 sem correspondência no sumário (o sumário 0.6 fixa as tabelas de autenticação, `turno_unidade`, `feriado_unidade` e três campos de `identidade`): colunas `sessao.token_hash`, `csrf_hash`, `dispositivo_id`, `ultimo_uso_em`, `expira_em`, `revogada_em`; `token_renovacao.familia_id`, `anterior_id`, `usado_em`, `revogado_em`; `codigo_autorizacao.codigo_hash`, `cliente_oauth`, `uri_retorno`, `desafio_pkce`, `sessao_id`; `desafio_mfa.tentativas`, `concluido_em`; `token_email.email`, `usado_em`, `revogado_em`; `turno_unidade.dia_semana`, `hora_inicio`, `hora_fim`, `nome`; `feriado_unidade.data_feriado`, `descricao`; `evento_auditoria.ocorrido_no_dispositivo_em` e `evento_auditoria.escopo`; `identidade.mfa_ultimo_passo`; policies `escopo_externo_exclusao` e `auditoria_sem_autenticacao`; coluna `empresa.mfa_obrigatorio` (já no sumário 0.6, 3.6); papel `tenaz_credencial`; coluna `perfil.perfil_origem`; `usuario_permissao.permissao`; constraints `ck_perfil_origem`, `ck_perfil_padrao_origem`, `ck_perfil_externo_vedadas`, `ck_usuario_permissao_formato`; funções `app.permissoes_vedadas_externo()`, `app.tg_usuario_permissao_externo()`, `app.tg_padrao_empresa()`, `app.tg_usuario_vinculo()`, `plataforma.tg_acesso_empresa()`, `plataforma.criar_particoes_mensais()`; variáveis de contexto `app.token_api_id`, `app.dispositivo_id`, `app.user_agent`, `app.ocorrido_no_dispositivo_em` | 3.2 | **Proposta**, já nas migrações `00003` a `00005`. Incluir no sumário os que forem nome de campo exposto na API |
+| S37 | Situação do usuário: o RF-ADM-004 propunha `convidado`, `ativo`, `inativo`; o DDL tinha `convidado`, `ativo`, `bloqueado`, `desligado` | 3.6 | **Resolvido pelo sumário 0.6 (seção 3.6):** `convidado`, `ativo`, `inativo`; o bloqueio temporário é `identidade.bloqueada_ate`. `ck_usuario_situacao` na migração `00004` |
+| S39 | Vínculo e situação da `pessoa` sem nome no sumário (documento 4, L-42; documento 1, ponto 47): o DDL tinha `situacao` `ativa`, `inativa`, `desligada` | 3.6 | **Resolvido pelo sumário 0.6 (seção 3.6):** `vinculo` `empregado`, `terceiro`, `autonomo`; `situacao` só `ativa` ou `inativa`, sem `desligada`; pessoa inativa nunca é excluída e continua ligada ao histórico. `ck_pessoa_situacao` na migração `00004` |
+| S38 | Origem da auditoria: o documento 9 (seção 5.14) registra eventos do link de uso único com "`origem = link`", e o RF-ADM-011 lista as origens "web, app, API, sistema"; `ck_evento_auditoria_origem` aceita `web`, `app`, `api`, `job`, `importacao`, e o link é identificado por `ator_tipo = 'link_execucao'` (9.1) | 3.1 | Sem mudança de esquema: o link grava `origem = 'web'` e `ator_tipo = 'link_execucao'`; "sistema" é o `ator_tipo` de job. Alinhar o texto dos documentos 1 e 9 |
 
 ### 17.2 Decisões de projeto a validar
 
@@ -8707,6 +9439,48 @@ Visão em alto nível. Procedimentos, responsáveis e testes estão no documento
 | D24 | Predecessoras só no modelo (`dependencia_etapa_modelo`); o projeto usa as da versão do modelo, que não muda depois de publicada | 13.12 |
 | D25 | Decisão da exclusão de parada fora da OS (`exclusao_parada_contrato`), por causa da imutabilidade da OS encerrada | 13.13 |
 | D26 | Faixas de desconto e itens cobertos sem sobreposição por `EXCLUDE USING gist` com `numrange` e `daterange` | 13.13 |
+| D27 | Tabelas de autenticação em `plataforma`, fora do RLS, com segredo só em hash, empresa sem `UPDATE` pela aplicação e FK composta `(empresa_id, usuario_id, identidade_id)` para `app.usuario`; família do refresh token = sessão do app | 5.1, 2.11 |
+| D28 | `acesso_empresa` escrita só pelo trigger `SECURITY DEFINER` `plataforma.tg_acesso_empresa()`; `tenaz_app` só lê | 5.1 |
+| D29 | Partições mensais por função própria `SECURITY DEFINER` com lista fechada, `ATTACH PARTITION`, partição padrão e partições sem privilégio e com RLS forçado, no lugar do `pg_partman` | 9.5, 7.5 |
+| D30 | "Calendário com pelo menos um turno" (RF-ADM-002) validado no serviço, e não por trigger de restrição | 5.1 |
+| D31 | Policy restritiva `escopo_externo_exclusao` em toda tabela com leitura externa | 2.9.4 |
+| D32 | `usuario.identidade_id` imutável depois de definida | 5.1 |
+| D33 | Escopo resolvido a cada requisição a partir do cadastro, sem cópia na sessão | 2.9.2 |
+| D34 | `selo_auditoria` e `arquivo_auditoria` fora de E01, criadas com os seus jobs | 9.4, 9.5 |
+| D35 | Permissões vedadas a usuário externo garantidas no banco por uma lista curta `IMMUTABLE` (CHECK no perfil, trigger na permissão avulsa e no vínculo); o catálogo completo só no Go, com CHECK de formato | 5.1 |
+| D36 | `perfil.perfil_origem` define se o perfil é externo, inclusive o personalizado derivado; o tipo do perfil é imutável depois de criado | 5.1 |
+| D37 | Fora do escopo interno, o usuário altera só `nome` e `telefone` da própria linha, por trigger com lista de colunas permitidas, e não por `UPDATE` só interno | 2.9.4, 5.1 |
+
+### 17.3 Pendências da etapa E01
+
+| # | Pendência | Dono | Quando |
+|---|---|---|---|
+| E01-1 | FKs que esperam tabela de etapa futura: `pessoa.fornecedor_id` e `usuario.fornecedor_id` → `app.fornecedor` (E06, RF-TER-001); `usuario.locatario_id` → `app.locatario` (fase 2, LOC); `sessao.dispositivo_id` → `app.dispositivo`. Entram como `ADD CONSTRAINT ... NOT VALID` seguido de `VALIDATE CONSTRAINT` (seção 14.3), compostas com `empresa_id`. Até lá, a regra do RF-ADM-015 ("pessoa com fornecedor só se liga a usuário `prestador` daquele fornecedor") fica no serviço | `tenaz-banco-dados` | Migração de cada tabela |
+| E01-2 | `selo_auditoria` e `arquivo_auditoria` (D34): entram com o job do selo (proposta: E11) e com o job de arquivamento (antes de novembro de 2028) | `tenaz-banco-dados` com `tenaz-plataforma-sre` | Ver seções 9.4 e 9.5 |
+| E01-3 | **Resolvido** pelo documento 5, versão 0.6, seção 6.6: `app.escopo_id()` não é criada; as policies usam `app.fornecedor_atual()`, `app.locatario_atual()` e `app.link_hash_atual()` (seção 2.9.2), e a do link confere também que o link não está revogado, expirado nem usado | `tenaz-arquiteto` | — |
+| E01-4 | **Resolvido** (confirmado pelo `tenaz-isolamento`). Suíte de vazamento, desalinhada da seção 2.8 e acusando o desenho desta etapa: (a) a consulta de cobertura olha `relkind = 'r'` sem excluir partições e não olha o pai `'p'` — acusa as cinco partições de `evento_auditoria` e deixaria passar uma tabela particionada sem RLS; (b) `evento_auditoria` precisa de exceção versionada, por não ter `isolamento_empresa` nem `escopo_externo` (policies por comando, seção 9.2); (c) `tabelas_globais.txt` precisa de `app.empresa`, `plataforma.identidade`, `plataforma.desafio_mfa` e `plataforma.token_renovacao` (e, pela consulta 8, de toda tabela de `plataforma`); (d) o caso "interno com usuário" de `TestConferirEscopoRecusaContextoInvalido` usa usuário aleatório, que a versão completa de `app.conferir_escopo()` agora recusa, corretamente; precisa de um usuário de fixture; (e) a lista aprovada de funções `SECURITY DEFINER` (consulta 6) ainda não é verificada | `tenaz-isolamento` | Antes do aceite de E01 |
+| E01-5 | `escopo_externo_exclusao` (D31) nas tabelas de etapas futuras com leitura externa: `almoxarifado`, `ativo`, `medidor`, `campo_extra_os` e as demais da tabela da seção 2.9.4 | `tenaz-banco-dados` e `tenaz-isolamento` | Migração de cada tabela |
+| E01-6 | Variáveis de contexto novas (seção 2.4) no `NaEmpresa`; leitura de escopo e permissões a cada requisição (2.9.2); pool `poolAutenticacao` com `tenaz_autenticacao_conexao` e repositório só no pacote de autenticação (2.4; documento 5, seção 6.9), recusando rodar dentro do `NaEmpresa`; operações entre os dois pools na ordem do documento 5; job diário que chama `plataforma.purgar_credenciais_vencidas()` como `tenaz_job`; eventos de login gravados pelo `tenaz_autenticacao` em cada empresa da identidade (9.1) | `tenaz-backend-go` | E01 |
+| E01-7 | O app precisa serializar a renovação do refresh token: duas renovações simultâneas contam como reuso e revogam a família (5.1) | `tenaz-mobile-offline` | E01 |
+| E01-8 | Sessão curta do link de uso único (documento 3, seção 4.7, "guarda `link_execucao_id` e `empresa_id`"): não cabe em `plataforma.sessao`, que exige usuário. Desenhar com o link, com nome a aprovar no sumário | `tenaz-banco-dados` com `tenaz-isolamento` | Etapa do link (TER) |
+| E01-9 | Partições de `leitura_medidor` pela mesma função (7.5), no lugar do `pg_partman`: confirmar | `tenaz-plataforma-sre` com `tenaz-banco-dados` | E03 |
+| ISO-E01-01 | **Corrigido.** Usuário externo alterava colunas da própria linha de `app.usuario` (`pessoa_id`, com leitura do CPF da pessoa interna; `custo_hora`, `unidade_padrao_id`, `email`, `situacao`). `trg_usuario_colunas_externo` (só `nome` e `telefone`) e `escopo_externo_insercao` | `tenaz-banco-dados`; revisão `tenaz-isolamento` | E01 |
+| ISO-E01-02 | **Corrigido pelo [ADR-011 do documento 5](5_ARQUITETURA_SOFTWARE.md#adr-011--papel-de-banco-próprio-para-as-credenciais-de-autenticação)** (documento 5, seção 6.9). O `tenaz_app` lia e escrevia credenciais de qualquer empresa nas tabelas de autenticação de `plataforma`. Agora só o papel `tenaz_autenticacao`, com pool próprio do pacote de autenticação, as alcança; `tenaz_app`, `tenaz_job`, `tenaz_leitura` e `tenaz_sinc` recebem "permissão negada"; auditoria de login contida por `autenticacao_identidade`; revogação no trigger de `acesso_empresa`; purga por `plataforma.purgar_credenciais_vencidas()` (seção 5.1) | `tenaz-banco-dados`; revisão `tenaz-isolamento` | E01 |
+| ISO-E01-03 | **Corrigido.** `perfil_origem` e `codigo` mudavam depois da atribuição. `trg_perfil_tipo`: o tipo `coalesce(perfil_origem, codigo)`, `perfil_origem` e `padrao` imutáveis | `tenaz-banco-dados` | E01 |
+| ISO-E01-04 | **Corrigido.** `empresa_listagem_job USING (true)` deixava o job, no contexto de A, ler B. Agora `USING (app.empresa_atual() IS NULL OR id = app.empresa_atual())` | `tenaz-banco-dados` | E01 |
+| ISO-E01-05 | **Corrigido.** `tenaz_sinc` sem `INSERT` em `token_api_id`, `dispositivo_id`, `user_agent` e `ocorrido_no_dispositivo_em`, que `tg_auditar` sempre lista: toda escrita auditada do sincronizador falharia | `tenaz-banco-dados` | E01 |
+| ISO-E01-06 | **Corrigido.** Corrida em READ COMMITTED entre os triggers de atribuição (perfil e permissão avulsa) e `tg_usuario_vinculo`: `SELECT ... FOR SHARE` em `app.usuario` nos dois triggers de atribuição | `tenaz-banco-dados` | E01 |
+| ISO-E01-07 | **Corrigido.** `tenaz_app` e `tenaz_job` gravavam em `app.evento_auditoria` evento com `entidade = 'identidade'` (ex.: `login`) na própria empresa, embora só o `tenaz_autenticacao` grave evento de autenticação (documento 5, seção 6.9). Restritiva `auditoria_sem_autenticacao` `FOR INSERT TO tenaz_app, tenaz_job, tenaz_sinc WITH CHECK (entidade <> 'identidade')` (seção 9.2); o `tg_auditar` nunca gera essa entidade, porque `identidade` fica em `plataforma`, sem trigger de auditoria. Teste a cargo do `tenaz-isolamento` | `tenaz-banco-dados` | E01 |
+| E01-12 | **Resolvido** (confirmado pelo `tenaz-isolamento`; suíte reescrita, seção 2.8). Suíte de vazamento depois do ADR-011: as fixtures passaram a gravar credenciais como `tenaz_autenticacao` e o teste da FK composta das credenciais passou a rodar nesse papel (adaptação mínima feita na etapa, para revisão); o mapa `privilegios.txt` ainda não varre o `INSERT` por coluna do `tenaz_autenticacao` em `app.evento_auditoria` (a linha esperada está comentada no arquivo); faltam os testes do ADR-011, decisão 9 (molde da auditoria, revogação pelo trigger, purga, consultas de credencial só no repositório) | `tenaz-isolamento` | Antes do aceite de E01 |
+| E01-13 | Troca de CNPJ de uma conta com conexão entre contas: o administrador altera `empresa.cnpj` (sumário 3.6), mas o aceite da conexão confere a raiz do CNPJ contra `conexao_empresa.documento_convidado` (seção 2.10.3). Definir o efeito da troca numa conta com conexão `convidada`, `ativa` ou `suspensa` (manter, suspender, exigir novo aceite) | `tenaz-conexao-contas` com `tenaz-banco-dados` | E07, antes do convite de conexão |
+| ISO-E01-08 | **Corrigido.** O `tenaz_manutencao` (`LOGIN`, membro de `tenaz_dono` com herança) lia as sete tabelas de credencial, sem RLS, porque o dono era `tenaz_dono`. Agora o dono é `tenaz_credencial`, sem membros de runtime (seções 2.2 e 5.1). Pendente no `tenaz-isolamento`: `TestTodoObjetoPertenceAoDono` precisa aceitar `tenaz_credencial` como dono das sete tabelas e das duas funções, e só deles; teste do próprio achado | `tenaz-banco-dados`; revisão `tenaz-isolamento` | E01 |
+| ISO-E01-09 | **Aberto (risco residual do ISO-E01-08; só registro, sem mudança de migração agora).** O esquema `plataforma`, como o `app`, continua com dono `tenaz_dono`, e o dono do esquema pode apagar tabelas que não são dele. Quem roubar a credencial do `tenaz_manutencao` (`LOGIN`, membro de `tenaz_dono`) não lê as credenciais, mas pode: apagar e recriar as sete tabelas de credencial como `tenaz_dono` e conceder acesso ao `tenaz_autenticacao`, para capturar o que for gravado depois; desligar o `trg_acesso_empresa`, e a inativação deixa de revogar sessões; e, nas tabelas de `app`, tirar o `FORCE ROW LEVEL SECURITY` ou criar policy para si. Opções em aberto (documento 5, seção 16; ADR-011 emendado): (a) tirar o `tenaz_manutencao` de `tenaz_dono`, com funções estreitas para criar e remover partições e o privilégio `MAINTAIN` do PostgreSQL 17+ para `VACUUM` e `ANALYZE`; (b) deixá-lo só no pipeline, como o `tenaz_migrador`, sem credencial em tarefa de runtime | `tenaz-arquiteto` (decisão), `tenaz-banco-dados` e `tenaz-plataforma-sre` | Antes da primeira implantação em homologação |
+| ISO-E01-10 | **Aberto (falha fechada, não vazamento).** O `tenaz_sinc` não tem `USAGE` no esquema `app`: toda escrita do sincronizador falharia por falta de privilégio. O teste de `conexao_sinc` concede o `USAGE` só dentro da transação desfeita. Conceder na migração da conexão entre contas. O `tenaz-isolamento` o registrou como ISO-E01-09, ID que já é o risco residual do `tenaz_manutencao`; IDs não se reaproveitam | `tenaz-banco-dados` | Migração de E04 |
+| E01-15 | Sugestão da revisão de isolamento: `ALTER DEFAULT PRIVILEGES FOR ROLE tenaz_dono IN SCHEMA app REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC`. Hoje toda função de `app` tem `EXECUTE` para `PUBLIC`, o padrão do PostgreSQL, e o mapa de privilégios (consulta 8-b) a ignora | `tenaz-banco-dados` com `tenaz-isolamento` | A decidir |
+| E01-16 | Pendência da suíte: `TestPredicadoNuloNaoLiberaLinha` e `TestEmpresaIDEImutavel` ainda criam tabela no banco compartilhado, em vez de transação desfeita | `tenaz-isolamento` | Até E02 |
+| E01-14 | Toda tabela futura de `plataforma` com dado sensível e sem RLS (a próxima é `conexao_empresa`, E04) não pode ter dono `tenaz_dono`, pelo mesmo motivo do ISO-E01-08: precisa de dono próprio sem membros de runtime ou de RLS forçado | `tenaz-banco-dados` com `tenaz-isolamento` | E04 |
+| E01-11 | **LGPD na trilha.** `tg_auditar` grava `cpf` e `data_nascimento` de `pessoa` em `antes` e `depois`, legíveis por quem tem `adm.ler_auditoria`. Resolver antes das tabelas de saúde (seção 5.10): omitir ou mascarar colunas pessoais na trilha (lista por tabela no `preparar_tabela`) ou restringir a leitura desses eventos a `pessoa.saude.ler` | `tenaz-banco-dados` com `tenaz-isolamento` e `tenaz-conformidade-br` (LGPD) | Antes de `documento_vencimento` com dado de saúde (E08) |
+| E01-10 | `app.permissoes_vedadas_externo()` repete parte do catálogo de RF-ADM-005 (as vedadas a externo, com o grupo Admin). Permissão nova do grupo Admin ou vedada exige migração que atualize a lista e revalide os CHECKs; sugestão: teste no Go que compare a lista do banco com o catálogo | `tenaz-backend-go` e `tenaz-banco-dados` | E01 |
 
 ---
 
@@ -8718,4 +9492,5 @@ Visão em alto nível. Procedimentos, responsáveis e testes estão no documento
 | 0.3 | 12/11/2026 | Alinhamento ao sumário executivo 0.4: módulo SRV (`cliente_servico`, `ativo` `de_cliente` com `tag_cliente`, `especialidade_tecnico`, `pessoa_especialidade`, `descricao_servico`, `servico_os`, `tipo_material` e números de série no material, `comentario`); conexão entre contas (`plataforma.conexao_empresa` com os 15 grupos de `campos_compartilhados`, `ativo_compartilhado`, `vinculo_os` em cada conta, `envio_conexao`, `recebimento_conexao`, `espelho_conexao`, papel `tenaz_sinc`, policy `conexao_sinc`, sincronização e teste com três contas, R5); `os.encerrar`, `est.decidir_destino`, ação `assumir`, origens da OS e da solicitação, `reaberta_de_id`, franquias de horas e km, encerramento e sublocação na locação, papéis `posto_combustivel` e `seguradora`, peça em trânsito não consumível, link de uso único com token no fragmento; seção 17.1 atualizada |
 | 0.2 | 12/11/2026 | Alinhamento ao sumário executivo 0.3: entidade `pessoa`; perfis novos; marcos `data_*`, transições e reconhecimento da OS; transições da solicitação; status do ativo e `bloqueio_ativo`; campos de propriedade e regime de operação do ativo; origem `iot`; numeração `OR` e `CL`; nomes das entidades auxiliares da seção 3.2 do sumário; módulo TER (fornecedor com papéis, catálogo, link de uso único, contratos, avaliação, orçamento); estoque em terceiros, peças serializadas e ordem de reparo; módulo LOC; isolamento do prestador e do locatário (R4); dados de saúde; KPIs pelo regime de operação |
 | 0.4 | 12/11/2026 | Alinhamento ao sumário executivo 0.5 (configuração por segmento): `ativo.fase_ciclo_vida` e `data_entrada_operacao`, `trg_ativo_fase` e `colocar_em_operacao`; `bloqueio_ativo.origem` com liberação por documento; OS tipo `implantacao`, origem `projeto` (sem origem `regra`), `campos_extras` e `causa_externa`; solicitação com origem `regra`; tabelas `campo_extra_os` (com `preenchido_pelo_prestador`), `regra_automacao` e `disparo_regra` (5.13); Fase 2: `plataforma.pacote_segmento` e `aplicacao_pacote` (13.11), PRJ com etapa `disponivel` (13.12), CTR com `decisao_exclusao` (13.13); numeração `PJ` e `CT`; permissões da configuração, de PRJ e de CTR; `cliente_servico` nas contas com CTR; lista de tabelas globais (2.11); campos que nunca atravessam a conexão (2.10.5); escopo externo das tabelas novas (2.9.4); diagramas 3.9 a 3.11; KPIs sem OS de implantação; seção 17.1 com S27 a S35 e decisões D21 a D26 |
+| 0.5 | 12/11/2026 | Etapa E01 (sumário 0.6), migrações `00003_auditoria`, `00004_adm` e `00005_autenticacao`: tabelas de autenticação `sessao`, `token_renovacao`, `codigo_autorizacao`, `desafio_mfa`, `token_email` e campos `identidade.falhas_login`, `bloqueada_ate`, `mfa_ativado_em`, com privilégios por coluna e FK composta para `usuario`; `turno_unidade` e `feriado_unidade`, com "pelo menos um turno" no serviço; `acesso_empresa` mantida por trigger `SECURITY DEFINER`; `tg_padrao_empresa` e `escopo_externo` da empresa; policies de escopo de `unidade`, `usuario` e `pessoa`, com `escopo_externo_exclusao`; `tg_usuario_vinculo` e identidade imutável; `evento_auditoria` particionada por `plataforma.criar_particoes_mensais()`, sem `pg_partman`, com partição padrão, `ocorrido_no_dispositivo_em` e contexto opcional na auditoria; `preparar_tabela` com conferência do dono; `USAGE` em `public` para os papéis do sistema; correção do `CASE` em `conferir_escopo`; `usuario_permissao`, `perfil.perfil_origem` e `app.permissoes_vedadas_externo()`, com `ck_perfil_externo_vedadas` e os triggers de permissão avulsa; `usuario.situacao` `convidado`, `ativo`, `inativo` (S37 resolvido); papel `tenaz_autenticacao` e privilégios das credenciais, `autenticacao_identidade`, revogação em `tg_acesso_empresa`, `purgar_credenciais_vencidas()` (ADR-011, ISO-E01-02); `evento_auditoria.escopo`, `identidade.mfa_ultimo_passo`, `uq_usuario_perfil` parcial e `ck_usuario_permissao_formato` com dígito (pendências do backend); `auditoria_sem_autenticacao` (ISO-E01-07); `empresa.mfa_obrigatorio` (sumário 3.6) e E01-13; dono `tenaz_credencial` das credenciais (ISO-E01-08); `pessoa.situacao` só `ativa` ou `inativa` (S39); risco ISO-E01-09 registrado; `tenaz_migrador` superusuário em desenvolvimento, CI e testes, membro de `tenaz_dono` e `tenaz_credencial` em homologação e produção (2.2); seção 2.8 alinhada à suíte reescrita (consultas 1 a 11, seis listas versionadas, partes 2 e 3); ISO-E01-10, E01-15 e E01-16; revisão de isolamento: `trg_usuario_colunas_externo` e `escopo_externo_insercao` em `usuario` (ISO-E01-01), `trg_perfil_tipo` (03), listagem do job restrita ao contexto (04), `INSERT` do sincronizador em todas as colunas de `tg_auditar` (05), `FOR SHARE` nos triggers de atribuição (06), trava de TRUNCATE nas partições, `TimeZone` e limite de `p_desde` em `criar_particoes_mensais`, `escopo_externo_insercao` em `evento_auditoria`; migrações numeradas `NNNNN_` e `SET LOCAL` nos limites (14.2); S36 a S39, D27 a D37 e pendências da etapa (17.3) |
 

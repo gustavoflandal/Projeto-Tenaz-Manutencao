@@ -25,6 +25,7 @@ Este conjunto de documentos especifica a **Tenaz**, sistema SaaS de gestão de m
 | 9 | [9_SEGURANCA_CONFIABILIDADE.md](9_SEGURANCA_CONFIABILIDADE.md) | Segurança, LGPD, SLA, backup, recuperação de desastre, observabilidade | Em elaboração |
 | — | [../CHANGELOG.md](../CHANGELOG.md) | Histórico de versões: todas as implementações e correções de cada versão | Sempre atualizado |
 | — | [etapas/](etapas/README.md) | Registro de todas as etapas do projeto: pedido, decisões, mudanças, verificação, pendências | Sempre atualizado |
+| — | [entregas/](entregas/README.md) | Entregas consolidadas: cada etapa aceita e em `main`, com o que ficou pronto, o portão item a item e o que foi para depois | A cada etapa aceita |
 | — | [pdf/](pdf/) | Versões em PDF dos documentos, geradas do Markdown | Regeradas a cada mudança |
 
 ## Execução

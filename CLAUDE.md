@@ -30,6 +30,7 @@ Em caso de conflito, vale esta ordem:
 | Segurança, LGPD, SLA, recuperação de desastre | [docs/9_SEGURANCA_CONFIABILIDADE.md](docs/9_SEGURANCA_CONFIABILIDADE.md) |
 | Histórico de versões do produto | [CHANGELOG.md](CHANGELOG.md) |
 | Histórico de etapas do projeto | [docs/etapas/](docs/etapas/) |
+| Entregas consolidadas (etapas aceitas e em `main`) | [docs/entregas/](docs/entregas/README.md) |
 | Como o trabalho acontece: agentes, skills, etapas | [docs/execucao/](docs/execucao/README.md) |
 
 Um ID (`RF-`, `RNF-`, `RN-`, `ADR-`) só é **criado** no documento dono. Os outros documentos apenas o citam.
@@ -50,6 +51,8 @@ Toda correção ou implementação atualiza, **no mesmo commit ou pull request**
 4. O sumário executivo, quando a mudança afetar módulo, plano, vocabulário, estado ou pendência.
 
 Uma mudança de comportamento que não aparece na documentação é tratada como defeito.
+
+**A documentação é idempotente ao código** (pedido do dono do produto, etapa E01): em nenhum momento os dois podem divergir. Todo fix, adendo, inclusão, exclusão ou alteração é documentado no mesmo passo em que acontece, e não só no fechamento da etapa: o documento dono, o `CHANGELOG.md` e o registro da etapa em andamento acompanham cada mudança. Agente que altera código sem atualizar o documento dono não terminou a tarefa.
 
 ### 3.3 Integridade e referência cruzada
 
@@ -113,6 +116,7 @@ infra/docker/           compose de desenvolvimento (PostgreSQL, Valkey, MinIO)
 marca/                  identidade visual (brandbook, logos, regras)
 docs/                   documentação do projeto (0 a 9)
 docs/etapas/            registro de todas as etapas do projeto
+docs/entregas/          cada etapa aceita e consolidada: o que ficou pronto
 docs/execucao/          plano de execução: modelo de trabalho, agentes, skills, etapas
 docs/prompts/           o prompt de cada etapa, escrito antes do trabalho
 docs/screenshots/       evidência visual das telas entregues

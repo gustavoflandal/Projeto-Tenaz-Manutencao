@@ -59,8 +59,26 @@ compilar() {
   verde "bin/tenaz"
 }
 
+# Ambiente da API local. As chaves abaixo são SÓ de desenvolvimento, estão no
+# repositório de propósito e não valem em nenhum outro ambiente; em
+# homologação e produção vêm do cofre. O pool da aplicação assume tenaz_app e o
+# da autenticação, sem TENAZ_BANCO_URL_AUTENTICACAO, assume tenaz_autenticacao
+# (ADR-011), os dois sobre a URL do migrador. Sobre http, o cookie de sessão
+# sai como tenaz_sessao, sem Secure (TENAZ_COOKIE_SEGURO=false, recusado fora
+# do desenvolvimento; seção 4.2 do documento 3).
 api() {
-  (cd backend && TENAZ_BANCO_URL="$BANCO_DEV" go run ./cmd/tenaz api)
+  (cd backend && \
+    TENAZ_BANCO_URL="$BANCO_DEV" \
+    TENAZ_BANCO_PAPEL="tenaz_app" \
+    TENAZ_BANCO_AUTENTICACAO_MAX_CONN="5" \
+    TENAZ_URL_WEB="http://localhost:5173" \
+    TENAZ_COOKIE_SEGURO="false" \
+    TENAZ_CHAVE_MFA="HwN8RJDGAV6P2aR295hByxI8whzgK2LmY7w4HqabfXI=" \
+    TENAZ_CHAVE_JWT="bYC9XDoeAyjFKg4SQh2/DJnEACmHjXLJSc5nz5Ebx+c=" \
+    TENAZ_CHAVE_JWT_ID="dev-1" \
+    TENAZ_SMTP_ENDERECO="127.0.0.1:1025" \
+    TENAZ_EMAIL_REMETENTE="nao-responda@tenaz.local" \
+    go run ./cmd/tenaz api)
 }
 
 formatar() {
@@ -110,6 +128,14 @@ contrato() {
   titulo "Regerando o contrato OpenAPI"
   (cd backend && go run ./cmd/tenaz openapi > api/openapi.yaml)
   verde "backend/api/openapi.yaml regerado"
+  api_tipos
+}
+
+# Tipos TypeScript gerados do contrato, em pacotes/api-tipos. Quem muda o
+# contrato roda `contrato`, que já chama esta tarefa.
+api_tipos() {
+  titulo "Regerando os tipos TypeScript do contrato"
+  "${PNPM[@]}" --filter @tenaz/api-tipos gerar
 }
 
 conferir_contrato() {
@@ -148,6 +174,23 @@ tipos_js() {
   "${PNPM[@]}" -r typecheck
 }
 
+lint_js() {
+  titulo "Análise estática de JavaScript"
+  "${PNPM[@]}" -r lint
+}
+
+tokens_ui() {
+  titulo "Regerando o CSS dos tokens de design"
+  "${PNPM[@]}" --filter @tenaz/tokens-ui gerar
+}
+
+# Arquivos gerados versionados: tipos do contrato e CSS dos tokens.
+conferir_gerados_js() {
+  titulo "Arquivos gerados de JavaScript em dia"
+  "${PNPM[@]}" --filter @tenaz/api-tipos conferir
+  "${PNPM[@]}" --filter @tenaz/tokens-ui conferir
+}
+
 compilar_web() {
   titulo "Compilando a web com a versão injetada"
   eval "$(bash "$RAIZ/ferramentas/versao.sh" --export)"
@@ -170,7 +213,9 @@ conferir() {
   conferir_formato
   vet
   conferir_contrato
+  conferir_gerados_js
   tipos_js
+  lint_js
   conferir_docs
   verde $'\nTodas as conferências passaram'
 }
@@ -205,13 +250,17 @@ Backend
   vazamento            suíte de isolamento, com saída detalhada
 
 Contrato
-  contrato             regera backend/api/openapi.yaml
+  contrato             regera backend/api/openapi.yaml e os tipos TypeScript
   conferir-contrato    falha se o contrato versionado divergir do gerado
+  api-tipos            regera só os tipos TypeScript (pacotes/api-tipos)
 
 JavaScript
   instalar-js          instala as dependências da web e do app
   testar-js            testes da web e do app
   tipos-js             conferência de tipos da web e do app
+  lint-js              análise estática (ESLint) da web
+  tokens-ui            regera o CSS dos tokens a partir de tokens.json
+  conferir-gerados-js  falha se tipos da API ou CSS dos tokens divergirem
   compilar-web         compila a web com a versão injetada
 
 Documentação
@@ -219,7 +268,7 @@ Documentação
   versao               mostra a versão derivada da tag git
 
 Conjuntos
-  conferir             formato, análise, contrato e documentação
+  conferir             formato, análise, contrato, gerados, tipos, lint e documentação
   tudo                 conferir + todos os testes (o que o CI roda)
 TXT
 }
@@ -243,9 +292,13 @@ case "$tarefa" in
   vazamento)         vazamento "$@" ;;
   contrato)          contrato "$@" ;;
   conferir-contrato) conferir_contrato "$@" ;;
+  api-tipos)         api_tipos "$@" ;;
   instalar-js)       instalar_js "$@" ;;
   testar-js)         testar_js "$@" ;;
   tipos-js)          tipos_js "$@" ;;
+  lint-js)           lint_js "$@" ;;
+  tokens-ui)         tokens_ui "$@" ;;
+  conferir-gerados-js) conferir_gerados_js "$@" ;;
   compilar-web)      compilar_web "$@" ;;
   conferir-docs)     conferir_docs "$@" ;;
   versao)            versao "$@" ;;

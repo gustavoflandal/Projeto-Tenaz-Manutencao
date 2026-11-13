@@ -1,0 +1,14 @@
+# Funções SECURITY DEFINER aprovadas em app e plataforma (consulta 6 da seção
+# 2.8 de docs/2_ARQUITETURA_BANCO_DADOS.md). Em app, nenhuma.
+#
+# Toda função daqui precisa de search_path exatamente "pg_catalog, pg_temp",
+# nomes qualificados no corpo e EXECUTE revogado de PUBLIC. O segundo campo é
+# a lista de papéis da aplicação com EXECUTE (separados por vírgula), ou "-"
+# para nenhum. Papéis membros do dono (tenaz_manutencao, migrador) não são
+# conferidos: já executam como dono.
+#
+# Formato: esquema.funcao(tipos)  executores  # justificativa
+
+plataforma.criar_particoes_mensais(regclass,integer,date)  -  # partições com o mesmo dono do pai (seção 9.5); lista fechada de tabelas; só tenaz_manutencao, membro do dono, executa
+plataforma.tg_acesso_empresa()                             -  # trigger de app.usuario que mantém acesso_empresa sem dar escrita ao tenaz_app e revoga as sessões do usuário que deixa de estar ativo (seção 5.1, ADR-011)
+plataforma.purgar_credenciais_vencidas()                   tenaz_job  # purga diária das credenciais vencidas há mais de 30 dias (ADR-011; seção 5.1); sem parâmetro, não recebe dado da requisição; o tenaz_job não tem privilégio nas tabelas

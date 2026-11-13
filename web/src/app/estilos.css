@@ -1,0 +1,28 @@
+/*
+ * Estilos globais da web. Nenhum valor de cor, espaço ou tipo é escrito aqui:
+ * tudo vem de @tenaz/tokens-ui, gerado de tokens.json (documento 7, seção 3).
+ */
+
+/* Fontes hospedadas com a aplicação, sem CDN (LGPD, seção 3.5). A Archivo
+   entra com o eixo de largura, para a Archivo Expanded (largura 125). */
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/jetbrains-mono';
+@import '@fontsource-variable/archivo/wdth.css';
+
+@import 'tailwindcss';
+@import '@tenaz/tokens-ui/tokens.css';
+@import '@tenaz/tokens-ui/tailwind.css';
+
+@layer base {
+  html {
+    background-color: var(--tz-fundo);
+    color: var(--tz-texto);
+    font: var(--tz-texto-corpo);
+  }
+
+  /* Foco visível padrão (11.1): anel de 2 px em `foco`, afastado 2 px. */
+  :focus-visible {
+    outline: var(--tz-foco-largura) solid var(--tz-foco);
+    outline-offset: var(--tz-foco-afastamento);
+  }
+}

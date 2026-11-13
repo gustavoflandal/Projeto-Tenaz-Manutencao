@@ -7,20 +7,34 @@
 # Regra que o teste de vazamento cobra: toda consulta sobre tabela de cliente
 # cita empresa_id no WHERE, mesmo com RLS ligado.
 #
-#   sqlc generate
+# Dois pacotes gerados:
+#   - consultas: tabelas de app, usadas só dentro de NaEmpresa, pelo pool da
+#     aplicação;
+#   - o repositório da autenticação: as tabelas de credencial do esquema
+#     plataforma (identidade, acesso_empresa, sessao, token_renovacao,
+#     codigo_autorizacao, desafio_mfa, token_email). Fica dentro de
+#     autenticacao/internal, para que o compilador impeça qualquer outro pacote
+#     de tocá-las, e roda num pool próprio (achado ISO-E01-02).
+#
+# O sqlc não percorre subpastas: cada pasta com consultas entra na lista.
+# Rodado por Docker, sem instalação local:
+#
+#   docker run --rm -v "$PWD:/src" -w /src sqlc/sqlc:1.30.0 generate
 
 version: "2"
 
 sql:
   - engine: postgresql
     schema: db/migracoes
-    queries: internal/modulos
+    queries:
+      - internal/modulos/adm/internal/repo
+      - internal/plataforma/autorizacao
+      - internal/plataforma/auditoria
     gen:
-      go:
+      go: &go_comum
         package: consultas
         out: internal/plataforma/db/consultas
         sql_package: pgx/v5
-
         # Nomes do domínio em português, como no banco e no sumário.
         emit_json_tags: true
         json_tags_case_style: snake
@@ -29,8 +43,7 @@ sql:
         emit_empty_slices: true
         emit_pointers_for_null_types: true
         emit_result_struct_pointers: false
-
-        overrides:
+        overrides: &overrides
           # UUID com a biblioteca que o backend já usa para gerar v7.
           - db_type: "uuid"
             go_type: "github.com/google/uuid.UUID"
@@ -50,6 +63,15 @@ sql:
           - db_type: "xid8"
             go_type: "uint64"
 
+          # Instantes sempre em time.Time, em UTC (seção 1.4 do documento 2).
+          - db_type: "timestamptz"
+            go_type: "time.Time"
+          - db_type: "timestamptz"
+            nullable: true
+            go_type:
+              type: "time.Time"
+              pointer: true
+
           - db_type: "citext"
             go_type: "string"
           - db_type: "citext"
@@ -57,3 +79,16 @@ sql:
             go_type:
               type: "string"
               pointer: true
+
+  # O sqlc não aceita chave fora do esquema dele; as opções comuns vêm por
+  # âncora do bloco acima, com o pacote e o destino trocados.
+  - engine: postgresql
+    schema: db/migracoes
+    queries:
+      - internal/plataforma/autenticacao/internal/repo
+    gen:
+      go:
+        <<: *go_comum
+        package: gerado
+        out: internal/plataforma/autenticacao/internal/repo/gerado
+        overrides: *overrides

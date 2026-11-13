@@ -58,7 +58,7 @@ O [roadmap](../6_ROADMAP.md), seção 2, prevê 15 pessoas no MVP. A tabela most
 | — (sem equivalente no roadmap) | — | `tenaz-dominio-manutencao`, `tenaz-conformidade-br`, `tenaz-documentacao` |
 | Advogado, consultor de SST, contador, pentest, auditor SOC 2 | parcial | **Não vira agente.** `tenaz-conformidade-br` prepara o material e as perguntas; a decisão é da pessoa. |
 
-Os três agentes sem equivalente existem porque este projeto tem exigências que, num time humano, ficariam distribuídas: o domínio de manutenção com 361 regras de negócio e fórmulas de indicador, a conformidade brasileira nativa que é a proposta de valor 4 do sumário, e a disciplina documental de [CLAUDE.md](../../CLAUDE.md), seção 3, que é condição de fechamento de qualquer etapa.
+Os três agentes sem equivalente existem porque este projeto tem exigências que, num time humano, ficariam distribuídas: o domínio de manutenção com 376 regras de negócio e fórmulas de indicador, a conformidade brasileira nativa que é a proposta de valor 4 do sumário, e a disciplina documental de [CLAUDE.md](../../CLAUDE.md), seção 3, que é condição de fechamento de qualquer etapa.
 
 ---
 

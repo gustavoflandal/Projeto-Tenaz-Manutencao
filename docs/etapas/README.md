@@ -52,3 +52,4 @@ O que ficou em aberto e onde está registrado.
 | 010 | 2026-11-12 | release | [Troca de repositório no GitHub](010_2026-11-12_troca-de-repositorio.md) |
 | 011 | 2026-11-12 | implementação | [Fundação técnica (etapa E00)](011_2026-11-12_fundacao-tecnica.md) |
 | 012 | 2026-11-12 | escopo | [Configuração por segmento](012_2026-11-12_configuracao-por-segmento.md) |
+| 013 | 2026-11-12 | implementação | [Conta e acesso (etapa E01), em andamento](013_2026-11-12_conta-e-acesso.md) |

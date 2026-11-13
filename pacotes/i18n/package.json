@@ -1,0 +1,18 @@
+{
+  "name": "@tenaz/i18n",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Textos de interface da Tenaz em português do Brasil, compartilhados pela web e pelo app",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "vitest": "3.2.4"
+  }
+}

@@ -207,7 +207,7 @@ jobs:
           echo "endpoint de versão correto"
 
   javascript:
-    name: Web e app (tipos, testes, fila offline)
+    name: Web e app (gerados, tipos, lint, testes, fila offline)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -222,8 +222,20 @@ jobs:
       - name: Instalar dependências
         run: pnpm install --frozen-lockfile
 
+      # Tipos TypeScript do contrato e CSS dos tokens são gerados e
+      # versionados; divergência quer dizer que alguém esqueceu de regerar.
+      - name: Arquivos gerados em dia (tipos da API, tokens)
+        run: |
+          pnpm --filter @tenaz/api-tipos conferir
+          pnpm --filter @tenaz/tokens-ui conferir
+
       - name: Tipos
         run: pnpm -r typecheck
+
+      # `any` proibido, regras de hooks, acessibilidade em JSX e nenhum
+      # texto de interface fora de pacotes/i18n (seção 8.4 do documento 5).
+      - name: Análise estática (ESLint)
+        run: pnpm -r lint
 
       # Inclui os testes da fila de comandos do app, rodados contra SQLite
       # real no Node (seção 9.1). É o componente mais crítico do app e o

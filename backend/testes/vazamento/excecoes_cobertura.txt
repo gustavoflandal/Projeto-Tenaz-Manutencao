@@ -1,0 +1,18 @@
+# Tabelas de app com empresa_id que, por desenho, NÃO têm a policy
+# isolamento_empresa FOR ALL nem a escopo_externo padrão (seção 2.8 de
+# docs/2_ARQUITETURA_BANCO_DADOS.md).
+#
+# A exceção troca a regra geral por uma forma mais estrita, que a suíte
+# confere (TestExcecoesDeCoberturaTemAFormaDeclarada). Ela nunca dispensa a
+# defesa: tabela aqui sem a forma declarada quebra o build do mesmo jeito.
+#
+# Formas aceitas:
+#   somente_insercao  RLS forçado; permissivas só de SELECT e INSERT, com o
+#                     predicado exato da empresa; nenhuma permissiva de UPDATE
+#                     ou DELETE; leitura restrita ao escopo interno; nenhum
+#                     papel da aplicação com UPDATE, DELETE ou TRUNCATE; trigger
+#                     app.tg_somente_insercao em UPDATE e DELETE (seção 9.4).
+#
+# Formato: esquema.tabela  forma  # justificativa
+
+app.evento_auditoria  somente_insercao  # trilha de auditoria imutável (seções 9.2 e 9.4): policies por comando, sem UPDATE nem DELETE; o escopo externo grava pelo trigger e não lê

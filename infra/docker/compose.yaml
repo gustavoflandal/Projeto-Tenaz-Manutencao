@@ -1,7 +1,8 @@
 # Infraestrutura local de desenvolvimento da Tenaz.
 #
 # Sobe o que o backend precisa para rodar e para os testes de integração:
-# PostgreSQL com RLS, Valkey para cache e MinIO para os anexos. O backend e a
+# PostgreSQL com RLS, Valkey para cache, Mailpit para os e-mails e MinIO para
+# os anexos. O backend e a
 # web rodam no host, para o ciclo de edição ficar rápido (seção 7 de
 # docs/5_ARQUITETURA_SOFTWARE.md).
 #
@@ -55,6 +56,21 @@ services:
       - "6380:6379"
     healthcheck:
       test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Servidor SMTP de teste: recebe os e-mails de convite, redefinição de senha
+  # e verificação de e-mail (token_email) sem entregar nada a ninguém. A caixa
+  # fica em http://localhost:8025. Em produção o envio é por provedor real.
+  mailpit:
+    image: axllent/mailpit:v1.27.0
+    container_name: tenaz-mailpit
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # caixa de entrada na web
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
       interval: 5s
       timeout: 3s
       retries: 10

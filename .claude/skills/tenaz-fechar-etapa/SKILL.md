@@ -1,6 +1,6 @@
 ---
 name: tenaz-fechar-etapa
-description: Use ao terminar qualquer etapa, correção ou implementação na Tenaz. Executa as quatro atualizações obrigatórias de CLAUDE.md - documentos afetados com versão subida, CHANGELOG, registro da etapa em docs/etapas e sumário quando couber - roda o verificador e regera os PDFs.
+description: Use ao terminar qualquer etapa, correção ou implementação na Tenaz. Executa as quatro atualizações obrigatórias de CLAUDE.md - documentos afetados com versão subida, CHANGELOG, registro da etapa em docs/etapas e sumário quando couber - escreve a entrega consolidada em docs/entregas quando a etapa é aceita, roda o verificador e regera os PDFs.
 ---
 
 # Fechar uma etapa da Tenaz
@@ -45,6 +45,10 @@ Em [docs/etapas/](../../../docs/etapas/), arquivo `NNN_AAAA-MM-DD_titulo-curto.m
 
 Registro publicado **não é reescrito**: erro se corrige com nota de correção datada no fim do próprio registro, ou com etapa nova que o cite.
 
+## 3-b. Entrega consolidada
+
+Quando a etapa é **aceita pelo dono do produto** e vai para `main`, escreva a entrega em [docs/entregas/](../../../docs/entregas/README.md), no formato e nas regras do README da pasta: arquivo `<ID da etapa>_<titulo>.md` (ex.: `E01_conta-e-acesso.md`), com o que foi entregue, a situação de cada requisito, o portão item a item com a prova, a evidência e o que ficou para depois. Atualize o índice da pasta. Etapa em andamento ou com portão vermelho não entra. Se a etapa mudou algo de uma entrega anterior, acrescente uma nota datada em "Notas posteriores" daquela entrega.
+
 ## 4. Sumário executivo
 
 Atualize [docs/0_SUMARIO_EXECUTIVO.md](../../../docs/0_SUMARIO_EXECUTIVO.md) quando a mudança afetar **módulo, plano, vocabulário, estado ou pendência**. Nome canônico novo entra aqui primeiro, e só depois nos outros documentos.
@@ -79,6 +83,7 @@ O Markdown é a fonte; **o PDF nunca é editado à mão**. A conversão precisa 
 - [ ] Citações em outros documentos atualizadas
 - [ ] CHANGELOG com a entrada e a referência
 - [ ] Registro da etapa escrito, com numeração nova e índice atualizado
+- [ ] Entrega consolidada escrita em `docs/entregas/`, se a etapa foi aceita, e notas nas entregas anteriores que ela alterou
 - [ ] Sumário atualizado, se o escopo ou o vocabulário mudou
 - [ ] Pendências nos dois lugares
 - [ ] Evidência visual capturada e citada

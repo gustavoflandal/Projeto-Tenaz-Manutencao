@@ -1,8 +1,10 @@
 # Segurança e Confiabilidade — Tenaz
 
-**Versão:** 0.3 · **Data:** 12/11/2026 · **Status:** Em elaboração
+**Versão:** 0.4 · **Data:** 12/11/2026 · **Status:** Em elaboração
 **Produto:** Tenaz · Gestão de Manutenção e Frota
-Alinhado ao sumário executivo 0.4
+Alinhado ao sumário executivo 0.6
+
+**Mudanças da versão 0.4:** na seção 5.4, a tabela de permissões típicas, que divergia dos grupos do documento 3, dá lugar à matriz canônica de RF-ADM-005, e a regra anti-escalada ganha a exceção do `administrador`; a concessão de `pessoa.saude.ler` passa a ser avulsa (`usuario_permissao`). Na seção 5.3, a sessão web passa a descrever o cookie com estado no servidor (documento 3, seção 4.2), e não um token de acesso rotativo, que é do app; a renovação do app passa de 14 para 30 dias de inatividade, como em RNF-017, que é o requisito dono do valor. Na seção 5.14, o registro do link usa `ator_tipo = link_execucao`, como no documento 2. Divergências encontradas na etapa E01.
 
 Este documento define as metas de disponibilidade e recuperação, os controles de segurança (inclusive do acesso externo e da conexão entre contas do módulo SRV), a trilha de auditoria, o tratamento de dados pessoais (LGPD), a assinatura eletrônica, a governança de IA e o roteiro de certificações da Tenaz. A mecânica técnica (RLS, sincronização offline, infraestrutura, observabilidade) está em [5_ARQUITETURA_SOFTWARE.md](5_ARQUITETURA_SOFTWARE.md). Os nomes de módulos, entidades e perfis seguem o [Sumário Executivo](0_SUMARIO_EXECUTIVO.md).
 
@@ -346,8 +348,8 @@ Risco R2 do sumário. A arquitetura está em 5_ARQUITETURA_SOFTWARE.md, seção 
 | SSO OIDC | Google e Microsoft Entra, plano Profissional, MVP |
 | SSO SAML 2.0 | Plano Enterprise, Fase 2 |
 | SCIM 2.0 | Plano Enterprise, Fase 2: criação, alteração e desativação de usuários pelo IdP do cliente |
-| Sessão web | Cookie `HttpOnly`, `Secure`, `SameSite=Lax`, proteção CSRF; token de acesso de 15 minutos com renovação rotativa e detecção de reuso |
-| Sessão do app | Tokens no Keychain/Keystore; renovação válida por 14 dias para suportar o offline; ligada ao aparelho |
+| Sessão web | Cookie `__Host-tenaz_sessao` `HttpOnly`, `Secure`, `SameSite=Lax`, com identificador aleatório de 256 bits e estado no servidor (`sessao`, canal `web`); proteção CSRF; expira após 12 horas de inatividade e 7 dias no máximo (RNF-017; [3_ESPECIFICACAO_APIS.md](3_ESPECIFICACAO_APIS.md), seção 4.2) |
+| Sessão do app | Access token de 15 minutos e refresh token rotativo com detecção de reuso (`token_renovacao`), guardados no Keychain/Keystore; renovação válida por **30 dias** de inatividade para suportar o offline (RNF-017; [3_ESPECIFICACAO_APIS.md](3_ESPECIFICACAO_APIS.md), seção 4.3); ligada ao aparelho |
 | Revogação | Versão de sessão no token: troca de senha, desativação, bloqueio ou remoção de aparelho invalidam os tokens anteriores |
 | Chaves de API | Por empresa, com escopos, validade e rótulo; guardadas só como hash; prefixo visível para identificação; rotação sem indisponibilidade (duas chaves ativas) |
 | Equipe Tenaz | Acesso à nuvem por SSO corporativo com MFA de hardware ou passkey; sem usuários IAM de longa duração |
@@ -363,23 +365,18 @@ Risco R2 do sumário. A arquitetura está em 5_ARQUITETURA_SOFTWARE.md, seção 
 - Permissões resolvidas no servidor **a cada requisição**, a partir do banco (com cache curto), nunca confiando no que está no token.
 - Perfis são conjuntos de permissões granulares no formato `<módulo>.<ação>` (`os.encerrar`, `est.ajustar_saldo`, `est.decidir_destino`); `pessoa.saude.ler` é a exceção aceita ao formato.
 - **Escopo por unidade:** o usuário só vê dados das unidades a que está vinculado. Filtro aplicado no repositório e testado; RLS por unidade fica como evolução se o teste mostrar risco. **(proposta)**
-- **Regras anti-escalada:** ninguém altera as próprias permissões; só edita um perfil ou usuário quem tem todas as permissões dele; só administrador altera administrador.
+- **Regras anti-escalada:** ninguém altera as próprias permissões nem concede permissão a si mesmo; só edita um perfil ou usuário quem tem todas as permissões dele, com uma exceção: o `administrador` concede a outros usuários internos `os.encerrar`, `est.decidir_destino` e `pessoa.saude.ler`, que ele mesmo não tem por padrão (RF-ADM-005); só administrador altera administrador.
 - Permissão negada responde 403 e fica registrada no log de segurança.
 
-**Perfis padrão (do sumário) e permissões típicas:**
+**Perfis padrão (do sumário) e permissões.** A matriz completa, com as 117 permissões do catálogo e os 12 perfis padrão, é a de RF-ADM-005 em [1_ESPECIFICACAO_REQUISITOS.md](1_ESPECIFICACAO_REQUISITOS.md), canônica pelo sumário 3.6. Este documento não a repete. Os pontos que importam para a segurança:
 
-| Ação | administrador | gestor | planejador | tecnico | almoxarife | motorista | solicitante | visualizador |
-|---|---|---|---|---|---|---|---|---|
-| Abrir solicitação | ● | ● | ● | ● | ● | ● | ● | |
-| Triar solicitação e criar OS | ● | ● | ● | | | | | |
-| Executar e concluir OS | ● | ● | | ● | | | | |
-| Encerrar OS | ● | ● | ● | | | | | |
-| Planos de manutenção | ● | ● | ● | | | | | |
-| Movimentar estoque | ● | ● | | | ● | | | |
-| Checklist de veículo | ● | ● | | ● | | ● | | |
-| Ver indicadores | ● | ● | ● | | | | | ● |
-| Usuários, perfis e parâmetros | ● | | | | | | | |
-| **Ver dados de saúde** (toxicológico, ASO) | | | | | | | | |
+| Regra | Onde é garantida |
+|---|---|
+| `os.encerrar` só em `gestor` e `planejador` por padrão; nunca em `prestador` nem `locatario`, nem em perfil derivado deles | Catálogo no Go e `CHECK` de `perfil` ([2_ARQUITETURA_BANCO_DADOS.md](2_ARQUITETURA_BANCO_DADOS.md), seção 5.1) |
+| `est.decidir_destino` só em `gestor`, `planejador` e `almoxarife` por padrão | Catálogo no Go |
+| `pessoa.saude.ler` em nenhum perfil padrão | Catálogo no Go e `ck_perfil_saude` |
+| O `administrador` tem todas, menos `pessoa.saude.ler`, `os.encerrar`, `est.decidir_destino` e `ter.manter_catalogo_proprio` | Catálogo no Go (sumário 3.6) |
+| Usuário externo nunca recebe as permissões vedadas (liberação de OS, configuração, PRJ, CTR, conexão entre contas, dados de saúde, grupo Admin), nem por perfil nem avulsa | `app.permissoes_vedadas_externo()` e os gatilhos de `perfil`, `usuario_perfil` e `usuario_permissao` |
 
 Os perfis `comprador` (requisições e pedidos de compra) e `plh` (registros NR-13) seguem a mesma lógica, com permissões só da sua área. A liberação (encerramento) de OS é a permissão `os.encerrar`, padrão em `gestor` e `planejador` e nunca concedida a `prestador` ou `locatario` (a regra anti-escalada recusa). O destino de peça com defeito é a permissão `est.decidir_destino`, padrão em `gestor`, `planejador` e `almoxarife`. A ação de assumir OS (`aberta` ou `planejada` da própria equipe) faz parte de "Executar" para o perfil `tecnico`.
 
@@ -408,13 +405,13 @@ Os perfis `comprador` (requisições e pedidos de compra) e `plh` (registros NR-
 | Ver custos, indicadores, outras OS ou pessoas do cliente | |
 | Técnicos contam na cobrança do cliente | Não (sumário 2.2) |
 
-**Dados de saúde:** a permissão `pessoa.saude.ler` não faz parte de nenhum perfil padrão. O administrador precisa concedê-la explicitamente, a um perfil personalizado (ex.: "Saúde ocupacional" ou "RH"), e a concessão fica na trilha. Os demais perfis veem só a situação ("apto", "vencido", "bloqueado"), sem o motivo. **(proposta)**
+**Dados de saúde:** a permissão `pessoa.saude.ler` não faz parte de nenhum perfil padrão. O administrador precisa concedê-la explicitamente, usuário a usuário, como permissão avulsa (`usuario_permissao`, em todos os planos) ou, a partir do Profissional, num perfil personalizado (ex.: "Saúde ocupacional"); a concessão fica na trilha. Os demais perfis veem só a situação ("apto", "vencido", "bloqueado"), sem o motivo. **(proposta)**
 
 **Acesso da equipe Tenaz a dados de clientes:**
 
 - Por padrão, a equipe não acessa dados de clientes.
 - Para suporte, o administrador da empresa concede acesso temporário (até 72 horas) pelo próprio produto, ligado a um chamado.
-- Durante o acesso, a interface mostra um aviso permanente; tudo fica na trilha de auditoria da empresa com `origem = suporte`.
+- Durante o acesso, a interface mostra um aviso permanente; tudo fica na trilha de auditoria da empresa com `ator_tipo = suporte_tenaz`.
 - Acesso direto ao banco de produção só em emergência (break-glass), com papel temporário, aprovação de uma segunda pessoa e registro.
 
 ### 5.5 Gestão de segredos
@@ -539,7 +536,7 @@ Primeira e única porta da API que aceita escrita sem sessão de usuário. Mecâ
 | Escopo mínimo | Uma OS sob o escopo `link`: leitura dos dados necessários à execução e escrita só de apontamento, peças, leitura, fotos, observação, assinatura simples e conclusão. Sem custos, listagens, busca ou outros IDs | Teste de troca de IDs e de rotas fora da lista |
 | Proteção contra encaminhamento | Vínculo à primeira sessão que ativou; código de confirmação opcional (6 dígitos ao contato cadastrado, por outro canal; 5 erros revogam o link); nome e documento do executor; aviso ao gestor na ativação | Teste de ativação em segundo aparelho |
 | Rate limit | WAF e API: 10 ativações inválidas por IP em 10 minutos bloqueiam o IP por 1 hora; respostas iguais para token inexistente, expirado, revogado ou consumido, em tempo constante | Teste de carga nas rotas públicas; DAST |
-| Registro de auditoria | `origem = link`: criação, envio, aberturas, ativação, registros, conclusão, revogação e tentativas inválidas, com IP, aparelho e horário | Teste de trilha |
+| Registro de auditoria | `ator_tipo = link_execucao`: criação, envio, aberturas, ativação, registros, conclusão, revogação e tentativas inválidas, com IP, aparelho e horário | Teste de trilha |
 | Arquivos | Upload só de imagem, tamanho máximo, URL pré-assinada limitada à OS do link, validade de 5 minutos | Teste de upload |
 
 Abuso recorrente de um link (muitas aberturas de IPs diferentes, tentativas de código) gera alerta à empresa e evento de segurança; a empresa pode tornar o código de confirmação obrigatório.

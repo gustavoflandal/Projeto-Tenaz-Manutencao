@@ -1,0 +1,23 @@
+{
+  "name": "@tenaz/tokens-ui",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Tokens de cor, tipografia, espaçamento, raio, sombra e movimento da marca Tenaz (docs/7_PADROES_DESIGN.md, seção 3)",
+  "type": "module",
+  "exports": {
+    "./tokens.css": "./tokens.css",
+    "./tailwind.css": "./tailwind.css",
+    "./tokens.json": "./tokens.json"
+  },
+  "scripts": {
+    "gerar": "node gerar.mjs",
+    "conferir": "node gerar.mjs --conferir",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.11",
+    "typescript": "5.9.3",
+    "vitest": "3.2.4"
+  }
+}

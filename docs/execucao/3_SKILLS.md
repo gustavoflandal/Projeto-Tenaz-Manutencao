@@ -1,6 +1,6 @@
 # Skills do Projeto — Tenaz
 
-**Versão:** 0.1 · **Data:** 12/11/2026 · **Status:** Em elaboração
+**Versão:** 0.2 · **Data:** 12/11/2026 · **Status:** Em elaboração
 **Produto:** Tenaz · Gestão de Manutenção e Frota
 
 Uma skill é o procedimento obrigatório de uma tarefa recorrente deste projeto. Ela existe para que o mesmo trabalho seja feito do mesmo jeito, com os mesmos portões, independentemente de quem o faça e de quando. A definição executável de cada skill está em [../../.claude/skills/](../../.claude/skills/).
@@ -72,7 +72,7 @@ Escreve o prompt da etapa em [../prompts/](../prompts/) antes de qualquer trabal
 
 ### 2.11 `tenaz-fechar-etapa`
 
-Fecha a etapa conforme [CLAUDE.md](../../CLAUDE.md), seção 3: documentos afetados com versão subida e linha no histórico, `CHANGELOG.md` na seção `[Não lançado]`, registro em [../etapas/](../etapas/) no formato fixo, sumário quando o escopo mudar, verificador sem erro e PDFs regerados.
+Fecha a etapa conforme [CLAUDE.md](../../CLAUDE.md), seção 3: documentos afetados com versão subida e linha no histórico, `CHANGELOG.md` na seção `[Não lançado]`, registro em [../etapas/](../etapas/) no formato fixo, entrega consolidada em [../entregas/](../entregas/README.md) quando a etapa é aceita, sumário quando o escopo mudar, verificador sem erro e PDFs regerados.
 
 ### 2.12 `tenaz-release`
 
@@ -93,3 +93,4 @@ Fecha uma versão em produção conforme RNF-039 e RNF-040 e a seção 3.3 do [r
 **Histórico de versões**
 
 - v0.1 (12/11/2026): primeira versão. Doze skills, com gatilho, finalidade e as cinco regras de manutenção.
+- v0.2 (12/11/2026): `tenaz-fechar-etapa` passa a escrever a entrega consolidada em `docs/entregas/` quando a etapa é aceita (pedido do dono do produto na etapa E01).

@@ -1,11 +1,13 @@
 # Especificação de APIs — Tenaz
 
-**Versão:** 0.4 · **Data:** 12/11/2026 · **Status:** Em elaboração
-**Alinhado ao sumário executivo 0.5.**
+**Versão:** 0.5 · **Data:** 12/11/2026 · **Status:** Em elaboração
+**Alinhado ao sumário executivo 0.6.**
 **Produto:** Tenaz · Gestão de Manutenção e Frota
 **Protocolo:** HTTPS (TLS 1.2 ou superior, preferência por 1.3) · **Formato:** JSON · **Contrato:** OpenAPI 3.1
 
 **Mudanças da versão 0.4:** configuração por segmento (sumário 0.5, seção 3.7). Entram no MVP as regras configuráveis de condição e efeito (`/v1/regras-automacao`, `/v1/disparos-regra`), os campos extras da OS (`/v1/campos-extras-os` e `campos_extras` na OS), a fase de ciclo de vida do ativo (`fase_ciclo_vida`, `data_entrada_operacao`, ação `colocar-em-operacao`, unitária e em lote) e o tipo de OS `implantacao`. Entram na Fase 2 os pacotes de segmento (`/v1/pacotes-segmento`, `/v1/aplicacoes-pacote`) e dois módulos novos: **PRJ** (`/v1/modelos-projeto`, `/v1/projetos`, etapas e `/v1/medicoes-etapa`) e **CTR** (`/v1/contratos-cliente`, itens, painel e `/v1/medicoes-contrato`). A OS ganha a origem `projeto` (e passa a usar `cliente_conectado`, que o sumário já tinha), `causa_externa` e `etapa_projeto_id`; a solicitação ganha a origem `regra`; o bloqueio de ativo ganha `origem`. Nove permissões novas, 9 eventos de webhook novos (um deles proposta) e 24 códigos de erro novos. Catálogo de 482 para 564 endpoints. Seções novas 23 a 25; as pendências passam para a seção 26.
+
+**Mudanças da versão 0.5:** contrato de E01 (conta e acesso) implementado e gerado do código. Códigos de erro: o código Go passa a usar exatamente os desta seção 3.2 (snake_case), e entram `senha_fraca`, `mfa_codigo_invalido`, `link_email_invalido`, `ultimo_administrador` e `pre_condicao_obrigatoria`; o problema traz `desafio_id`, `desafio_expira_em`, `tentativas_restantes` e `versao_atual`. Rotas novas de ADM: `POST /v1/empresas` (cadastro pelo site), convites (`/v1/auth/convites/consultar` e `/aceitar`), MFA do próprio usuário (`/v1/auth/mfa/iniciar`, `/confirmar`, `/desativar`), `POST /v1/auth/trocar-senha`, `POST /oauth/authorize` (decisão da tela de autorização), turnos e feriados da unidade, reativação de unidade e de pessoa, reenvio de convite e permissões avulsas do usuário; `DELETE /v1/unidades/{id}` passa para o MVP. Cookie de desenvolvimento, conferência de Origin, fluxo do authorize, `empresa_escolhida_id` e extensões `x-escopos-acesso` e `x-permissoes` no contrato. Divergências do documento 1 (seção 8.3, pontos 39, 42, 43 e 44): grupo **Conexão** (`srv.gerenciar_conexao`), `prestador` nas rotas de checklist, `plh` no enquadramento NR-13 e grupo da rota de orçamento da ordem de reparo. Catálogo de 564 para 583 endpoints.
 
 Este documento especifica a API REST da Tenaz: convenções, autenticação, limites, catálogo de endpoints por módulo, sincronização do app offline, webhooks, integrações, terceiros, estoque estendido, locação, gestão de serviços do prestador com conexão entre contas, configuração por segmento, projetos de implantação, contratos com clientes e política de versões. Usa os códigos de módulo, os nomes de entidade e os estados canônicos do [Sumário Executivo](0_SUMARIO_EXECUTIVO.md). Quando este documento e o sumário divergirem, vale o sumário, e a divergência deve ser registrada na seção 26.
 
@@ -75,13 +77,12 @@ O domínio depende da pendência P5 do sumário (disponibilidade do nome Tenaz).
 
 ### 1.3 OpenAPI 3.1 como fonte da verdade
 
-- O contrato fica num arquivo versionado no repositório do backend (`api/openapi.yaml`, proposta), dividido por módulo com `$ref`.
-- **Contrato primeiro:** toda mudança de API começa no OpenAPI, passa por revisão e só depois é implementada.
-- O servidor Go valida requisições e respostas contra o contrato nos testes (proposta: `oapi-codegen` para tipos e interfaces de handler; `kin-openapi` para validação).
+- O contrato OpenAPI 3.1 é **gerado** a cada build a partir dos tipos Go anotados das rotas (biblioteca Huma) e versionado em `backend/api/openapi.yaml`. O CI falha se o arquivo gerado divergir do versionado; a revisão do contrato acontece no pull request, sobre a diferença desse arquivo (seção 2.5 do [documento 5](5_ARQUITETURA_SOFTWARE.md)).
+- O servidor valida toda requisição contra o esquema da rota antes do caso de uso; o erro de validação sai em `problem+json` (seção 3). O processo (`tenaz api`), a geração do contrato (`tenaz openapi`) e os testes de rota montam a API pelo mesmo ponto (`internal/servidor`), para que o contrato seja exatamente o que o servidor atende.
 - Os tipos TypeScript do web e do app são gerados do contrato (proposta: `openapi-typescript`). Nenhum tipo de API é escrito à mão no frontend.
 - O CI roda lint do contrato (proposta: Spectral, com as regras deste documento: snake_case, rotas no plural em kebab-case, `operationId` obrigatório, exemplos obrigatórios) e detecta mudança incompatível contra a última versão publicada (proposta: `oasdiff`). Mudança incompatível em `/v1` quebra o build.
 - A documentação pública para integradores é gerada do mesmo arquivo e publicada com exemplos em curl, Go e TypeScript.
-- Extensões próprias do contrato: `x-modulo` (código do módulo), `x-plano-minimo`, `x-fase`, `x-perfis`, `x-escopos`, `x-estabilidade` (`estavel`, `beta`, `depreciado`) e `x-enum-extensivel` (ver 18.3).
+- Extensões próprias do contrato: `x-modulo` (código do módulo), `x-plano-minimo`, `x-fase`, `x-perfis`, `x-escopos` (escopos de token de API, 4.4), `x-escopos-acesso` (escopos de acesso aceitos pela rota, 4.9: `interno`, `prestador`, `locatario`, `link`, ou `publico` para rota sem credencial), `x-permissoes` (permissões de RF-ADM-005 exigidas pela rota), `x-estabilidade` (`estavel`, `beta`, `depreciado`) e `x-enum-extensivel` (ver 18.3). Desde a versão 0.5, toda operação gerada traz `x-modulo`, `x-fase`, `x-plano-minimo` e `x-escopos-acesso`, e as que exigem permissão trazem `x-permissoes`; a suíte de isolamento lê `x-escopos-acesso` para varrer as rotas. `x-escopos` entra com os tokens de API.
 
 ---
 
@@ -122,7 +123,7 @@ O domínio depende da pendência P5 do sumário (disponibilidade do nome Tenaz).
 | `atualizado_em` | data-hora | Última alteração |
 | `criado_por_id` | UUID | Usuário ou token que criou |
 
-- `empresa_id` **não aparece** no corpo das respostas e **nunca é aceito** no corpo ou na URL (ver 4.7). Ele só aparece no envelope de webhooks e em `GET /v1/empresa`.
+- `empresa_id` **não aparece** no corpo das respostas e **nunca é aceito** no corpo ou na URL (ver 4.7): enviado, responde `400 campo_nao_permitido`. O identificador da empresa só aparece como `id` em `GET /v1/empresa`, no envelope de webhooks e, para o seletor de empresa, em `empresas[].id` da sessão (4.2). As rotas que escolhem a empresa da credencial (login, `mfa/verificar`, `trocar-empresa` e `POST /oauth/authorize`) recebem o campo `empresa_escolhida_id`, conferido contra os acessos da pessoa (fora deles, `404`).
 
 ### 2.3 Versionamento na URL
 
@@ -165,6 +166,7 @@ Toda lista é paginada por cursor opaco.
 - O cursor codifica a ordenação e o último item; é válido por 24 horas (proposta). Cursor inválido ou de outra consulta: `400 cursor_invalido`.
 - Mudar filtros ou ordenação exige começar sem cursor.
 - **Proposta:** recurso único volta sem envelope (o próprio objeto); listas sempre com `dados` e `paginacao`.
+- Listas curtas e fechadas (unidades, feriados da unidade, perfis, catálogo de permissões) voltam inteiras, no mesmo envelope, com `tem_mais = false` e `proximo_cursor = null`. As listas abertas (pessoas, usuários, eventos de auditoria) são paginadas por cursor, com `limite` de 1 a 200 (padrão 50) e ordem `-criado_em` (na trilha, `-ocorrido_em`).
 
 ### 2.7 Filtros e ordenação
 
@@ -196,6 +198,9 @@ Toda lista é paginada por cursor opaco.
 - Mesma chave com corpo diferente: `422 idempotencia_conflito`.
 - Mesma chave enquanto a primeira requisição ainda está em processamento: `409 idempotencia_em_processamento`, com `Retry-After: 1`.
 - A sincronização do app (seção 12) usa o `id_comando` como chave, com retenção maior (90 dias).
+- A chave vale por empresa e por sessão da credencial (no app, a sessão do aparelho, que sobrevive à renovação do access token). A repetição devolve o status, o corpo e os cabeçalhos `Content-Type`, `Location` e `ETag` da primeira resposta; resposta 5xx não é guardada, para que a repetição tente de novo. Chave com mais de 64 caracteres ou com caractere não visível: `400 requisicao_invalida`.
+- Rotas que emitem credencial (`/v1/auth/*`, `/oauth/*`) e rotas públicas aceitam o cabeçalho e o ignoram: a resposta traz cookie ou token novo e não é guardada para repetição.
+- **E01:** o depósito das chaves fica na memória de cada instância da API, o que só é correto com uma instância. O depósito compartilhado é pendência A-37 (seção 26). A obrigatoriedade para o app e para tokens de API ainda não é exigida.
 
 ### 2.10 Campos de auditoria e motivo
 
@@ -209,6 +214,9 @@ Toda escrita gera um `evento_auditoria` imutável (quem, o quê, quando, antes e
   - Com ETag desatualizado: `412 versao_desatualizada`, com o recurso atual em `recurso_atual` no corpo do erro, para o cliente mostrar a diferença.
 - `GET` com `If-None-Match` igual à versão atual devolve `304 Not Modified`.
 - Ações que só **acrescentam** registros (criar apontamento, registrar leitura, comentar) não exigem `If-Match` no recurso pai.
+- `If-Match` aceita `"12"`, `W/"12"` ou `12`; valor malformado responde `400 requisicao_invalida`. O `412` traz também `versao_atual`.
+- Sub-recurso com versão própria (turno e feriado da unidade) usa o ETag dele, não o da unidade. A concessão e a retirada de permissão avulsa (`/v1/usuarios/{id}/permissoes`) não exigem `If-Match`: acrescentam ou retiram uma linha de `usuario_permissao`, sem editar o usuário. Encerrar sessões e reenviar convite também não: não mudam o estado do usuário.
+- **E01:** no `PATCH`, a versão é conferida na gravação, na mesma transação. Nas ações de estado e no `DELETE`, a camada HTTP lê o registro, compara a versão e só então chama a ação; a transição continua validada pela máquina de estados (`409 transicao_invalida`). `If-None-Match` e `304` ainda não estão implementados (pendência A-37).
 
 ### 2.12 Exclusão
 
@@ -265,6 +273,9 @@ Estados: `na_fila`, `em_andamento`, `concluido`, `falhou`, `cancelado`. Ao concl
 | `X-Tenaz-App-Versao` | Requisição | Versão do app de campo (18.5) |
 | `X-Tenaz-Dispositivo-Id` | Requisição | Dispositivo do app (seção 12) |
 | `ETag`, `Location` | Resposta | Versão do recurso, recurso criado |
+| `Idempotency-Replayed: true` | Resposta | Resposta repetida pela chave de idempotência (2.9) |
+| `Cache-Control: no-store` | Resposta | Toda resposta que traz credencial, `csrf_token` ou segredo de MFA |
+| `Set-Cookie` | Resposta | Cookie de sessão web (4.2) |
 | `Tenaz-Versao` | Resposta | Versão do produto em SemVer (`Tenaz-Versao: 1.4.2`), em toda resposta, inclusive de erro (18.8) |
 | `RateLimit-*`, `Retry-After` | Resposta | Seção 5 |
 | `Deprecation`, `Sunset`, `Link` | Resposta | Seção 18 |
@@ -302,9 +313,9 @@ Todo erro usa `Content-Type: application/problem+json` e o formato da RFC 9457, 
 | `instance` | Caminho da requisição |
 | `codigo` | **Código estável** em snake_case, português. É o que o cliente deve tratar. |
 | `id_rastreio` | Igual ao `X-Request-Id`; o suporte usa para localizar o log |
-| `erros` | Lista de erros por campo, com `campo` em notação de ponto (`registro_nr12.indicacao_conclusiva`, `respostas[3].valor_numero`) |
+| `erros` | Lista de erros por campo, com `campo` em notação de ponto (`registro_nr12.indicacao_conclusiva`, `respostas[3].valor_numero`), `codigo` do vocabulário curto (abaixo), `mensagem` e, em enumeração, `valores_aceitos` |
 
-Membros adicionais aparecem quando úteis: `recurso_atual` (412), `estado_atual` e `transicoes_permitidas` (409 de transição), `plano_necessario` (403 de plano), `campos_faltantes` (422 de transição e de campo extra obrigatório), `estado_conexao`, `lado_dono`, `campos` e `grupos` (erros de conexão entre contas, 22.8), `tipos_documento_faltantes`, `ordens_servico_pendentes`, `predecessoras_pendentes`, `etapas_pendentes` e `ativos` (erros de entrada em operação e de projeto, seções 23 e 24), `faixas` (contrato com cliente, 25.2), `limite` (erros de limite de configuração).
+Membros adicionais aparecem quando úteis: `recurso_atual` e `versao_atual` (412), `desafio_id` e `desafio_expira_em` (`401 mfa_obrigatorio`), `tentativas_restantes` (`401 mfa_codigo_invalido`), `error` (erros de `POST /oauth/token`, com o valor da RFC 6749, como `invalid_grant`), `estado_atual` e `transicoes_permitidas` (409 de transição), `plano_necessario` (403 de plano), `campos_faltantes` (422 de transição e de campo extra obrigatório), `estado_conexao`, `lado_dono`, `campos` e `grupos` (erros de conexão entre contas, 22.8), `tipos_documento_faltantes`, `ordens_servico_pendentes`, `predecessoras_pendentes`, `etapas_pendentes` e `ativos` (erros de entrada em operação e de projeto, seções 23 e 24), `faixas` (contrato com cliente, 25.2), `limite` (erros de limite de configuração).
 
 ### 3.2 Códigos de erro estáveis
 
@@ -317,7 +328,8 @@ Membros adicionais aparecem quando úteis: `recurso_atual` (412), `estado_atual`
 | `data_sem_fuso` | 422 | Data-hora sem `Z` ou deslocamento |
 | `nao_autenticado` | 401 | Sem credencial |
 | `credencial_invalida` | 401 | Token ou sessão inválidos, expirados ou revogados |
-| `mfa_obrigatorio` | 401 | Login exige segundo fator |
+| `mfa_obrigatorio` | 401 | Login exige segundo fator; traz `desafio_id` e `desafio_expira_em` (4.2) |
+| `mfa_codigo_invalido` | 401 | Código TOTP errado ao concluir o login, ativar ou desativar o segundo fator; no login traz `tentativas_restantes` (cada erro consome uma das 5 tentativas do desafio) |
 | `csrf_invalido` | 403 | Token CSRF ausente ou errado (web) |
 | `permissao_negada` | 403 | O perfil não permite a operação |
 | `escopo_insuficiente` | 403 | O token de API não tem o escopo exigido |
@@ -330,16 +342,20 @@ Membros adicionais aparecem quando úteis: `recurso_atual` (412), `estado_atual`
 | `transicao_invalida` | 409 | Ação não permitida no estado atual; traz `estado_atual` e `transicoes_permitidas` |
 | `os_encerrada_imutavel` | 409 | Alteração em OS encerrada |
 | `idempotencia_em_processamento` | 409 | Mesma `Idempotency-Key` ainda em processamento |
+| `ultimo_administrador` | 409 | Desativar, ou tirar o perfil `administrador`, do último administrador ativo da empresa (RF-ADM-004) |
 | `cursor_expirado` | 410 | Cursor de sincronização fora da retenção; refazer instantâneo |
 | `versao_descontinuada` | 410 | Endpoint após a data de `Sunset` (seção 18) |
+| `link_email_invalido` | 410 | Link de convite ou de redefinição de senha inexistente, vencido, já usado ou substituído por outro envio |
 | `versao_desatualizada` | 412 | `If-Match` não confere; traz `recurso_atual` |
 | `payload_muito_grande` | 413 | Corpo ou arquivo acima do limite |
 | `tipo_midia_nao_suportado` | 415 | `Content-Type` não aceito |
+| `pre_condicao_obrigatoria` | 428 | `PATCH`, `DELETE` ou ação de estado sem `If-Match` (2.11) |
 | `validacao_falhou` | 422 | Erros de campo; detalhes em `erros` |
 | `campo_somente_leitura` | 422 | Tentativa de alterar `status`, `numero`, `versao` ou campo calculado |
 | `campos_obrigatorios_transicao` | 422 | Faltam campos exigidos pela transição; traz `campos_faltantes` |
 | `motivo_obrigatorio` | 422 | Pausa, cancelamento, recusa de solicitação, recusa de liberação ou alteração do responsável pelo custo sem motivo |
 | `idempotencia_conflito` | 422 | Mesma `Idempotency-Key` com corpo diferente |
+| `senha_fraca` | 422 | Senha fora da política: menos de 10 caracteres, senha comum ou vazada, ou igual ao e-mail (RF-ADM-006) |
 | `nr12_registro_incompleto` | 422 | Encerramento de OS em máquina NR-12 sem os sete campos do item 12.11.2 |
 | `nr12_maquina_inapta` | 422 | Tentativa de devolver à operação, por alteração manual, máquina com indicação conclusiva `inapto` vigente |
 | `leitura_regressiva` | 422 | Leitura menor que a anterior sem troca de medidor registrada |
@@ -412,7 +428,9 @@ Membros adicionais aparecem quando úteis: `recurso_atual` (412), `estado_atual`
 Regras:
 
 - Um código publicado **nunca muda de significado** nem é removido em `/v1`. Códigos novos podem surgir; o cliente deve tratar código desconhecido pelo `status` HTTP.
-- Erros 5xx nunca expõem detalhes internos (pilha, SQL, nome de tabela).
+- Erros 5xx nunca expõem detalhes internos (pilha, SQL, nome de tabela). Todo erro inesperado sai como `500 erro_interno`; o código interno e a causa ficam só no log, localizados pelo `id_rastreio`.
+- Os códigos são os desta tabela, com a mesma grafia no código Go (`internal/plataforma/erros`), que é a fonte do contrato gerado. A URI de `type` é `https://api.tenaz.com.br/erros/<codigo>`.
+- Erros que a biblioteca de rotas gera sozinha também saem com estes códigos: corpo que não é JSON, valor de tipo errado ou campo desconhecido, `400 requisicao_invalida`; `empresa_id` no corpo ou na consulta, `400 campo_nao_permitido`; campo somente leitura no corpo (`id`, `versao`, `situacao`, `status`, `numero`, `criado_em`, `atualizado_em`, `plano`, `email` do usuário e semelhantes), `422 campo_somente_leitura`; parâmetro de consulta não declarado, `400 filtro_nao_suportado`; rota ou método inexistente e identificador malformado no caminho, `404 recurso_nao_encontrado`.
 - Erros por campo usam um vocabulário curto e estável em `erros[].codigo`: `obrigatorio`, `valor_invalido`, `tamanho_maximo`, `tamanho_minimo`, `formato_invalido`, `fora_da_faixa`, `nao_encontrado`, `duplicado`, `inativo`.
 
 ---
@@ -433,20 +451,27 @@ As senhas seguem as regras do documento 9 (hash Argon2id, proposta). A Tenaz nã
 
 ### 4.2 Web: sessão por cookie httpOnly + CSRF
 
-- `POST /v1/auth/login` com `email` e `senha`. Se o usuário tiver MFA, a resposta é `401 mfa_obrigatorio` com um `desafio_id`, e o login termina em `POST /v1/auth/mfa/verificar` (TOTP; WebAuthn em fase posterior, proposta).
-- O servidor cria a sessão e devolve o cookie `__Host-tenaz_sessao` com `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, sem `Domain`. O valor é um identificador aleatório de 256 bits; o estado da sessão fica no servidor.
+- `POST /v1/auth/login` com `email`, `senha` e, opcional, `empresa_escolhida_id` (sem ele, a empresa da última sessão). Toda falha de credencial (e-mail inexistente, senha errada, conta bloqueada) responde igual, `401 credencial_invalida`, no mesmo tempo. Se o usuário tiver MFA, a resposta é `401 mfa_obrigatorio` com `desafio_id` e `desafio_expira_em`, e o login termina em `POST /v1/auth/mfa/verificar` com `desafio_id`, `codigo` (6 dígitos) e `empresa_escolhida_id` opcional (TOTP; WebAuthn em fase posterior, proposta).
+- **`desafio_id` é segredo:** 256 bits aleatórios, de uso único, válido por 5 minutos e por 5 tentativas; o banco guarda só o sha256. Vai sempre no corpo, nunca na URL nem em log. Código errado responde `401 mfa_codigo_invalido` com `tentativas_restantes`; desafio vencido, gasto ou esgotado, `401 credencial_invalida`, e o login recomeça pela senha.
+- O servidor cria a sessão e devolve o cookie `__Host-tenaz_sessao` com `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, sem `Domain`, e `Expires` no teto absoluto. O valor é um identificador aleatório de 256 bits; o estado da sessão fica no servidor.
+- **Desenvolvimento sobre http:** o navegador recusa o prefixo `__Host-` sem `Secure`. Com `TENAZ_COOKIE_SEGURO=false`, aceito **só** com `TENAZ_AMBIENTE=desenvolvimento` (o processo recusa subir com ele em homologação e produção), o cookie se chama `tenaz_sessao` e sai sem `Secure`; os demais atributos não mudam. A tarefa `ferramentas/tarefas.sh api` sobe assim.
+- A resposta do login, de `mfa/verificar` e de `GET /v1/auth/sessao` é a **sessão**: `canal` (`web` ou `app`), `csrf_token` (nulo no app), `expira_em` (só no login e na troca de empresa), `escopo_acesso`, `usuario` (`id`, `nome`, `email`, `pessoa_id`, `mfa_ativo`), `empresa` (`nome`, `plano`, `srv_habilitado`, sem identificador), `perfis`, `permissoes` (efetivas, em ordem alfabética) e `empresas` (`id`, `nome`, `atual`), com a atual primeiro. Respostas com credencial trazem `Cache-Control: no-store`.
 - Validade (proposta): 12 horas de inatividade, 7 dias no máximo. O administrador pode reduzir em `/v1/parametros-empresa`.
-- **CSRF:** a resposta do login e `GET /v1/auth/sessao` trazem `csrf_token`. Todo `POST`, `PATCH`, `PUT` e `DELETE` feito com cookie exige o cabeçalho `X-CSRF-Token` igual ao token da sessão; senão, `403 csrf_invalido`. O servidor também confere `Origin` contra a lista de origens do aplicativo.
+- **CSRF:** a resposta do login e `GET /v1/auth/sessao` trazem `csrf_token`, derivado da sessão por HMAC (o mesmo valor em toda consulta da mesma sessão; o banco guarda só o hash). Todo `POST`, `PATCH`, `PUT` e `DELETE` feito com cookie exige o cabeçalho `X-CSRF-Token` igual ao token da sessão; senão, `403 csrf_invalido`.
+- **Origin:** o servidor confere `Origin` (na falta dele, a origem de `Referer`) contra a lista de origens da web (`TENAZ_ORIGENS_WEB`; vazia, a origem de `TENAZ_URL_WEB`). Requisição com cookie que altera dados sem nenhum dos dois cabeçalhos, ou de outra origem, responde `403 csrf_invalido`. Rota pública que altera dados (login, cadastro da conta, convite) também recusa `Origin` de outra origem, contra login CSRF; sem `Origin` (cliente que não é navegador), ela é aceita.
+- **Escopo e permissão:** depois da credencial, a camada HTTP confere o escopo de acesso da rota (`x-escopos-acesso`; fora dele, `404`) e as permissões de `x-permissoes` (`403 permissao_negada` para interno, `404` para externo), antes de ler o corpo. A sessão é resolvida em dois pools, nunca na mesma transação (seção 6.3 do documento 5).
+- **Rotas do próprio usuário** (todas as credenciais, inclusive `prestador` e `locatario`): `POST /v1/auth/trocar-senha` (`senha_atual`, `nova_senha`; encerra as outras sessões da pessoa e mantém a atual; senha atual errada conta como falha de login); `POST /v1/auth/mfa/iniciar` (devolve `segredo_base32` e `uri_otpauth`, uma vez), `POST /v1/auth/mfa/confirmar` e `POST /v1/auth/mfa/desativar` (`codigo`).
+- **Senha esquecida e convite:** `POST /v1/auth/recuperar-senha` (`email`) responde `202` sempre, exista ou não o e-mail, e envia o link (1 hora). O link de e-mail leva o token no fragmento (`#token=...`); a página lê o fragmento e o envia no corpo de `POST /v1/auth/redefinir-senha` (`token`, `nova_senha`; encerra todas as sessões da pessoa) ou de `POST /v1/auth/convites/consultar` (`token`; devolve `email` e `pede_senha`) e `POST /v1/auth/convites/aceitar` (`token`, `senha` quando `pede_senha`). Link inválido: `410 link_email_invalido`; senha fora da política: `422 senha_fraca`.
 - Requisições autenticadas por `Authorization: Bearer` ignoram o cookie e não exigem CSRF.
-- `POST /v1/auth/logout` invalida a sessão no servidor. O administrador pode encerrar todas as sessões de um usuário (`POST /v1/usuarios/{id}/encerrar-sessoes`).
+- `POST /v1/auth/logout` invalida a sessão no servidor (web ou app) e, na web, apaga o cookie (`Max-Age=0`). O administrador pode encerrar todas as sessões de um usuário (`POST /v1/usuarios/{id}/encerrar-sessoes`).
 
 ### 4.3 App de campo: OAuth 2.1 com PKCE e refresh token rotativo
 
 O app é um cliente público OAuth 2.1, sem segredo embutido.
 
 1. O app gera `code_verifier` e `code_challenge` (S256) e abre o navegador do sistema (não WebView) em `GET /oauth/authorize?response_type=code&client_id=tenaz-app&redirect_uri=br.com.tenaz.app:/oauth&code_challenge=...&code_challenge_method=S256&state=...`.
-2. O usuário entra com senha, MFA ou SSO. Se tiver acesso a mais de uma empresa, escolhe uma nessa tela.
-3. O app troca o código em `POST /oauth/token` (`grant_type=authorization_code` + `code_verifier`) e recebe:
+2. A API confere `client_id` e `redirect_uri` (byte a byte) e responde `302` para a tela de autorização da web, `/autorizar-app`, com os mesmos parâmetros. Cliente ou URI de retorno inválidos respondem `422 validacao_falhou` e nunca redirecionam. Na tela, o usuário entra com a sessão web normal (senha e MFA; SSO quando existir) e, se tiver acesso a mais de uma empresa, escolhe uma (lista de `GET /v1/auth/sessao`). A web então chama `POST /oauth/authorize` com a sessão web (cookie, `X-CSRF-Token` e `Origin`; o access token do app não serve), em JSON: `response_type`, `client_id`, `redirect_uri`, `code_challenge`, `code_challenge_method`, `state` e `empresa_escolhida_id`. A resposta é `{"uri_redirecionamento": "br.com.tenaz.app:/oauth?code=...&state=..."}`, com código de uso único válido por 60 segundos; a web navega até ela e o sistema entrega ao app. Perfil sem `mob.usar_app` (o `locatario`) recebe a URI com `error=access_denied`; empresa fora do acesso, `404`. Assim o app nunca vê a senha e o login do app segue as mesmas regras do login da web.
+3. O app troca o código em `POST /oauth/token`, em `application/x-www-form-urlencoded` (RFC 6749): `grant_type=authorization_code`, `code`, `redirect_uri`, `client_id` e `code_verifier`, com o cabeçalho opcional `X-Tenaz-Dispositivo-Id`. Código, URI de retorno, cliente ou PKCE que não conferem gastam o código e respondem `401 credencial_invalida` com `error=invalid_grant`; código reapresentado depois de usado revoga a sessão que ele gerou. O app recebe:
 
 ```json
 {
@@ -462,7 +487,8 @@ O app é um cliente público OAuth 2.1, sem segredo embutido.
 - **Refresh token rotativo:** cada uso em `POST /oauth/token` (`grant_type=refresh_token`) devolve um refresh token novo e invalida o anterior. Se um refresh token já usado for reapresentado, **toda a família é revogada** e o usuário precisa entrar de novo (detecção de reuso).
 - **Compatível com 7 dias offline:** o refresh token vale **30 dias** de inatividade (janela deslizante, proposta), acima da meta de 7 dias sem conexão do sumário. Os comandos feitos offline ficam na fila local e são enviados depois de renovar o token; access token expirado nunca causa perda de registro.
 - O refresh token é guardado no armazenamento seguro do sistema (Keychain/Keystore).
-- `POST /oauth/revoke` revoga o refresh token (logout no app). O administrador pode revogar um dispositivo em `DELETE /v1/dispositivos/{id}`.
+- `POST /oauth/revoke` (formulário, `token`, RFC 7009) revoga a família de refresh tokens e a sessão do aparelho (logout no app) e responde `200`, também para token desconhecido. O refresh token no corpo é a credencial; a rota não exige outra. O administrador pode revogar um dispositivo em `DELETE /v1/dispositivos/{id}`.
+- Os erros de `/oauth/token` saem em `problem+json` com `codigo`, como toda a API, e com o membro `error` da RFC 6749; o status de credencial inválida é `401`, e não o `400` da RFC (pendência A-37). Duas renovações simultâneas com o mesmo refresh token contam como reuso: o app serializa as renovações.
 
 ### 4.4 Tokens de API por empresa
 
@@ -536,7 +562,7 @@ Regra central de isolamento: **a empresa vem sempre da credencial, nunca de dado
 
 Consequências:
 
-- Não existe parâmetro, cabeçalho ou subdomínio de empresa. `empresa_id` enviado no corpo devolve `400 campo_nao_permitido`.
+- Não existe parâmetro, cabeçalho ou subdomínio de empresa. `empresa_id` enviado no corpo ou na consulta devolve `400 campo_nao_permitido`. A escolha da empresa ao entrar ou ao trocar usa `empresa_escolhida_id` (2.2), conferido contra os acessos da pessoa e só emitindo credencial nova.
 - A camada de acesso a dados abre uma transação por requisição e executa `set_config('app.empresa_id', <id>, true)` (escopo local da transação) antes de qualquer consulta. O PostgreSQL aplica Row-Level Security forçado em todas as tabelas de negócio, e o repositório também filtra por `empresa_id` (dupla proteção, conforme o risco R2 do sumário).
 - Um `id` de outra empresa se comporta como inexistente: `404 recurso_nao_encontrado`, nunca `403`, para não revelar que o recurso existe.
 - Usuário com acesso a mais de uma empresa (consultor, grupo econômico) troca de empresa em `POST /v1/auth/trocar-empresa`, que emite **nova** sessão ou novos tokens. Uma credencial nunca vale para duas empresas. Isso vale também para contas conectadas (SRV): o gestor da subcontratada não entra na conta do cliente, e o do cliente não entra na da subcontratada; cada lado vê só a própria cópia da OS e do equipamento.
@@ -572,13 +598,14 @@ Perfis padrão do sumário (seção 3.1): `administrador`, `gestor`, `planejador
 | **Contratos** | Quem tem a permissão `ctr.gerenciar` (padrão em `administrador` e `gestor`): mantém contratos com clientes e itens e executa `ativar`, `encerrar` e `cancelar` |
 | **Fechamento de medição** | Quem tem a permissão `ctr.fechar_medicao` (padrão em `administrador` e `gestor`): decide as exclusões de paradas e fecha a medição do contrato |
 | **Reabertura de medição** | Quem tem a permissão `ctr.reabrir_medicao` (padrão em `administrador` e `gestor`): reabre medição de contrato `fechada` |
+| **Conexão** | Quem tem a permissão `srv.gerenciar_conexao` (padrão em `administrador` e `gestor`), nos dois lados da conexão entre contas. O servidor confere o lado: só o cliente convida e altera ativos e campos compartilhados, só a subcontratada aceita ou recusa, e só quem suspendeu reativa |
 | **Admin** | `administrador` |
 | **Externos** | `prestador` e `locatario`, sempre com o alcance da seção 4.9 |
 | **Integração** | Somente token de API com o escopo indicado |
 
 Quando um perfil específico aparece no catálogo (por exemplo `motorista`, `plh`, `prestador`), ele se soma ao grupo. Os perfis externos (`prestador`, `locatario`) só acessam as rotas em que aparecem nomeados e as rotas de sessão e infraestrutura do próprio usuário (`/v1/auth/*`, `/oauth/*`, `GET /v1/usuarios/eu`, `PATCH /v1/usuarios/eu`, anexos, processamentos, notificações, dispositivos e, para `prestador`, sincronização). Qualquer outra rota devolve `404 recurso_nao_encontrado` para eles, não `403`, para não revelar a estrutura de dados da empresa contratante.
 
-A matriz completa de permissões fica no documento 1. Perfis personalizados (proposta: plano Profissional) combinam permissões finas no formato `<módulo>.<ação>` (sumário 3.6), com o código do módulo em minúsculas, listadas em `GET /v1/permissoes`. Doze permissões finas aparecem neste documento:
+O catálogo de permissões e a matriz dos doze perfis padrão são os de RF-ADM-005, em [1_ESPECIFICACAO_REQUISITOS.md](1_ESPECIFICACAO_REQUISITOS.md), canônicos por decisão do sumário 3.6; os grupos acima são a forma resumida desse catálogo no catálogo de endpoints, e a permissão exigida por rota sai no contrato em `x-permissoes`. Perfis personalizados (proposta: plano Profissional) combinam permissões finas no formato `<módulo>.<ação>` (sumário 3.6), com o código do módulo em minúsculas, listadas em `GET /v1/permissoes`. Treze permissões finas aparecem neste documento:
 
 | Permissão | Dá direito a | Perfis padrão |
 |---|---|---|
@@ -594,6 +621,7 @@ A matriz completa de permissões fica no documento 1. Perfis personalizados (pro
 | `ctr.gerenciar` | Criar e manter contratos com clientes e itens; `ativar`, `encerrar` e `cancelar`; abrir medição (por extensão, proposta) (RF-CTR-001, RF-CTR-002) | `administrador`, `gestor` |
 | `ctr.fechar_medicao` | Decidir a exclusão de paradas com causa externa (`decisao_exclusao`) e fechar a medição do contrato (RF-CTR-004) | `administrador`, `gestor` |
 | `ctr.reabrir_medicao` | Reabrir medição de contrato `fechada`, com motivo (RF-CTR-004) | `administrador`, `gestor` |
+| `srv.gerenciar_conexao` | Convidar, aceitar, recusar, suspender, reativar e encerrar conexão entre contas; alterar ativos e campos compartilhados (grupo Conexão, 6.10; RF-SRV-014, RF-SRV-019) | `administrador`, `gestor`; nunca `prestador` nem `locatario` |
 
 As nove permissões acrescentadas na versão 0.4 (`adm.*`, `atv.*`, `prj.*` e `ctr.*` acima, sumário 3.6) nunca são concedidas a `prestador` nem a `locatario` (proposta).
 
@@ -727,39 +755,58 @@ Legenda das colunas:
 
 | Método | Rota | Descrição | Perfil | Plano | Fase |
 |---|---|---|---|---|---|
-| POST | `/v1/auth/login` | Login por e-mail e senha; cria sessão web | Público | E | MVP |
+| POST | `/v1/auth/login` | Login por e-mail e senha; cria sessão web (4.2) | Público | E | MVP |
 | POST | `/v1/auth/mfa/verificar` | Conclui o login com o segundo fator | Público | E | MVP |
-| POST | `/v1/auth/logout` | Encerra a sessão | Todos | E | MVP |
-| GET | `/v1/auth/sessao` | Usuário, empresa, perfis, plano e `csrf_token` | Todos | E | MVP |
-| POST | `/v1/auth/trocar-empresa` | Nova sessão em outra empresa a que o usuário tem acesso | Todos | E | MVP |
-| POST | `/v1/auth/recuperar-senha` | Envia link de redefinição de senha | Público | E | MVP |
+| POST | `/v1/auth/logout` | Encerra a sessão | Todos, Externos | E | MVP |
+| GET | `/v1/auth/sessao` | Sessão: usuário, empresa, escopo, perfis, permissões, empresas do seletor e `csrf_token` | Todos, Externos | E | MVP |
+| POST | `/v1/auth/trocar-empresa` | Nova sessão (web) ou novos tokens (app) em outra empresa a que o usuário tem acesso | Todos, Externos | E | MVP |
+| POST | `/v1/auth/recuperar-senha` | Envia link de redefinição de senha; `202` sempre | Público | E | MVP |
 | POST | `/v1/auth/redefinir-senha` | Define nova senha com o token do link | Público | E | MVP |
-| GET | `/oauth/authorize` | Início do fluxo OAuth 2.1 com PKCE (app) | Público | E | MVP |
-| POST | `/oauth/token` | Troca de código e renovação rotativa de refresh token | Público | E | MVP |
-| POST | `/oauth/revoke` | Revoga refresh token | Todos | E | MVP |
+| POST | `/v1/auth/trocar-senha` | Troca a própria senha, conferindo a atual | Todos, Externos | E | MVP |
+| POST | `/v1/auth/mfa/iniciar` | Gera o segredo TOTP pendente e a URI do QR code | Todos, Externos | E | MVP |
+| POST | `/v1/auth/mfa/confirmar` | Ativa o segundo fator com o primeiro código certo | Todos, Externos | E | MVP |
+| POST | `/v1/auth/mfa/desativar` | Desativa o segundo fator, com um código válido | Todos, Externos | E | MVP |
+| POST | `/v1/auth/convites/consultar` | Confere o link do convite sem gastá-lo: `email` e `pede_senha` | Público | E | MVP |
+| POST | `/v1/auth/convites/aceitar` | Aceita o convite: liga o login ao usuário convidado e o ativa | Público | E | MVP |
+| GET | `/oauth/authorize` | Início do fluxo OAuth 2.1 com PKCE (app): `302` para a tela `/autorizar-app` da web | Público | E | MVP |
+| POST | `/oauth/authorize` | Decisão da tela de autorização: emite o código para a empresa escolhida (só sessão web) | Todos, Externos | E | MVP |
+| POST | `/oauth/token` | Troca de código e renovação rotativa de refresh token (formulário) | Público | E | MVP |
+| POST | `/oauth/revoke` | Revoga refresh token; o token no corpo é a credencial | Público | E | MVP |
 | GET | `/v1/versao` | Versão do produto em SemVer, commit, data do build e ambiente (18.8) | Público | E | MVP |
+| POST | `/v1/empresas` | Cadastro da conta pelo site: empresa, unidade inicial, 12 perfis padrão e responsável como administrador convidado (RF-ADM-001, RF-SRV-001); responde só `convite_enviado`, sem identificadores; `409 conflito` em CNPJ já cadastrado | Público | E, S | MVP |
 | GET | `/v1/empresa` | Dados da empresa | Leitura | E | MVP |
 | PATCH | `/v1/empresa` | Altera dados cadastrais | Admin | E | MVP |
 | GET | `/v1/empresa/plano` | Plano, recursos habilitados e uso (técnicos, veículos ativos, créditos de IA) | Admin | E | MVP |
 | GET | `/v1/unidades` | Lista unidades | Leitura | E | MVP |
-| POST | `/v1/unidades` | Cria unidade. O Essencial tem 1 unidade; a segunda exige o Profissional (`403 plano_nao_inclui_recurso`) | Admin | E | MVP |
+| POST | `/v1/unidades` | Cria unidade com pelo menos um turno. O Essencial tem 1 unidade; a segunda exige o Profissional (`403 plano_nao_inclui_recurso`) | Admin | E | MVP |
 | GET | `/v1/unidades/{id}` | Detalha unidade | Leitura | E | MVP |
 | PATCH | `/v1/unidades/{id}` | Altera unidade (nome, endereço, fuso, CNPJ) | Admin | E | MVP |
-| DELETE | `/v1/unidades/{id}` | Inativa unidade sem ativos ativos | Admin | P | F2 |
-| GET | `/v1/pessoas` | Lista pessoas (`com_usuario`, `fornecedor_id`, `unidade_id`, `especialidade_tecnico_id`, `busca`) | Gestão | E | MVP |
+| DELETE | `/v1/unidades/{id}` | Inativa unidade; a última unidade ativa não é inativada (a regra "sem ativos ativos" entra com ATV, em E02) | Admin | E | MVP |
+| POST | `/v1/unidades/{id}/reativar` | Reativa unidade inativa, respeitando o limite de unidades do plano | Admin | E | MVP |
+| POST | `/v1/unidades/{id}/turnos` | Inclui turno (`turno_unidade`): `dia_semana` (1 = segunda ... 7 = domingo), `hora_inicio`, `hora_fim`, `nome` | Admin | E | MVP |
+| PATCH | `/v1/unidades/{id}/turnos/{turno_id}` | Altera turno (ETag do turno) | Admin | E | MVP |
+| DELETE | `/v1/unidades/{id}/turnos/{turno_id}` | Remove turno; o último turno da unidade não é removido (`422 validacao_falhou`) | Admin | E | MVP |
+| GET | `/v1/unidades/{id}/feriados` | Feriados da unidade (`feriado_unidade`), com filtro `data[gte]` e `data[lte]` | Leitura | E | MVP |
+| POST | `/v1/unidades/{id}/feriados` | Inclui feriado (`data`, `descricao`); `409 conflito` em data repetida | Admin | E | MVP |
+| DELETE | `/v1/unidades/{id}/feriados/{feriado_id}` | Remove feriado (ETag do feriado) | Admin | E | MVP |
+| GET | `/v1/pessoas` | Lista pessoas (`com_usuario`, `fornecedor_id`, `unidade_id`, `situacao`, `busca`; `especialidade_tecnico_id` entra com o SRV), com CPF mascarado | Gestão | E | MVP |
 | POST | `/v1/pessoas` | Cadastra pessoa, com ou sem usuário (técnico, motorista, condutor eventual, técnico de fornecedor, PLH); aceita `especialidade_tecnico_ids` (22.3) | Gestão | E | MVP |
 | GET | `/v1/pessoas/{id}` | Detalha pessoa; documentos de saúde só com `pessoa.saude.ler` | Gestão, titular | E | MVP |
 | PATCH | `/v1/pessoas/{id}` | Altera pessoa | Gestão | E | MVP |
 | DELETE | `/v1/pessoas/{id}` | Inativa pessoa | Gestão | E | MVP |
+| POST | `/v1/pessoas/{id}/reativar` | Reativa pessoa inativa | Gestão | E | MVP |
 | GET | `/v1/usuarios` | Lista usuários | Gestão | E | MVP |
-| POST | `/v1/usuarios` | Cria usuário e envia convite; aceita `pessoa_id` (opcional), `fornecedor_id` (obrigatório para `prestador`) e `locatario_id` (obrigatório para `locatario`) | Admin | E | MVP |
-| GET | `/v1/usuarios/eu` | Próprio usuário, perfis, unidades e preferências | Todos | E | MVP |
-| PATCH | `/v1/usuarios/eu` | Altera preferências e dados próprios | Todos | E | MVP |
+| POST | `/v1/usuarios` | Cria usuário `convidado` e envia convite (7 dias); aceita `pessoa_id` ou `nova_pessoa` (cria a pessoa junto; nunca os dois), `fornecedor_id` (obrigatório para `prestador`), `locatario_id` (obrigatório para `locatario`), `custo_hora` e `unidade_padrao_id`; responde com `convite_enviado` | Admin | E | MVP |
+| GET | `/v1/usuarios/eu` | Próprio usuário, perfis, unidades e preferências | Todos, Externos | E | MVP |
+| PATCH | `/v1/usuarios/eu` | Altera os dados próprios (no MVP, `nome` e `telefone`) | Todos, Externos | E | MVP |
 | GET | `/v1/usuarios/{id}` | Detalha usuário | Gestão | E | MVP |
-| PATCH | `/v1/usuarios/{id}` | Altera perfis, unidades e dados | Admin | E | MVP |
-| POST | `/v1/usuarios/{id}/desativar` | Desativa e revoga sessões e tokens do usuário | Admin | E | MVP |
-| POST | `/v1/usuarios/{id}/reativar` | Reativa usuário | Admin | E | MVP |
+| PATCH | `/v1/usuarios/{id}` | Altera perfis (lista completa em `perfis`), unidades e dados | Admin | E | MVP |
+| POST | `/v1/usuarios/{id}/desativar` | `situacao` → `inativo`; revoga sessões e tokens do usuário; `409 ultimo_administrador` | Admin | E | MVP |
+| POST | `/v1/usuarios/{id}/reativar` | `inativo` → `ativo` (ou `convidado`, com convite novo, se nunca aceitou) | Admin | E | MVP |
+| POST | `/v1/usuarios/{id}/reenviar-convite` | Revoga o link anterior e envia outro (7 dias); só para `convidado` | Admin | E | MVP |
 | POST | `/v1/usuarios/{id}/encerrar-sessoes` | Encerra todas as sessões e dispositivos | Admin | E | MVP |
+| POST | `/v1/usuarios/{id}/permissoes` | Concede permissão avulsa (`usuario_permissao`), como `pessoa.saude.ler`; nunca a si mesmo | Admin | E | MVP |
+| DELETE | `/v1/usuarios/{id}/permissoes/{permissao}` | Retira permissão avulsa | Admin | E | MVP |
 | GET | `/v1/perfis` | Lista perfis padrão e personalizados | Gestão | E | MVP |
 | POST | `/v1/perfis` | Cria perfil personalizado (proposta) | Admin | P | F2 |
 | PATCH | `/v1/perfis/{id}` | Altera perfil personalizado | Admin | P | F2 |
@@ -814,6 +861,8 @@ Legenda das colunas:
 | POST | `/v1/pacotes-segmento/{codigo}/aplicar` | Aplica o pacote: só cria o que falta, numa transação; devolve a `aplicacao_pacote` | Configuração | E | F2 |
 | GET | `/v1/aplicacoes-pacote` | Aplicações de pacote da conta (`pacote_codigo`, período) | Admin, Gestão | E | F2 |
 | GET | `/v1/aplicacoes-pacote/{id}` | Detalha a aplicação: versão, quem aplicou, itens criados e itens ignorados com o motivo | Admin, Gestão | E | F2 |
+
+**Permissão por rota (E01).** O grupo da coluna Perfil é a forma resumida; a permissão conferida pelo servidor é a de RF-ADM-005 e sai no contrato em `x-permissoes`: `GET /v1/empresa`, `GET /v1/unidades`, `GET /v1/unidades/{id}` e `GET .../feriados`, `adm.ler`; `PATCH /v1/empresa` e a escrita de unidades, turnos e feriados, `adm.gerenciar_empresa`; leitura de pessoas, `adm.ler_pessoas` (o titular lê a própria pessoa sem ela); escrita de pessoas, `adm.gerenciar_pessoas`; `GET /v1/usuarios`, `GET /v1/usuarios/{id}` e `GET /v1/perfis`, `adm.ler_usuarios`; escrita de usuários, ações e permissões avulsas, `adm.gerenciar_usuarios`; `GET /v1/permissoes`, `adm.gerenciar_perfis`; trilha, `adm.ler_auditoria`. As rotas de `/v1/auth/*`, `/oauth/*` e `/v1/usuarios/eu` exigem só a credencial e aceitam os escopos `interno`, `prestador` e `locatario` ("Todos, Externos"); todas as demais rotas de ADM aceitam só `interno` e respondem `404` aos externos. **Situação do usuário:** `usuario.situacao` é `convidado`, `ativo` ou `inativo` (sumário 3.6); o bloqueio temporário por falhas de login é da identidade, não do usuário. **Dinheiro:** `custo_hora` do usuário é texto decimal (2.5).
 
 **Pessoa e usuário.** `pessoa` é quem executa, conduz ou responde por algo, com ou sem login; `usuario` é o login e pode apontar para uma pessoa (`usuario.pessoa_id`, opcional). CNH, ASO, capacitações e documentos pessoais ligam-se à pessoa (`pessoa_id` em `documentos-vencimento` e `capacitacoes`), nunca ao usuário. Condutor eventual sem login é uma pessoa sem usuário, não um usuário sem acesso. Documentos de tipo marcado como dado de saúde (ASO, exame toxicológico) só aparecem, em qualquer rota, para quem tem `pessoa.saude.ler`; para os demais, a lista os omite e o detalhe devolve `404`.
 
@@ -1016,17 +1065,17 @@ As ações de atribuição a prestador (`atribuir-fornecedor`, `retirar-forneced
 
 | Método | Rota | Descrição | Perfil | Plano | Fase |
 |---|---|---|---|---|---|
-| GET | `/v1/checklists-modelo` | Lista modelos (filtro por classe de ativo) | Todos | E | MVP |
+| GET | `/v1/checklists-modelo` | Lista modelos (filtro por classe de ativo) | Todos, `prestador` | E | MVP |
 | POST | `/v1/checklists-modelo` | Cria modelo em rascunho | Gestão | E | MVP |
-| GET | `/v1/checklists-modelo/{id}` | Detalha modelo e itens | Todos | E | MVP |
+| GET | `/v1/checklists-modelo/{id}` | Detalha modelo e itens | Todos, `prestador` | E | MVP |
 | PATCH | `/v1/checklists-modelo/{id}` | Altera rascunho | Gestão | E | MVP |
 | DELETE | `/v1/checklists-modelo/{id}` | Inativa modelo | Gestão | E | MVP |
 | POST | `/v1/checklists-modelo/{id}/publicar` | Publica nova versão imutável | Gestão | E | MVP |
-| GET | `/v1/checklists-modelo/{id}/versoes` | Versões publicadas | Leitura | E | MVP |
-| GET | `/v1/checklists-execucao` | Lista execuções (`ativo_id`, `resultado`, período) | Leitura | E | MVP |
-| POST | `/v1/checklists-execucao` | Registra execução completa (seção 10) | Execução, `motorista` | E | MVP |
-| GET | `/v1/checklists-execucao/{id}` | Detalha execução | Leitura, autor | E | MVP |
-| GET | `/v1/checklists-execucao/{id}/relatorio` | Relatório em PDF com fotos e assinatura | Leitura, autor | E | MVP |
+| GET | `/v1/checklists-modelo/{id}/versoes` | Versões publicadas | Leitura, `prestador` | E | MVP |
+| GET | `/v1/checklists-execucao` | Lista execuções (`ativo_id`, `resultado`, período) | Leitura, `prestador` | E | MVP |
+| POST | `/v1/checklists-execucao` | Registra execução completa (seção 10) | Execução, `motorista`, `prestador` | E | MVP |
+| GET | `/v1/checklists-execucao/{id}` | Detalha execução | Leitura, autor, `prestador` | E | MVP |
+| GET | `/v1/checklists-execucao/{id}/relatorio` | Relatório em PDF com fotos e assinatura | Leitura, autor, `prestador` | E | MVP |
 
 ### 6.8 EST — Estoque e compras
 
@@ -1070,7 +1119,7 @@ As ações de atribuição a prestador (`atribuir-fornecedor`, `retirar-forneced
 | GET | `/v1/ordens-reparo/{id}` | Detalha ordem de reparo | Leitura, `prestador` | P | F2 |
 | PATCH | `/v1/ordens-reparo/{id}` | Altera ordem `aberta` (fornecedor, itens, prazo) | Estoque | P | F2 |
 | POST | `/v1/ordens-reparo/{id}/enviar` | `aberta` → `enviada`; gera `envio_conserto` com NF-e de remessa | Estoque | P | F2 |
-| POST | `/v1/ordens-reparo/{id}/registrar-orcamento` | `enviada` → `em_orcamento`; cria `orcamento_fornecedor` | Estoque, Compras, `prestador` | P | F2 |
+| POST | `/v1/ordens-reparo/{id}/registrar-orcamento` | `enviada` → `em_orcamento`; cria `orcamento_fornecedor` (permissão `ter.registrar_orcamento`, a mesma das rotas de orçamento de fornecedor) | Gestão, Compras, `prestador` | P | F2 |
 | POST | `/v1/ordens-reparo/{id}/aprovar` | `em_orcamento` → `aprovada` | Gestão, `comprador` | P | F2 |
 | POST | `/v1/ordens-reparo/{id}/registrar-retorno` | `aprovada` → `retornada`; gera `retorno_conserto`; peça volta recondicionada, com custo e garantia | Estoque | P | F2 |
 | POST | `/v1/ordens-reparo/{id}/declarar-irreparavel` | `enviada`, `em_orcamento` ou `aprovada` → `irreparavel`; peça vai para sucata ou volta sem reparo | Destino de peça | P | F2 |
@@ -1162,14 +1211,14 @@ Rotas próprias do módulo. Na conta da subcontratada, "Leitura", "Gestão" e "E
 | PATCH | `/v1/clientes-servico/{id}` | Altera cliente; os dados vindos da conexão (razão social, CNPJ) ficam só leitura | Gestão | S, P | MVP |
 | DELETE | `/v1/clientes-servico/{id}` | Inativa cliente sem OS em aberto | Gestão | S, P | MVP |
 | GET | `/v1/conexoes-empresa` | Lista as conexões em que a conta é parte, com o papel dela (`cliente` ou `prestador`) e `estado` | Gestão | E, S | MVP |
-| POST | `/v1/conexoes-empresa` | Ação `convidar`: o cliente convida a conta do fornecedor; cria a conexão em `convidada` e envia o código por e-mail (22.5) | Admin (cliente) | E | MVP |
+| POST | `/v1/conexoes-empresa` | Ação `convidar`: o cliente convida a conta do fornecedor; cria a conexão em `convidada` e envia o código por e-mail (22.5) | Conexão (cliente) | E | MVP |
 | GET | `/v1/conexoes-empresa/{id}` | Detalha a conexão (`campos_compartilhados`, ativos compartilhados, datas) | Gestão | E, S | MVP |
-| PATCH | `/v1/conexoes-empresa/{id}` | O cliente altera os ativos compartilhados e reduz `campos_compartilhados`; ampliar campos exige novo aceite | Admin (cliente) | E | MVP |
-| POST | `/v1/conexoes-empresa/{id}/aceitar` | `convidada` → `ativa`, com o código do convite no corpo; liga a um `cliente_servico` ou cria um | Admin (prestador) | S | MVP |
-| POST | `/v1/conexoes-empresa/{id}/recusar` | `convidada` → `encerrada`, com motivo | Admin (prestador) | S | MVP |
-| POST | `/v1/conexoes-empresa/{id}/suspender` | `ativa` → `suspensa`, com motivo; a sincronização para e fica pendente | Admin (cliente ou prestador) | E, S | MVP |
-| POST | `/v1/conexoes-empresa/{id}/reativar` | `suspensa` → `ativa`, pelo lado que suspendeu; as pendências são sincronizadas | Admin (quem suspendeu) | E, S | MVP |
-| POST | `/v1/conexoes-empresa/{id}/encerrar` | `convidada`, `ativa` ou `suspensa` → `encerrada` (final), com motivo; para a sincronização sem apagar histórico | Admin (cliente ou prestador) | E, S | MVP |
+| PATCH | `/v1/conexoes-empresa/{id}` | O cliente altera os ativos compartilhados e reduz `campos_compartilhados`; ampliar campos exige novo aceite | Conexão (cliente) | E | MVP |
+| POST | `/v1/conexoes-empresa/{id}/aceitar` | `convidada` → `ativa`, com o código do convite no corpo; liga a um `cliente_servico` ou cria um | Conexão (prestador) | S | MVP |
+| POST | `/v1/conexoes-empresa/{id}/recusar` | `convidada` → `encerrada`, com motivo | Conexão (prestador) | S | MVP |
+| POST | `/v1/conexoes-empresa/{id}/suspender` | `ativa` → `suspensa`, com motivo; a sincronização para e fica pendente | Conexão (cliente ou prestador) | E, S | MVP |
+| POST | `/v1/conexoes-empresa/{id}/reativar` | `suspensa` → `ativa`, pelo lado que suspendeu; as pendências são sincronizadas | Conexão (quem suspendeu) | E, S | MVP |
+| POST | `/v1/conexoes-empresa/{id}/encerrar` | `convidada`, `ativa` ou `suspensa` → `encerrada` (final), com motivo; para a sincronização sem apagar histórico | Conexão (cliente ou prestador) | E, S | MVP |
 | GET | `/v1/conexoes-empresa/{id}/ativos` | Ativos compartilhados pela conexão: no cliente, os ativos originais; na subcontratada, as cópias `de_cliente` | Gestão | E, S | MVP |
 | GET | `/v1/vinculos-os` | Vínculos de OS da conta (`conexao_empresa_id`, `lado_origem`, `estado_sincronizacao`, período) | Gestão | E, S | MVP |
 | GET | `/v1/vinculos-os/{id}` | Detalha o vínculo, com o histórico de sincronizações e o último erro | Gestão | E, S | MVP |
@@ -1276,7 +1325,7 @@ A oficina externa saiu de FRO: veículo enviado a oficina é uma OS atribuída a
 | PATCH | `/v1/capacitacoes/{id}` | Altera capacitação | Gestão | P | F2 |
 | DELETE | `/v1/capacitacoes/{id}` | Inativa capacitação | Gestão | P | F2 |
 | GET | `/v1/ativos/{id}/enquadramento-nr13` | Categoria, SPIE e prazos de inspeção do equipamento | Leitura | P | F2 |
-| PUT | `/v1/ativos/{id}/enquadramento-nr13` | Define enquadramento; prazos menores do PLH são aceitos | Gestão | P | F2 |
+| PUT | `/v1/ativos/{id}/enquadramento-nr13` | Define enquadramento; prazos menores do PLH são aceitos | Gestão, `plh` | P | F2 |
 | GET | `/v1/prazos-nr13` | Calendário de inspeções NR-13 calculado | Leitura | P | F2 |
 | GET | `/v1/ordens-servico/{id}/bloqueios-energia` | Registros de bloqueio e etiquetagem da OS | Leitura, `prestador` | E | MVP |
 | POST | `/v1/ordens-servico/{id}/bloqueios-energia` | Registra bloqueio e etiquetagem (fonte, horário, data, motivo, responsável; item 12.11.3); `ponto_bloqueio_id` opcional no Profissional | Execução, `prestador` | E | MVP |
@@ -1473,7 +1522,7 @@ Módulo da Fase 2, plano Profissional (sumário 2.1 e 4; RF-CTR-001 a RF-CTR-005
 
 | Módulo | Endpoints | MVP | F2 | F3 | Variação desde a versão 0.3 |
 |---|---|---|---|---|---|
-| ADM | 87 | 63 | 24 | 0 | +17: regras configuráveis (9) e disparos (2), no MVP; pacotes de segmento (4) e aplicações (2), na Fase 2 |
+| ADM | 106 | 83 | 23 | 0 | +17 na versão 0.4: regras configuráveis (9) e disparos (2), no MVP; pacotes de segmento (4) e aplicações (2), na Fase 2. +19 na versão 0.5 (E01): `POST /v1/empresas`, convites (2), MFA do próprio usuário (3), `trocar-senha`, `POST /oauth/authorize`, turnos (3), feriados (3), reativação de unidade e de pessoa, reenvio de convite e permissões avulsas (2); `DELETE /v1/unidades/{id}` passa da Fase 2 ao MVP |
 | ATV | 27 | 27 | 0 | 0 | +2: `colocar-em-operacao`, unitária e em lote (campos `fase_ciclo_vida`, `data_entrada_operacao`, `projeto_id`) |
 | MED | 12 | 12 | 0 | 0 | — |
 | SOL | 11 | 11 | 0 | 0 | — (origem `regra`) |
@@ -1492,9 +1541,9 @@ Módulo da Fase 2, plano Profissional (sumário 2.1 e 4; RF-CTR-001 a RF-CTR-005
 | INT | 52 | 26 | 26 | 0 | — |
 | IA | 13 | 0 | 9 | 4 | — |
 | MOB | 9 | 9 | 0 | 0 | — |
-| **Total** | **564** | **322** | **238** | **4** | **+82** |
+| **Total** | **583** | **342** | **237** | **4** | **+82 na versão 0.4; +19 na versão 0.5** |
 
-ADM inclui autenticação (10 rotas, entre elas as de OAuth fora de `/v1`), SCIM (10 rotas em `/scim/v2`), pessoas, versão do produto, anexos, processamentos, notificações e exportação completa. Os sub-recursos de frota e de conformidade pendurados em `ativos` e `ordens-servico` (dados de veículo, pneus no mapa, registro de bloqueio, NR-13) são contados nos módulos FRO e CON; as ações `atribuir-fornecedor` e `retirar-fornecedor` e as 4 rotas públicas do link de uso único, em TER; `assumir`, `servicos` e `relatorio-pdf`, em OS. O SRV conta só as rotas próprias (22.2); a conta da subcontratada usa também as rotas de ADM, ATV, MED, OS, CHK, EST, IND e MOB. As regras configuráveis e os pacotes de segmento contam em ADM; as definições e os valores de campos extras, em OS; `colocar-em-operacao`, em ATV; `gerar-os` da etapa, em PRJ; as medições de etapas (`/v1/medicoes-etapa`), em PRJ; as medições do contrato (`/v1/medicoes-contrato`), em CTR.
+ADM inclui autenticação (19 rotas, entre elas as 4 de OAuth fora de `/v1`), SCIM (10 rotas em `/scim/v2`), pessoas, versão do produto, anexos, processamentos, notificações e exportação completa. Os sub-recursos de frota e de conformidade pendurados em `ativos` e `ordens-servico` (dados de veículo, pneus no mapa, registro de bloqueio, NR-13) são contados nos módulos FRO e CON; as ações `atribuir-fornecedor` e `retirar-fornecedor` e as 4 rotas públicas do link de uso único, em TER; `assumir`, `servicos` e `relatorio-pdf`, em OS. O SRV conta só as rotas próprias (22.2); a conta da subcontratada usa também as rotas de ADM, ATV, MED, OS, CHK, EST, IND e MOB. As regras configuráveis e os pacotes de segmento contam em ADM; as definições e os valores de campos extras, em OS; `colocar-em-operacao`, em ATV; `gerar-os` da etapa, em PRJ; as medições de etapas (`/v1/medicoes-etapa`), em PRJ; as medições do contrato (`/v1/medicoes-contrato`), em CTR.
 
 ---
 
@@ -3424,7 +3473,7 @@ Regras do SemVer na Tenaz:
 | `data_build` | Data e hora UTC do build |
 | `ambiente` | `producao` ou `sandbox` |
 
-A resposta **não expõe** dependências, versões de bibliotecas, sistema operacional, região, nomes de servidor nem qualquer outro dado de infraestrutura. O mesmo vale para o cabeçalho.
+A resposta **não expõe** dependências, versões de bibliotecas, sistema operacional, região, nomes de servidor nem qualquer outro dado de infraestrutura. O mesmo vale para o cabeçalho. No contrato gerado, o esquema da resposta se chama `Versao` (até a versão 0.4 deste documento, o código o gerava como `Dados`). **Divergência aberta (A-38):** o servidor devolve só `versao`, `commit` e `data_build`, como a seção 9.5 do documento 5; o campo `ambiente` desta seção não sai.
 
 **Cabeçalho `Tenaz-Versao`.** Toda resposta da API, de sucesso ou de erro, inclusive `GET /v1/versao`, traz `Tenaz-Versao: 1.4.2` com a versão do produto que atendeu a requisição. O suporte usa esse valor junto com o `id_rastreio` para localizar o problema. O web e o app mostram a versão na interface (rodapé e tela "Sobre"), lida de `GET /v1/versao`; o app mostra também a própria versão (`X-Tenaz-App-Versao`, 18.5), que segue SemVer à parte.
 
@@ -5620,6 +5669,10 @@ Os 15 pontos da versão 0.1 (I-1 a I-15) foram resolvidos pelo sumário 0.3 e j�
 | A-34 | Nomes desta versão sem nome canônico no sumário | Propostas: entidades `medicao_etapa` (24.7) e `lancamento_custo_projeto` (6.18); campos `preenchido_pelo_prestador`, `obrigatorio_em`, `opcoes`, `numero_versao`, `modelo_projeto_versao`, `origem_pacote`, `disparo_regra_id`, `levanta_com_tipo_documento_id`, `levantado_automaticamente`, `colocado_em_operacao_por_id`, `termo_entrega_anexo_id`, `causa_externa_marcada_por_id`, `causa_externa_marcada_em`, `numero_contrato_cliente`, `renovacao_automatica`, `evidencia_causa_externa_obrigatoria`; valores `calendario_contrato` (calendário de apuração) e `em_apuracao`/`fechada` na medição de etapas; aviso `campos_extras_pendentes`; escopos `configuracao:*`, `projetos:*`, `contratos_cliente:*`; evento `regra_automacao.disparada`. Fixar no documento 2 e, os de vocabulário, no sumário |
 | A-35 | Operações do documento 1 ainda sem rota | Aditivo de contrato com cliente com histórico (RF-CTR-001, proposta) e marcação de medição como enviada ao cliente ou ao ERP (RF-PRJ-006, RF-CTR-004, propostas). Hoje o `PATCH` de contrato `vigente` só altera data de fim, renovação, contatos e anexos (25.2) |
 | A-36 | Alcance de `prj.gerenciar` e `ctr.gerenciar` | O sumário 3.6 lista modelos e projetos (criar, iniciar, suspender, retomar, concluir, cancelar) e contratos e itens. Proposta (4.8): `prj.gerenciar` cobre também etapas, `gerar-os`, lançamentos de custo e a geração e o fechamento da medição de etapas; `ctr.gerenciar` cobre também abrir a medição do contrato. Confirmar no sumário |
+| A-37 | Lacunas da implementação de E01 na camada HTTP | (a) Idempotência guardada na memória de cada instância (2.9): correta só com uma instância; antes de escalar a API, o depósito precisa ser compartilhado (tabela no banco, que é do documento 2, ou Valkey); a obrigatoriedade da chave para o app e para tokens de API também fica para depois. (b) Rate limit da seção 5 ainda não implementado, inclusive o de login e de `/oauth/token`; hoje só vale o bloqueio progressivo da identidade. (c) `X-Forwarded-For` não é lido: o IP gravado é o da conexão; atrás do balanceador, é preciso a lista de proxies confiáveis. (d) `If-None-Match` e `304` não implementados (2.11). (e) Nas ações de estado e no `DELETE`, a versão do `If-Match` é conferida por leitura antes da ação, não na mesma transação. (f) `PATCH /v1/usuarios/{id}` com `perfis` e dados roda em duas transações (perfis primeiro, depois dados), e a troca de perfis não muda a versão do usuário. (g) Erro de `/oauth/token` com `401`, e não o `400` da RFC 6749 para `invalid_grant`, para manter o código `credencial_invalida` com um status só |
+| A-38 | Campos de `GET /v1/versao` | A seção 18.8 lista `ambiente`; a seção 9.5 do documento 5 e o servidor devolvem só `versao`, `commit` e `data_build`. Decidir qual vale e alinhar o outro |
+
+**Divergências do documento 1 (seção 8.3) tratadas na versão 0.5:** ponto 39, grupo **Conexão** (`srv.gerenciar_conexao`, padrão `administrador` e `gestor`) nas rotas de conexão da 6.10, no lugar de "Admin", mantendo o lado de cada ação; ponto 42, `prestador` nomeado nas rotas de modelos e execuções de checklist (6.7), com o alcance das OS do seu fornecedor (4.9); ponto 43, `plh` nomeado em `PUT /v1/ativos/{id}/enquadramento-nr13` (6.13); ponto 44, `POST /v1/ordens-reparo/{id}/registrar-orcamento` no grupo das rotas de orçamento de fornecedor (Gestão, Compras, `prestador`; permissão `ter.registrar_orcamento`). A seção 4.8 passa a remeter ao catálogo de RF-ADM-005 e lista `srv.gerenciar_conexao` entre as permissões finas.
 
 ### 26.2 Pendências do sumário que afetam a API
 
@@ -5654,3 +5707,4 @@ Todas as marcações "proposta" deste documento, em especial: limites de rate li
 | 0.2 | 12/11/2026 | — | Alinhamento ao sumário executivo 0.3: prioridade `urgente`; transições da OS (`desprogramar`, `recusar-liberacao`, cancelamento só de `aberta`, `planejada`, `programada`, `pausada`); regras do status do ativo; `pessoa` e `/v1/pessoas`; perfis `comprador`, `plh`, `prestador`, `locatario` e alcance dos externos (4.9); campos novos do ativo e da OS; origem de leitura `iot`; eventos com nome completo da entidade; planos conforme a tabela do sumário 2.1 (catálogo padrão de falhas e registro de bloqueio no Essencial, MCP no Enterprise, Essencial com 1 unidade). Módulos novos TER e LOC e EST estendido (seções 19 a 21), com eventos e códigos de erro novos. Versão do produto em SemVer, `GET /v1/versao` e cabeçalho `Tenaz-Versao` (18.8). Pendências renumeradas para a seção 22, com as inconsistências da versão 0.1 marcadas como resolvidas |
 | 0.3 | 12/11/2026 | — | Alinhamento ao sumário executivo 0.4. Permissões `<módulo>.<ação>`: `os.encerrar` (substitui `ordem_servico.liberar`) e `est.decidir_destino`. Escopo de acesso `interno`, `prestador`, `locatario`, `link`. Link de uso único com token no fragmento, `POST /v1/publico/links-execucao/ativar` e sessão curta (`/atual/*`); nenhum token no caminho. Ação `assumir`; `origem` da OS com 8 valores; solicitação `nova` → `recusada`, `duplicada` final e `reabrir-como-nova`, origem `portal_locatario`. Locação: `local_uso`, `franquia_horas`, `franquia_km`, cancelamento só de `rascunho`, sublocação proibida. Papéis `posto_combustivel` e `seguradora`; peça `em_transito` não consumível; `/v1/bloqueios-ativo` e eventos `ativo.despacho_*`. Módulo novo **SRV** (seções 6.10 e 22): especialidades, clientes atendidos, equipamentos `de_cliente`, serviços a realizar, componentes por `tipo_material`, relatório PDF, conexão entre contas, vínculo de OS com dono por campo, API para integradores da subcontratada. Eventos `conexao_empresa.*` e `vinculo_os.*`; 9 códigos de erro novos. Catálogo de 451 para 482 endpoints. Pendências na seção 23 |
 | 0.4 | 12/11/2026 | — | Alinhamento ao sumário executivo 0.5: configuração por segmento (sumário 3.6 e 3.7). Regras configuráveis (`/v1/regras-automacao`, `/v1/disparos-regra`, simulação, ativar e inativar) e campos extras da OS (`/v1/campos-extras-os`, `/v1/ordens-servico/{id}/campos-extras`, `campos_extras` com marcação "preenchido pelo prestador") no MVP; fase de ciclo de vida do ativo (`fase_ciclo_vida`, `data_entrada_operacao`, `colocar-em-operacao` unitário e em lote) e tipo de OS `implantacao`; pacotes de segmento com aplicação atômica (`/v1/pacotes-segmento`, `/v1/aplicacoes-pacote`, Fase 2). Módulos novos **PRJ** (6.18 e 24: modelos, projetos com ações, etapas `pendente`, `disponivel`, `em_andamento`, `concluida`, `dispensada`, OS de implantação, termo de entrega, medição de etapas) e **CTR** (6.19 e 25: contratos com clientes, itens, painel, medições com `decisao_exclusao`). OS com origem `projeto` (e `cliente_conectado`, resolvendo A-21), `causa_externa`, `etapa_projeto_id`; sem origem `regra` na OS; solicitação com origem `regra`; `bloqueio_ativo.origem`; `/v1/clientes-servico` também no Profissional com CTR. Nove permissões novas (`adm.gerenciar_regras`, `adm.gerenciar_configuracao`, `atv.colocar_em_operacao`, `prj.gerenciar`, `prj.dispensar_etapa`, `prj.ajustar_medicao`, `ctr.gerenciar`, `ctr.fechar_medicao`, `ctr.reabrir_medicao`), escopos de token `configuracao:*`, `projetos:*`, `contratos_cliente:*` (proposta), 9 eventos de webhook novos (`regra_automacao.disparada` como proposta) e 24 códigos de erro novos. Catálogo de 482 para 564 endpoints. Seções novas 23 a 25; pendências renumeradas para a seção 26, com A-29 a A-36 |
+| 0.5 | 12/11/2026 | — | Contrato de E01 (conta e acesso), gerado do código e alinhado ao sumário 0.6. Códigos de erro do código Go alinhados à seção 3.2 (snake_case: `recurso_nao_encontrado`, `permissao_negada`, `validacao_falhou`, `versao_desatualizada`, `limite_requisicoes_excedido`, `erro_interno`...) e códigos novos `senha_fraca`, `mfa_codigo_invalido`, `link_email_invalido`, `ultimo_administrador`, `pre_condicao_obrigatoria`; problema com `erros[].codigo`, `id_rastreio` e membros `desafio_id`, `desafio_expira_em`, `tentativas_restantes`, `versao_atual`, `error`. 19 rotas novas de ADM (convites, MFA do próprio usuário, troca de senha, `POST /oauth/authorize`, `POST /v1/empresas`, turnos, feriados, reativações, reenvio de convite, permissões avulsas) e `DELETE /v1/unidades/{id}` no MVP; catálogo de 564 para 583. Sessão web (cookie de desenvolvimento, CSRF, Origin, `desafio_id` como segredo, formato da sessão), fluxo do authorize, `empresa_escolhida_id`, idempotência e `If-Match` da E01, extensões `x-escopos-acesso` e `x-permissoes`. Pontos 39, 42, 43 e 44 da seção 8.3 do documento 1: grupo Conexão, `prestador` em checklists, `plh` no NR-13, grupo da rota de orçamento da ordem de reparo; seção 4.8 remete a RF-ADM-005. Esquema de `GET /v1/versao` chamado `Versao`. Pendências A-37 e A-38 |

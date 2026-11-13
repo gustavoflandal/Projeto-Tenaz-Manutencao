@@ -1,6 +1,9 @@
+/// <reference types="vitest/config" />
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import tailwindcss from '@tailwindcss/vite';
+import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
 
 // A versão NUNCA é digitada em arquivo de código: vem do CI, derivada da tag
@@ -36,7 +39,7 @@ function publicarVersao(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [publicarVersao()],
+  plugins: [react(), tailwindcss(), publicarVersao()],
   define: {
     __TENAZ_VERSAO__: JSON.stringify(versao),
     __TENAZ_COMMIT__: JSON.stringify(commit),
@@ -54,5 +57,11 @@ export default defineConfig({
       // interna paralela (princípio 4 da arquitetura).
       '/v1': { target: 'http://127.0.0.1:8080', changeOrigin: true },
     },
+  },
+  test: {
+    include: ['src/**/*.test.{ts,tsx}'],
+    environment: 'jsdom',
+    setupFiles: ['./src/testes/preparar.ts'],
+    css: false,
   },
 });

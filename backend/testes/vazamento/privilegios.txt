@@ -1,0 +1,79 @@
+# Mapa fechado de privilégios onde o RLS não é a defesa.
+#
+# Entram aqui:
+#   - todo privilégio em tabela de plataforma (não há RLS: o privilégio É a
+#     defesa — seção 5.1 de docs/2_ARQUITETURA_BANCO_DADOS.md);
+#   - todo privilégio de tabela ou de função do sincronizador (tenaz_sinc,
+#     tenaz_sinc_conexao) e do papel das credenciais (tenaz_autenticacao,
+#     tenaz_autenticacao_conexao), em QUALQUER esquema: para esses papéis o
+#     privilégio exato é a defesa (seção 2.10.4, risco R5; ADR-011);
+#   - todo privilégio concedido a PUBLIC em app ou plataforma (deve ser nenhum).
+#
+# O teste compara o catálogo com este arquivo nos dois sentidos: privilégio a
+# mais quebra o build (alargou a superfície), privilégio a menos também (a
+# lista deixou de descrever o banco). Privilégio de coluna aparece como
+# PRIVILEGIO(coluna,coluna,...), em ordem alfabética.
+#
+# Formato: esquema.tabela  papel  PRIVILEGIO[(colunas)]  # justificativa
+
+# --- sincronizador (R5) ---------------------------------------------------
+app.evento_auditoria  tenaz_sinc  INSERT(acao,antes,ator_tipo,campos_alterados,conexao_empresa_id,depois,dispositivo_id,empresa_id,entidade,entidade_chave,entidade_id,escopo,ip,ocorrido_no_dispositivo_em,origem,request_id,token_api_id,user_agent,usuario_id)  # o sincronizador grava o evento da conexão (seção 2.10.4): exatamente as colunas que tg_auditar lista no INSERT (ISO-E01-05)
+
+# --- papel das credenciais fora de plataforma (ADR-011) --------------------
+app.evento_auditoria  tenaz_autenticacao  INSERT(acao,ator_tipo,campos_alterados,depois,dispositivo_id,empresa_id,entidade,entidade_id,ip,origem,request_id,user_agent,usuario_id)  # eventos de login, falha, logout e alteração da identidade, contidos pela restritiva autenticacao_identidade; sem SELECT (seção 9.2)
+app.uuid_v7()         tenaz_autenticacao  EXECUTE  # valor padrão do id das credenciais
+app.empresa_atual()   tenaz_autenticacao  EXECUTE  # policy auditoria_insercao: o evento é da empresa da transação
+
+# --- autenticação (ADR-011; documento 2, seção 5.1) -------------------------
+# Só o papel tenaz_autenticacao, do pacote de autenticação, alcança as sete
+# tabelas. tenaz_app, tenaz_job, tenaz_leitura e tenaz_sinc não têm nada nelas;
+# o tenaz_job só executa plataforma.purgar_credenciais_vencidas().
+plataforma.identidade          tenaz_dono  REFERENCES(id)  # FK de app.usuario.identidade_id: o dono de app.usuario cria a FK sem ler a tabela; as credenciais pertencem a tenaz_credencial (ISO-E01-08)
+plataforma.identidade          tenaz_autenticacao  SELECT  # login por e-mail e conferência da senha
+plataforma.identidade          tenaz_autenticacao  INSERT  # cadastro da identidade no aceite do convite
+plataforma.identidade          tenaz_autenticacao  UPDATE(atualizado_em,bloqueada_ate,bloqueada_em,email,email_verificado_em,falhas_login,mfa_ativado_em,mfa_segredo_cifrado,mfa_ultimo_passo,senha_hash,ultimo_login_em)  # ciclo da credencial; id e criado_em nunca mudam
+plataforma.acesso_empresa      tenaz_autenticacao  SELECT  # login: em quais empresas a identidade entra; a escrita é só do trigger
+plataforma.sessao              tenaz_autenticacao  SELECT  # resolução da sessão pelo hash do cookie ou pelo sid
+plataforma.sessao              tenaz_autenticacao  INSERT  # login e troca de empresa criam sessão nova
+plataforma.sessao              tenaz_autenticacao  UPDATE(expira_em,revogada_em,ultimo_uso_em)  # só ciclo de vida: empresa, usuário, identidade, canal e hashes ficam fixos
+plataforma.token_renovacao     tenaz_autenticacao  SELECT  # rotação do refresh token
+plataforma.token_renovacao     tenaz_autenticacao  INSERT  # rotação do refresh token
+plataforma.token_renovacao     tenaz_autenticacao  UPDATE(revogado_em,usado_em)  # uso e revogação; família e hash fixos
+plataforma.codigo_autorizacao  tenaz_autenticacao  SELECT  # troca do código OAuth
+plataforma.codigo_autorizacao  tenaz_autenticacao  INSERT  # emissão do código OAuth
+plataforma.codigo_autorizacao  tenaz_autenticacao  UPDATE(sessao_id,usado_em)  # consumo do código; empresa e usuário fixos
+plataforma.desafio_mfa         tenaz_autenticacao  SELECT  # conferência do TOTP
+plataforma.desafio_mfa         tenaz_autenticacao  INSERT  # senha certa abre o desafio
+plataforma.desafio_mfa         tenaz_autenticacao  UPDATE(concluido_em,tentativas)  # tentativas com teto no CHECK
+plataforma.token_email         tenaz_autenticacao  SELECT  # conferência do link
+plataforma.token_email         tenaz_autenticacao  INSERT  # envio de convite, redefinição e verificação
+plataforma.token_email         tenaz_autenticacao  UPDATE(revogado_em,usado_em)  # uso e revogação
+
+# --- dono das credenciais (ISO-E01-08) -------------------------------------
+app.usuario  tenaz_credencial  REFERENCES(empresa_id,id,identidade_id)  # FK composta das credenciais para app.usuario: o dono das credenciais referencia sem ler a tabela
+
+# --- funções fora de app ----------------------------------------------------
+plataforma.criar_particoes_mensais(regclass,integer,date)  tenaz_manutencao  EXECUTE  # job mensal de partições (seção 9.5)
+plataforma.purgar_credenciais_vencidas()                   tenaz_job         EXECUTE  # purga diária das credenciais vencidas (ADR-011)
+plataforma.tg_acesso_empresa()                             tenaz_dono        EXECUTE  # o trigger de app.usuario, do dono, chama a função do dono das credenciais (ISO-E01-08)
+
+# --- esquemas ----------------------------------------------------------------
+# USAGE é o mínimo para alcançar um objeto; CREATE só para quem é dono do que
+# cria. Esquema novo com USAGE para papel de execução entra aqui, com revisão.
+esquema:app         tenaz_app           USAGE   # tabelas de empresa, sob RLS
+esquema:app         tenaz_job           USAGE   # tabelas de empresa, sob RLS
+esquema:app         tenaz_leitura       USAGE   # réplica de leitura, sob RLS
+esquema:app         tenaz_autenticacao  USAGE   # só INSERT por coluna em evento_auditoria e as funções de contexto (ADR-011)
+esquema:app         tenaz_credencial    USAGE   # alvo da FK composta das credenciais (app.usuario)
+esquema:plataforma  tenaz_app           USAGE   # funções seguras da conexão e catálogos globais, sem credencial (ADR-011)
+esquema:plataforma  tenaz_job           USAGE   # função de purga
+esquema:plataforma  tenaz_autenticacao  USAGE   # as sete tabelas de credencial
+esquema:plataforma  tenaz_credencial    USAGE   # dono das credenciais
+esquema:plataforma  tenaz_credencial    CREATE  # a migração cria as credenciais como tenaz_credencial (ISO-E01-08)
+esquema:public      tenaz_dono          USAGE   # extensões (citext, pg_trgm, btree_gin, btree_gist) moram em public
+esquema:public      tenaz_app           USAGE   # tipo citext e operadores das extensões
+esquema:public      tenaz_job           USAGE   # tipo citext e operadores das extensões
+esquema:public      tenaz_leitura       USAGE   # tipo citext e operadores das extensões
+esquema:public      tenaz_sinc          USAGE   # tipo citext e operadores das extensões
+esquema:public      tenaz_autenticacao  USAGE   # tipo citext de identidade.email
+esquema:public      tenaz_credencial    USAGE   # tipo citext nas tabelas que ele possui

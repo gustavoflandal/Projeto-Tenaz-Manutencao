@@ -1,8 +1,10 @@
 # Especificação de Requisitos — Tenaz
 
-**Versão:** 0.4 · **Data:** 12/11/2026 · **Status:** Em elaboração
+**Versão:** 0.5 · **Data:** 12/11/2026 · **Status:** Em elaboração
 **Produto:** Tenaz · Gestão de Manutenção e Frota
-Alinhado ao sumário executivo 0.5.
+Alinhado ao sumário executivo 0.6.
+
+**Mudanças da versão 0.5:** catálogo de permissões e matriz dos doze perfis padrão, como subseção de RF-ADM-005, a que o documento 3 (seção 4.8) remete; regra explícita do perfil `administrador` e da permissão `srv.gerenciar_conexao` na conta da subcontratada. Redação de RF-ADM-001, RF-ADM-002, RF-ADM-004, RF-ADM-005, RF-ADM-006, RF-ADM-011, RF-ADM-015, RF-MOB-001, RF-SRV-001 e RF-SRV-003 ajustada às decisões da etapa E01: calendário da unidade em `turno_unidade` e `feriado_unidade` e login por telefone e código adiado pela pendência **P11**. Decisões do dono do produto no sumário 0.6, seção 3.6 (catálogo de permissões canônico, situação do usuário, criação da conta, MFA da empresa, CNPJ): responsável nasce `administrador` e `gestor`, turnos da unidade inicial informados na criação sem padrão imposto, CNPJ único entre todas as empresas com reativação da cancelada (proposta), `usuario.situacao`, permissão avulsa em `usuario_permissao` com a regra RN-ADM-026 para usuários externos, `empresa.mfa_obrigatorio`; vínculo (`empregado`, `terceiro`, `autonomo`) e situação (`ativa`, `inativa`, sem `desligada`) da `pessoa` em RF-ADM-015. Nenhum requisito mudou de fase nem de plano; o único escopo ampliado é o de RF-ADM-011, por decisão do dono do produto dentro da etapa E01. Trilha de auditoria ampliada (sumário 0.6, seção 3.6, "Trilha de auditoria configurável"): RF-ADM-011 com tela e módulo, nove tipos de operação, captura configurável por tela (`captura_auditoria`), hash por evento e selo encadeado (`selo_auditoria`) em armazenamento imutável, telas de consulta, verificação e configuração, e critérios de aceite; coerência em RF-ADM-013 e RNF-019. `srv.gerenciar_conexao` no grupo Conexão e pontos 39 e 42 a 44 resolvidos pelo documento 3, versão 0.5; pontos 39 a 44, 46 e 47 resolvidos (seção 8.4); fica em aberto só o ponto 45 (seção 8.3).
 
 **Mudanças da versão 0.4:** configuração por segmento (sumário 3.7). No MVP: regras configuráveis de condição e efeito (RF-ADM-016), fase de ciclo de vida do ativo e entrada em operação (RF-ATV-013), campos extras da OS (RF-OS-021) e o tipo de OS `implantacao`. Na Fase 2: pacotes de segmento (RF-ADM-017) e os módulos novos PRJ, projetos de implantação (RF-PRJ-001 a RF-PRJ-007), e CTR, contratos com clientes (RF-CTR-001 a RF-CTR-005). Origem: caso de um fornecedor de radares instalados e mantidos por prestadores em várias cidades ([etapa 012](etapas/012_2026-11-12_configuracao-por-segmento.md)).
 
@@ -107,7 +109,7 @@ Atores não humanos:
 - **Plano mínimo:** o plano mais barato que inclui o requisito (Essencial, Profissional ou Enterprise), conforme a tabela de recursos do sumário (seção 2.1), que é a única fonte de qual plano inclui o quê. Os planos superiores herdam tudo dos inferiores. Quando a tabela não cita o recurso, o plano vem marcado como "(proposta)". Os requisitos do módulo SRV têm plano mínimo **Serviços**, o plano das contas de subcontratadas (sumário 2.2), que não herda nem é herdado pelos outros três; a parte de um requisito SRV executada na conta do cliente contratante indica também o plano exigido do cliente.
 - **Permissões:** formato `<módulo>.<ação>` (ex.: `os.encerrar`, `est.decidir_destino`); `pessoa.saude.ler` é a exceção aceita (sumário 3.6).
 - **(proposta):** valor, regra ou escolha que não vem do sumário nem do estudo de mercado. Precisa de validação com clientes ou com o time.
-- **Pendências:** P1 a P8 são as pendências do sumário (seção 6). O requisito que depende de uma delas cita a pendência.
+- **Pendências:** P1 a P11 são as pendências do sumário (seção 6). O requisito que depende de uma delas cita a pendência.
 - **Nomes técnicos** entre crases (`ordem_servico`, `em_execucao`) são os canônicos do sumário. O identificador de empresa é sempre `empresa_id`. Rotas seguem `/v1/<recurso-no-plural>`; `GET /v1/versao` é a exceção aceita (sumário 3.6).
 - **Estrutura de cada requisito:** descrição, dados principais, operações, validações e regras. Campos sem conteúdo relevante são omitidos.
 - **IDs movidos não são reutilizados.** Um requisito que mudou de módulo fica com uma entrada curta no lugar antigo, apontando para o novo ID, e não entra nas contagens.
@@ -130,19 +132,19 @@ Requisitos movidos na versão 0.2:
 **Fase:** MVP · **Plano mínimo:** Essencial
 
 - **Descrição:** criação da conta da empresa cliente (tenant) e roteiro guiado de primeiros passos, para uso sem treinamento formal.
-- **Dados principais:** CNPJ, razão social, nome fantasia, logo, fuso horário, plano contratado, ciclo de cobrança (mensal ou anual), contato do responsável, unidade inicial.
-- **Operações:** criar conta pelo site; editar dados; seguir o roteiro de primeiros passos (cadastrar ou importar ativos, convidar técnicos, criar o primeiro plano preventivo, abrir a primeira OS); carregar dados de exemplo opcionais e apagá-los depois.
-- **Validações:** CNPJ com dígito verificador válido; CNPJ único entre empresas ativas (proposta); e-mail do responsável confirmado antes do primeiro acesso.
-- **Regras:** todo dado do sistema pertence a uma empresa e só é visível a ela. O roteiro de primeiros passos mostra o progresso e pode ser retomado. Dados de exemplo ficam marcados e são excluídos por inteiro com um comando.
+- **Dados principais:** CNPJ, razão social, nome fantasia, logo, fuso horário, plano contratado, ciclo de cobrança (mensal ou anual), contato do responsável, unidade inicial com os seus turnos de trabalho, MFA obrigatório para a empresa (`empresa.mfa_obrigatorio`, RF-ADM-006).
+- **Operações:** criar conta pelo site, informando os turnos da unidade inicial (modelos prontos, como comercial ou 24 horas por 7 dias, só preenchem o formulário); editar dados, inclusive o CNPJ, pelo `administrador`, com registro na trilha (sumário 3.6); seguir o roteiro de primeiros passos (cadastrar ou importar ativos, convidar técnicos, criar o primeiro plano preventivo, abrir a primeira OS); carregar dados de exemplo opcionais e apagá-los depois.
+- **Validações:** CNPJ com dígito verificador válido; CNPJ único entre todas as empresas da Tenaz, inclusive as canceladas: a empresa cancelada que volta é reativada, não recriada (proposta, coerente com o modelo de dados e com RN-ADM-017 do documento 4); unidade inicial com pelo menos um turno; e-mail do responsável confirmado antes do primeiro acesso.
+- **Regras:** todo dado do sistema pertence a uma empresa e só é visível a ela. A empresa nasce com os doze perfis padrão, já com as permissões da matriz de RF-ADM-005, e o responsável recebe os perfis `administrador` e `gestor`, para que uma empresa com uma só pessoa já libere OS (sumário 3.6). O sistema não impõe calendário padrão à unidade inicial. A troca de CNPJ de uma conta com conexões entre contas é tratada no requisito da conexão (RF-SRV-014). O roteiro de primeiros passos mostra o progresso e pode ser retomado. Dados de exemplo ficam marcados e são excluídos por inteiro com um comando.
 
 #### RF-ADM-002 · Unidade
 
 **Fase:** MVP · **Plano mínimo:** Essencial
 
 - **Descrição:** cadastro da unidade (planta, filial, base ou loja) onde ficam localizações, ativos, almoxarifados e usuários.
-- **Dados principais:** nome, código curto, endereço, CNPJ da filial (opcional), fuso horário, calendário de trabalho (dias e turnos), feriados, situação (ativa ou inativa).
-- **Operações:** criar, editar, inativar.
-- **Validações:** código único na empresa; calendário com pelo menos um turno.
+- **Dados principais:** nome, código curto, endereço, CNPJ da filial (opcional), fuso horário, calendário de trabalho, situação (ativa ou inativa). O calendário fica em duas entidades próprias da unidade: os turnos por dia da semana (`turno_unidade`) e os feriados, com data (`feriado_unidade`) (sumário 3.2).
+- **Operações:** criar, editar, inativar; incluir, alterar e remover turnos e feriados.
+- **Validações:** código único na empresa; calendário com pelo menos um turno (`turno_unidade`). Os turnos são configuráveis pela empresa: o sistema não impõe calendário padrão e só oferece modelos que preenchem o formulário (sumário 3.6).
 - **Regras:** no plano Essencial a empresa tem uma unidade. A unidade não é excluída se tiver ativos, OS ou movimentações; só é inativada. O calendário da unidade é a base do tempo requerido nos KPIs quando o ativo não tem calendário próprio.
 
 #### RF-ADM-003 · Multi-unidade
@@ -160,30 +162,335 @@ Requisitos movidos na versão 0.2:
 **Fase:** MVP · **Plano mínimo:** Essencial
 
 - **Descrição:** gestão dos logins de acesso (`usuario`), inclusive solicitantes, motoristas, visualizadores, compradores e locatários gratuitos e usuários de prestadores.
-- **Dados principais:** nome, e-mail ou telefone celular, pessoa vinculada (`usuario.pessoa_id`, opcional), fornecedor vinculado (`usuario.fornecedor_id`, obrigatório no perfil `prestador`), locatário vinculado (obrigatório no perfil `locatario`), perfis, unidades, custo por hora (para técnicos), situação (`convidado`, `ativo`, `inativo`) (proposta), foto.
-- **Operações:** convidar por e-mail ou por link de telefone; importar por planilha; atribuir perfis; vincular a uma pessoa existente ou criar a pessoa junto; inativar e reativar; redefinir acesso.
-- **Validações:** e-mail ou telefone único na empresa; pelo menos um perfil; não inativar o último `administrador`; usuário com perfil `prestador` tem `fornecedor_id` de um fornecedor ativo e não acumula perfis internos (`administrador`, `gestor`, `planejador`, `almoxarife`, `comprador`) (proposta); usuário com perfil `locatario` só tem esse perfil (proposta).
-- **Regras:** CPF, CNH, documentos pessoais e capacitações ficam na `pessoa` (RF-ADM-015), não no usuário. Usuário com histórico (OS, apontamento, assinatura, leitura) nunca é excluído, só inativado, para preservar a trilha. Inativar um usuário encerra suas sessões e marca o cache do app para limpeza na próxima conexão (RF-MOB-010). Motoristas e técnicos podem entrar sem e-mail, com telefone e código de verificação (proposta), porque parte deles não usa e-mail corporativo. Uma mesma pessoa pode ter acesso a mais de uma empresa e escolhe a empresa ao entrar (proposta).
+- **Dados principais:** nome, e-mail, telefone celular (opcional), pessoa vinculada (`usuario.pessoa_id`, opcional), fornecedor vinculado (`usuario.fornecedor_id`, obrigatório no perfil `prestador`), locatário vinculado (obrigatório no perfil `locatario`), perfis, unidades, custo por hora (para técnicos), situação (`usuario.situacao`: `convidado`, `ativo`, `inativo`; sumário 3.6), permissões avulsas (`usuario_permissao`, RF-ADM-005), foto.
+- **Operações:** convidar por e-mail; importar por planilha; atribuir perfis; vincular a uma pessoa existente ou criar a pessoa junto; inativar e reativar; redefinir acesso. O convite por link enviado ao telefone depende da pendência **P11**. Conceder e retirar permissões avulsas (RF-ADM-005).
+- **Validações:** e-mail obrigatório e único na empresa enquanto a **P11** estiver aberta; pelo menos um perfil; não inativar o último `administrador`; usuário com perfil `prestador` tem `fornecedor_id` de um fornecedor ativo e só tem esse perfil; usuário com perfil `locatario` só tem esse perfil; usuário interno nunca recebe perfil externo (proposta; coerente com o documento 3, seção 4.9, e com o modelo de dados, seção 5.1).
+- **Regras:** CPF, CNH, documentos pessoais e capacitações ficam na `pessoa` (RF-ADM-015), não no usuário. Usuário com histórico (OS, apontamento, assinatura, leitura) nunca é excluído, só inativado, para preservar a trilha. Inativar um usuário encerra suas sessões e marca o cache do app para limpeza na próxima conexão (RF-MOB-010). O login de motoristas e técnicos sem e-mail, por telefone e código de verificação (proposta), porque parte deles não usa e-mail corporativo, fica adiado até a escolha do provedor de SMS (**P11**); até lá, quem não tem e-mail é cadastrado como pessoa sem usuário (RF-ADM-015). Uma mesma pessoa pode ter acesso a mais de uma empresa e escolhe a empresa ao entrar (proposta). O bloqueio temporário por falhas de login é da identidade (`identidade.bloqueada_ate`, RF-ADM-006), não uma situação do usuário (sumário 3.6).
 
 #### RF-ADM-005 · Perfis e permissões
 
 **Fase:** MVP · **Plano mínimo:** Essencial
 
 - **Descrição:** controle de acesso por perfil, com matriz de módulo por ação.
-- **Dados principais:** os doze perfis padrão do sumário (`administrador`, `gestor`, `planejador`, `tecnico`, `almoxarife`, `comprador`, `plh`, `motorista`, `solicitante`, `visualizador`, `prestador`, `locatario`); matriz de permissões no formato `<módulo>.<ação>` (ler, criar, editar, aprovar, encerrar, excluir, exportar e ações específicas, como `os.encerrar` e `est.decidir_destino`); permissões avulsas; perfis personalizados; **escopo de acesso** do usuário: `interno`, `prestador`, `locatario` ou `link` (sessão curta aberta pelo link de uso único, RF-TER-005) (sumário 3.6).
-- **Operações:** consultar a matriz dos perfis padrão; criar perfil personalizado a partir de um padrão (Profissional, proposta); atribuir perfis a usuários; conceder permissões avulsas, como `pessoa.saude.ler`.
-- **Validações:** perfis padrão não podem ser alterados nem excluídos; perfil personalizado não pode conceder permissão que o editor não tem; perfil personalizado derivado de `prestador` ou `locatario` mantém o filtro de escopo do perfil de origem.
-- **Regras:** a permissão é verificada no servidor em cada requisição, inclusive na API e na sincronização do app. Permissões sensíveis (liberar OS, aprovar compra, decidir o destino de peça com defeito, ler dados de saúde, exportar a base inteira) são separadas das de edição comum. A liberação de OS é a permissão `os.encerrar`, padrão em `gestor` e `planejador` e nunca concedida a `prestador` ou `locatario`, nem a perfil personalizado derivado deles. O destino de peça com defeito é a permissão `est.decidir_destino`, padrão em `gestor`, `planejador` e `almoxarife` (RF-EST-017). Dados de saúde (ASO, exame toxicológico) exigem `pessoa.saude.ler`, que não está em nenhum perfil padrão e é concedida usuário a usuário com registro na auditoria. Os escopos `prestador`, `locatario` e `link` têm, além da restrição por empresa, um filtro próprio aplicado no servidor (RNF-037 e RNF-038): o `prestador` vê só OS atribuídas ao seu fornecedor, o `locatario` só ativos locados a ele e o `link` só a OS do link. O usuário `interno` não tem filtro adicional além das unidades.
+- **Dados principais:** os doze perfis padrão do sumário (`administrador`, `gestor`, `planejador`, `tecnico`, `almoxarife`, `comprador`, `plh`, `motorista`, `solicitante`, `visualizador`, `prestador`, `locatario`); matriz de permissões no formato `<módulo>.<ação>` (ler, criar, editar, aprovar, encerrar, excluir, exportar e ações específicas, como `os.encerrar` e `est.decidir_destino`), com o catálogo e a matriz dos perfis padrão na subseção abaixo; permissões avulsas; perfis personalizados; permissões avulsas de um único usuário em `usuario_permissao` (sumário 3.6); **escopo de acesso** do usuário: `interno`, `prestador`, `locatario` ou `link` (sessão curta aberta pelo link de uso único, RF-TER-005) (sumário 3.6).
+- **Operações:** consultar a matriz dos perfis padrão e o catálogo de permissões (`GET /v1/permissoes`); criar perfil personalizado a partir de um padrão (Profissional, proposta); atribuir perfis a usuários; conceder e retirar permissões avulsas (`usuario_permissao`), como `pessoa.saude.ler`.
+- **Validações:** perfis padrão não podem ser alterados nem excluídos; permissão avulsa é sempre do catálogo abaixo; ninguém concede nem retira permissão de si mesmo; perfil personalizado ou permissão avulsa só é concedido por quem tem a permissão concedida e a de gerenciar usuários ou perfis, salvo `os.encerrar`, `est.decidir_destino` e `pessoa.saude.ler`, que só o `administrador` concede ou retira, sempre de outro usuário, embora não as tenha por padrão (proposta, RN-ADM-026 do documento 4); perfil personalizado derivado de `prestador` ou `locatario` mantém o filtro de escopo do perfil de origem; usuário `prestador` ou `locatario` não recebe permissão avulsa fora do conjunto padrão do seu perfil, nem as permissões vedadas a externos (proposta, RN-ADM-026).
+- **Regras:** a permissão é verificada no servidor em cada requisição, inclusive na API e na sincronização do app. Permissões sensíveis (liberar OS, aprovar compra, decidir o destino de peça com defeito, ler dados de saúde, exportar a base inteira) são separadas das de edição comum. A liberação de OS é a permissão `os.encerrar`, padrão em `gestor` e `planejador` e nunca concedida a `prestador` ou `locatario`, nem a perfil personalizado derivado deles. O destino de peça com defeito é a permissão `est.decidir_destino`, padrão em `gestor`, `planejador` e `almoxarife` (RF-EST-017). Dados de saúde (ASO, exame toxicológico) exigem `pessoa.saude.ler`, que não está em nenhum perfil padrão e é concedida usuário a usuário, como permissão avulsa (`usuario_permissao`), com registro na auditoria. Os escopos `prestador`, `locatario` e `link` têm, além da restrição por empresa, um filtro próprio aplicado no servidor (RNF-037 e RNF-038): o `prestador` vê só OS atribuídas ao seu fornecedor, o `locatario` só ativos locados a ele e o `link` só a OS do link. O usuário `interno` não tem filtro adicional além das unidades.
+
+##### Catálogo de permissões e matriz dos perfis padrão (RF-ADM-005)
+
+Esta é a matriz completa de permissões a que o documento 3 remete (3_ESPECIFICACAO_APIS.md, seção 4.8). Respeita o sumário (seções 3.1 e 3.6), os grupos e as doze permissões finas do documento 3 (seções 4.8, 4.9 e o catálogo de endpoints da seção 6) e as permissões citadas no modelo de dados (2_ARQUITETURA_BANCO_DADOS.md, seção 5.1). O que não vem de nenhuma dessas fontes está marcado "(proposta)". O sumário 3.6 (linha "Catálogo de permissões") declara canônicos os códigos deste catálogo e a matriz dos perfis padrão. Permissão nova entra aqui por decisão do dono do produto, com nova versão deste documento, antes de entrar no código.
+
+**Regras do catálogo**
+
+1. **Formato.** `<módulo>.<ação>`, com o código do módulo do sumário (seção 2) em minúsculas; `pessoa.saude.ler` é a exceção aceita (sumário 3.6). A ação `ler` dá leitura. A ação `gerenciar` reúne criar, editar e excluir ou inativar quando os três têm sempre os mesmos perfis padrão, como `prj.gerenciar` e `ctr.gerenciar` no sumário 3.6. Ação de decisão (aprovar, validar, liberar, cancelar, decidir, reabrir) e ação cujos perfis padrão diferem dos do cadastro têm permissão própria (proposta).
+2. **O catálogo inteiro existe desde o MVP.** `GET /v1/permissoes` devolve todas as permissões abaixo, e os doze perfis padrão nascem com a empresa (RF-ADM-001, RF-SRV-001) já com a lista completa, inclusive as permissões de recursos das Fases 2 e 3, para que a empresa não precise rever perfis quando o recurso chegar. A coluna **Fase** diz quando a permissão passa a ter efeito; antes disso, a rota não existe (proposta).
+3. **Permissão não substitui plano nem alcance.** A ordem é credencial, plano, permissão e alcance (documento 3, seção 4.8). Ter a permissão não libera recurso fora do plano (`403 plano_nao_inclui_recurso`), nem registro fora do alcance do usuário.
+4. **Rotas sem permissão fina.** As rotas de sessão e de infraestrutura do próprio usuário exigem só autenticação: `/v1/auth/*`, `/oauth/*`, `GET` e `PATCH /v1/usuarios/eu`, anexos, processamentos, notificações e os próprios dispositivos (documento 3, seção 4.8). `GET /v1/versao` e `GET /v1/configuracao-app` são públicas.
+5. **Rota com mais de uma permissão.** Consumir e estornar peça na OS aceita `os.executar` ou `est.movimentar`. Concluir projeto com ativos `em_implantacao` exige `prj.gerenciar` e `atv.colocar_em_operacao`. Os rascunhos de IA exigem `ia.usar` e a permissão do registro (`os.criar`, `sol.criar` ou `chk.gerenciar`).
+6. **Sensível.** Marcadas "sim" as permissões que este requisito separa da edição comum (liberar OS, aprovar compra, decidir destino de peça, ler dados de saúde, exportar a base inteira), as ações administrativas sensíveis do documento 3, seção 4.4 (tokens, SSO, perfis e usuários, cobrança e parâmetros, conexões entre contas, aplicação de pacote, regras configuráveis, reabertura de medição) e, por proposta, `con.bloquear_ativo` e `ter.aprovar_orcamento`. A tela de perfis mostra as sensíveis destacadas, e cada concessão ou retirada gera evento de auditoria (RF-ADM-011) (proposta).
+
+**Regras dos perfis padrão**
+
+- **Grupos do documento 3.** A matriz expande os grupos do catálogo de endpoints: Todos (todos os perfis internos, sem `prestador` e `locatario`); Leitura (`administrador`, `gestor`, `planejador`, `tecnico`, `almoxarife`, `comprador`, `plh`, `visualizador`); Gestão (`administrador`, `gestor`, `planejador`); Execução (Gestão e `tecnico`); Estoque (`administrador`, `gestor`, `almoxarife`); Compras (Estoque e `comprador`); Admin (`administrador`); Externos (`prestador` e `locatario`, com o alcance da seção 4.9 do documento 3). Os grupos de uma permissão só (Liberação, Destino de peça, Regras, Configuração, Entrada em operação, Projetos, Dispensa de etapa, Ajuste de medição, Contratos, Fechamento de medição, Reabertura de medição) são as próprias permissões, com os perfis do sumário 3.6.
+- **`administrador`.** Tem todas as permissões do catálogo, exceto quatro: `pessoa.saude.ler` (nenhum perfil padrão a tem); `os.encerrar` e `est.decidir_destino`, decisões da operação que o sumário 3.6 e o documento 3 põem só nos perfis da operação; e `ter.manter_catalogo_proprio`, exclusiva do `prestador`. O administrador que também libera OS ou decide destino de peça recebe o perfil `gestor` ou `planejador` (um usuário pode ter vários perfis, seção 2). Essa regra é decisão do sumário 3.6. Só o administrador concede essas três permissões internas a outros usuários, por perfil personalizado ou permissão avulsa (`usuario_permissao`), e nunca a si mesmo (proposta, RN-ADM-026).
+- **Perfis externos (`prestador`, `locatario`).** Têm só as permissões marcadas na matriz, sempre com o alcance da seção 4.9 do documento 3 (RNF-037, RNF-038), e só nas rotas em que aparecem nomeados no catálogo de endpoints; nas demais, a resposta é `404`. Nunca recebem `os.encerrar`, as nove permissões da configuração, de PRJ e de CTR (sumário 3.6), `srv.gerenciar_conexao`, `pessoa.saude.ler` nem permissão do grupo Admin. Perfil personalizado derivado de um deles, e permissão avulsa dada a um deles, só contém permissões do conjunto padrão do perfil de origem (proposta, RN-ADM-026). O `locatario` não tem `mob.usar_app`: o app recusa o login dele (sumário 3.6, RF-MOB-001).
+- **Alcance interno.** O alcance não é permissão: o `solicitante`, o `motorista` e o `locatario` veem só as próprias solicitações (proposta do documento 3); o técnico aponta horas só em OS em que está atribuído; o titular vê a própria pessoa e as próprias capacitações; o autor vê a própria execução de checklist e o próprio sinistro.
+- **Conta da subcontratada (SRV).** Usa os mesmos doze perfis e a mesma matriz, com o significado do lado de quem presta o serviço (seção 2). A permissão `srv.gerenciar_conexao` (sumário 3.6) vale nos dois lados da conexão e tem como padrão `administrador` e `gestor` (RF-SRV-014, RF-SRV-019); o servidor confere de que lado a conta está: só o cliente convida e altera ativos e campos compartilhados, só a subcontratada aceita ou recusa, e só quem suspendeu reativa. Na conta da subcontratada, `os.encerrar` vale só para OS sem vínculo com conta de cliente; numa OS vinculada, a liberação é sempre do cliente (RF-SRV-018). Nenhuma permissão de uma conta vale na outra: técnicos e gestores da subcontratada não têm credencial na conta do cliente (documento 3, seção 4.7).
+
+**Catálogo** (Fase: MVP, F2 ou F3, quando a permissão passa a ter efeito)
+
+| Permissão | Dá direito a | Grupo no documento 3 | Fase | Sensível |
+|---|---|---|---|---|
+| **ADM** | | | | |
+| `adm.ler` | Ler os dados da empresa e das unidades, com turnos e feriados | Leitura | MVP | não |
+| `adm.gerenciar_empresa` | Alterar os dados cadastrais da empresa; criar, alterar e inativar unidades, com turnos (`turno_unidade`) e feriados (`feriado_unidade`) (RF-ADM-001, RF-ADM-002) | Admin | MVP | não |
+| `adm.gerenciar_plano` | Consultar plano, recursos e uso; trocar de plano e de ciclo; baixar faturas (RF-ADM-009) | Admin | MVP | sim |
+| `adm.ler_pessoas` | Listar e detalhar pessoas, sem dados de saúde (RF-ADM-015) | Gestão | MVP | não |
+| `adm.gerenciar_pessoas` | Cadastrar, alterar, inativar e importar pessoas; ligar a pessoa a um usuário (RF-ADM-015) | Gestão | MVP | não |
+| `adm.ler_usuarios` | Listar e detalhar usuários e perfis (RF-ADM-004, RF-ADM-005) | Gestão | MVP | não |
+| `adm.gerenciar_usuarios` | Criar e convidar usuários; alterar perfis, unidades e dados; desativar e reativar; encerrar sessões e revogar dispositivos de outro usuário (RF-ADM-004, RF-MOB-010) | Admin | MVP | sim |
+| `adm.gerenciar_perfis` | Consultar o catálogo de permissões (`GET /v1/permissoes`); criar, alterar e excluir perfis personalizados (Fase 2, Profissional, proposta) (RF-ADM-005) | Admin | MVP | sim |
+| `adm.ler_parametros` | Ler os parâmetros da empresa (RF-ADM-010) | Gestão | MVP | não |
+| `adm.gerenciar_parametros` | Alterar os parâmetros da empresa (RF-ADM-010) e ligar ou desligar, por tela, a captura de visualização, impressão e extração da trilha (`captura_auditoria`, RF-ADM-011) | Admin | MVP | sim |
+| `adm.ler_auditoria` | Consultar, exportar e verificar a integridade da trilha de auditoria (RF-ADM-011) | Admin, `gestor` | MVP | não |
+| `adm.gerenciar_sso` | Configurar SSO OIDC (MVP) e SAML, e emitir token SCIM (Fase 2) (RF-ADM-007, RF-ADM-008) | Admin | MVP | sim |
+| `adm.exportar` | Exportação completa da empresa, agendamento e pedido de encerramento da conta (RF-ADM-013) | Admin | MVP | sim |
+| `adm.ler_configuracao` | Ler e simular regras configuráveis e ler os disparos (RF-ADM-016); ler o catálogo de pacotes de segmento e as aplicações (Fase 2, RF-ADM-017) | Gestão | MVP | não |
+| `adm.gerenciar_regras` | Criar, alterar, ativar, inativar e excluir regras configuráveis (RF-ADM-016) | Regras | MVP | sim |
+| `adm.gerenciar_configuracao` | Manter as definições de campos extras da OS (RF-OS-021, MVP); pré-visualizar e aplicar pacotes de segmento (RF-ADM-017, Fase 2) | Configuração | MVP | sim |
+| `pessoa.saude.ler` | Ler dados de saúde da pessoa (ASO, exame toxicológico) em qualquer rota (RNF-021). Exceção aceita ao formato | — | MVP | sim |
+| **ATV** | | | | |
+| `atv.ler` | Ler localizações e ativos, a árvore e o QR code (RF-ATV-001, RF-ATV-002, RF-ATV-007) | Todos, `prestador`, `locatario` | MVP | não |
+| `atv.ler_tecnico` | Ler classes de ativo, histórico do ativo e documentos técnicos (RF-ATV-005, RF-ATV-008, RF-ATV-010) | Leitura | MVP | não |
+| `atv.gerenciar` | Criar, alterar, mover, inativar e reativar localizações, classes e ativos; emitir etiquetas QR; vincular documentos técnicos | Gestão | MVP | não |
+| `atv.colocar_em_operacao` | Executar `colocar_em_operacao`, unitária ou em lote (RF-ATV-013); concluir projeto com ativos `em_implantacao` (RF-PRJ-007, junto com `prj.gerenciar`) | Entrada em operação | MVP | não |
+| **MED** | | | | |
+| `med.ler` | Ler medidores com a última leitura válida (RF-MED-001) | Leitura, `motorista`, `prestador`, `locatario` | MVP | não |
+| `med.ler_leituras` | Ler o histórico de leituras (RF-MED-002) | Leitura, `locatario` | MVP | não |
+| `med.registrar_leitura` | Registrar leitura de medidor (RF-MED-002) | Execução, `motorista`, `prestador` | MVP | não |
+| `med.gerenciar` | Criar, alterar e inativar medidores; registrar troca ou virada do contador (RF-MED-001, RF-MED-004) | Gestão | MVP | não |
+| `med.validar_leitura` | Aceitar ou invalidar leitura `suspeita`, com motivo (RF-MED-003, RF-MED-007) | Gestão | MVP | não |
+| **SOL** | | | | |
+| `sol.ler` | Ler solicitações e comentários (RF-SOL-003) | Todos, `locatario` | MVP | não |
+| `sol.criar` | Abrir solicitação, comentar, alterar a própria enquanto `nova` e desistir da própria (RF-SOL-001) | Todos, `locatario` | MVP | não |
+| `sol.triar` | Iniciar triagem, aprovar (cria a OS), recusar, marcar duplicada e reabrir como nova; alterar qualquer solicitação (RF-SOL-002) | Gestão | MVP | não |
+| **OS** | | | | |
+| `os.ler` | Ler OS, histórico, tarefas, apontamentos, serviços, peças, comentários, campos extras, códigos de falha, registro NR-12, registros de bloqueio e etiquetagem e o relatório em PDF | Leitura, `prestador`, `locatario` | MVP | não |
+| `os.criar` | Criar OS (RF-OS-001) | Execução | MVP | não |
+| `os.editar` | Alterar os campos editáveis da OS; incluir tarefas e procedimentos; manter os serviços a realizar (RF-OS-006, RF-SRV-007) | Execução | MVP | não |
+| `os.executar` | Reconhecer, assumir, iniciar, pausar, retomar e concluir; marcar tarefas; apontar e corrigir horas; consumir e estornar peças; registrar assinaturas e valores de campos extras; registrar e retirar bloqueio e etiquetagem (RF-OS-007 a RF-OS-011, RF-OS-014, RF-CON-004) | Execução, `prestador` | MVP | não |
+| `os.comentar` | Comentar a OS, com anexos (RF-OS-016) | Execução, `prestador`, `locatario` | MVP | não |
+| `os.planejar` | Planejar, programar e desprogramar; remover tarefa não iniciada; excluir apontamento antes do encerramento (RF-OS-006, RF-OS-007) | Gestão | MVP | não |
+| `os.cancelar` | Cancelar OS `aberta`, `planejada`, `programada` ou `pausada`, com motivo (RF-OS-003) | Gestão | MVP | não |
+| `os.alterar_responsavel_custo` | Trocar o `responsavel_custo`, com justificativa (RF-OS-013) | Gestão | MVP | não |
+| `os.ler_custos` | Ler os custos da OS (RF-OS-013) | Gestão, `locatario` | MVP | não |
+| `os.encerrar` | Liberar (`encerrar`) a OS e recusar a liberação (`recusar-liberacao`) (RF-OS-014) | Liberação | MVP | sim |
+| `os.gerenciar_codigos_falha` | Criar, alterar e inativar códigos de falha do catálogo personalizável (RF-OS-012) | Gestão | F2 | não |
+| **PRE** | | | | |
+| `pre.ler` | Ler planos, gatilhos, previsão, vencimentos e procedimentos (RF-PRE-001 a RF-PRE-008) | Leitura | MVP | não |
+| `pre.gerenciar` | Criar, alterar, ativar, suspender e excluir planos e gatilhos; manter procedimentos; gerar OS antecipada (RF-PRE-001 a RF-PRE-009) | Gestão | MVP | não |
+| **CHK** | | | | |
+| `chk.ler` | Ler modelos de checklist e seus itens (RF-CHK-001) | Todos (e `prestador`, 4.9) | MVP | não |
+| `chk.ler_execucoes` | Ler execuções de checklist, relatórios e versões de modelo (RF-CHK-006) | Leitura (e `prestador`, 4.9) | MVP | não |
+| `chk.executar` | Registrar execução de checklist (RF-CHK-002, RF-CHK-004, RF-CHK-005) | Execução, `motorista` (e `prestador`, 4.9) | MVP | não |
+| `chk.gerenciar` | Criar, alterar, publicar e inativar modelos de checklist (RF-CHK-001) | Gestão | MVP | não |
+| **EST** | | | | |
+| `est.ler` | Ler itens, almoxarifados, saldos, movimentações e reservas; na Fase 2, saldo consolidado, peças serializadas, ordens de reparo, inventários, requisições, pedidos e NF-e | Leitura, `prestador` | MVP | não |
+| `est.gerenciar` | Criar, alterar e inativar itens e almoxarifados; na Fase 2, cadastrar peças serializadas e abrir inventário (RF-EST-001, RF-EST-002, RF-EST-005, RF-EST-016) | Estoque | MVP | não |
+| `est.movimentar` | Registrar `entrada` e, conforme o plano, `transferencia`, `remessa_terceiro` e `retorno_terceiro`; confirmar recebimento de remessa e entrada de NF-e (Fase 2); consumir e estornar peça na OS (RF-EST-003, RF-EST-015) | Estoque, `prestador` | MVP | não |
+| `est.ajustar_saldo` | Registrar `ajuste` com motivo, estornar movimentação e concluir inventário com ajustes (RF-EST-003, RF-EST-005) | Estoque | MVP | não |
+| `est.reservar` | Reservar item para OS e cancelar reserva (RF-EST-006) | Execução, Estoque | MVP | não |
+| `est.decidir_destino` | Decidir o destino de peça com defeito: abrir ordem de reparo, baixar como sucata (`baixa_sucata`), declarar irreparável, devolver ao fornecedor (RF-EST-017, RF-EST-018) | Destino de peça | F2 | sim |
+| `est.contar_inventario` | Registrar contagens de inventário (RF-EST-005) | Estoque, `prestador` | F2 | não |
+| `est.instalar_peca` | Instalar e remover peça serializada em ativo, ligada a uma OS (RF-EST-016) | Execução, `prestador` | F2 | não |
+| `est.gerenciar_reparo` | Alterar e enviar ordem de reparo; registrar o retorno do conserto (RF-EST-018) | Estoque | F2 | não |
+| `est.cancelar_reparo` | Cancelar ordem de reparo `aberta`, com motivo (RF-EST-018) | Estoque, Gestão | F2 | não |
+| `est.requisitar` | Criar requisição de material (RF-EST-007) | Execução, Compras | F2 | não |
+| `est.aprovar_compra` | Aprovar requisição; aprovar e cancelar pedido de compra (RF-EST-007, RF-EST-008) | Gestão | F2 | sim |
+| `est.criar_pedido` | Criar e alterar pedido de compra em rascunho (RF-EST-008) | Compras, Gestão | F2 | não |
+| `est.comprar` | Atender requisição; enviar pedido ao fornecedor; importar e conciliar NF-e (RF-EST-007 a RF-EST-009) | Compras | F2 | não |
+| **TER** | | | | |
+| `ter.ler` | Ler fornecedores e o catálogo de serviços (RF-TER-001, RF-TER-002) | Leitura, `prestador` | MVP | não |
+| `ter.gerenciar` | Criar, alterar e inativar fornecedores, papéis e serviços do fornecedor (RF-TER-001, RF-TER-002) | Compras, Gestão | MVP | não |
+| `ter.manter_catalogo_proprio` | Criar e alterar os serviços do próprio fornecedor, se a empresa permitir (parâmetro, proposta) (RF-TER-004) | `prestador` (4.9) | MVP | não |
+| `ter.atribuir` | Atribuir e retirar a OS de um fornecedor; gerar, listar e revogar links de uso único (RF-TER-003, RF-TER-005) | Gestão | MVP | não |
+| `ter.ler_contratos` | Ler contratos de prestação, cumprimento de SLA, avaliações e orçamentos de fornecedor (RF-TER-006, RF-TER-007, RF-TER-009) | Gestão, Compras, `prestador` | F2 | não |
+| `ter.gerenciar_contratos` | Criar, alterar e inativar contratos de prestação (RF-TER-006) | Gestão, Compras | F2 | não |
+| `ter.avaliar` | Registrar avaliação de fornecedor (RF-TER-007) | Gestão | F2 | não |
+| `ter.registrar_orcamento` | Registrar e alterar orçamento de oficina, assistência ou conserto, inclusive o da ordem de reparo (RF-TER-009, RF-EST-018) | Gestão, Compras, `prestador` | F2 | não |
+| `ter.aprovar_orcamento` | Aprovar ou recusar orçamento de fornecedor, inclusive o da ordem de reparo (RF-TER-009, RF-EST-018) | Gestão, `comprador` | F2 | sim |
+| **SRV** | | | | |
+| `srv.ler` | Ler especialidades de técnico e clientes atendidos (RF-SRV-002, RF-SRV-004) | Leitura | MVP | não |
+| `srv.gerenciar` | Criar, alterar e inativar especialidades de técnico e clientes atendidos (RF-SRV-002, RF-SRV-004) | Gestão | MVP | não |
+| `srv.acompanhar_conexoes` | Ler as conexões entre contas, os ativos compartilhados e os vínculos de OS; reprocessar vínculo em `erro` (RF-SRV-014 a RF-SRV-016) | Gestão | MVP | não |
+| `srv.gerenciar_conexao` | Convidar, aceitar, recusar, suspender, reativar e encerrar conexão entre contas; alterar ativos e campos compartilhados (RF-SRV-014, RF-SRV-019) | Conexão | MVP | sim |
+| **LOC** | | | | |
+| `loc.ler` | Ler locatários, contratos de locação, itens, matriz de responsabilidade e relatório de cobrança (RF-LOC-001 a RF-LOC-004, RF-LOC-009) | Gestão, `locatario` | F2 | não |
+| `loc.gerenciar` | Manter locatários e contratos de locação, itens e matriz; `ativar`, `encerrar`, `cancelar`; registrar substituição (RF-LOC-001 a RF-LOC-004, RF-LOC-007) | Gestão | F2 | não |
+| `loc.ler_vistorias` | Ler vistorias de locação e o termo em PDF (RF-LOC-005) | Gestão, Execução, `locatario` | F2 | não |
+| `loc.vistoriar` | Registrar vistoria de entrega ou de devolução (RF-LOC-005) | Gestão, Execução | F2 | não |
+| `loc.assinar_vistoria` | Registrar a assinatura de uma das partes na vistoria (RF-LOC-005) | Gestão, Execução, `locatario` | F2 | não |
+| **FRO** | | | | |
+| `fro.ler_veiculo` | Ler dados do veículo e, na Fase 2, o mapa de pneus (RF-ATV-003, RF-FRO-003) | Leitura, `motorista` | MVP | não |
+| `fro.ler` | Ler pneus, histórico de pneus e abastecimentos (RF-FRO-002 a RF-FRO-007) | Leitura | F2 | não |
+| `fro.gerenciar` | Alterar dados do veículo (MVP); na Fase 2, alterar e sucatear pneu, corrigir e excluir abastecimento, ler e manter multas e sinistros | Gestão | MVP | não |
+| `fro.acoplar` | Acoplar e desacoplar implemento (RF-ATV-004) | Gestão, `motorista` | MVP | não |
+| `fro.gerenciar_pneus` | Cadastrar pneu; enviar e receber recapagem (RF-FRO-002, RF-FRO-005) | Gestão, Estoque | F2 | não |
+| `fro.operar_pneus` | Montar e desmontar pneu (RF-FRO-003) | Execução | F2 | não |
+| `fro.aferir_pneu` | Registrar sulco e pressão (RF-FRO-004) | Execução, `motorista` | F2 | não |
+| `fro.abastecer` | Registrar abastecimento ou Arla (RF-FRO-007) | Execução, `motorista` | F2 | não |
+| `fro.registrar_sinistro` | Registrar sinistro (RF-FRO-011) | Gestão, `motorista` | F2 | não |
+| **CON** | | | | |
+| `con.ler` | Ler tipos de documento, agenda de documentos (sem dados de saúde), inventário e cronograma NR-12, bloqueios de ativo e a consulta de despacho; na Fase 2, NR-13 e pontos de bloqueio | Leitura | MVP | não |
+| `con.gerenciar_tipos_documento` | Criar e alterar tipos de documento (RF-CON-005) | Admin | MVP | não |
+| `con.gerenciar_documentos` | Registrar, alterar, renovar e inativar documentos com vencimento (RF-CON-005) | Gestão | MVP | não |
+| `con.bloquear_ativo` | Criar bloqueio manual de ativo e liberar bloqueio de origem `manual` ou `regra`, com motivo (RF-CON-007, RF-ADM-016) | Gestão | MVP | sim |
+| `con.gerenciar_capacitacoes` | Ler e manter capacitações de pessoas (RF-CON-012; no MVP, só nas contas com SRV, RF-SRV-003) | Gestão | F2 | não |
+| `con.gerenciar_nr13` | Definir enquadramento e prazos adotados da NR-13 e manter o Registro de Segurança (RF-CON-008 a RF-CON-010) | Gestão (e `plh`, proposta) | F2 | não |
+| `con.gerenciar_loto` | Cadastrar, alterar e inativar pontos de bloqueio LOTO (RF-CON-011) | Gestão | F2 | não |
+| **IND** | | | | |
+| `ind.ler` | Ler indicadores, composição, painéis e o catálogo de relatórios (RF-IND-001 a RF-IND-005) | Leitura | MVP | não |
+| `ind.gerenciar_paineis` | Criar, alterar e excluir painéis (RF-IND-001) | Gestão | MVP | não |
+| `ind.exportar` | Gerar relatórios e exportar listas em CSV ou XLSX (RF-IND-007) | Leitura | MVP | não |
+| **INT** | | | | |
+| `int.gerenciar_tokens` | Criar, alterar, rotacionar e revogar tokens de API (RF-INT-001) | Admin | MVP | sim |
+| `int.gerenciar_webhooks` | Manter assinaturas de webhook, segredos, entregas e reentregas (RF-INT-002) | Admin | MVP | não |
+| `int.importar` | Enviar, validar, confirmar e cancelar importações por planilha (RF-INT-003) | Gestão, Estoque | MVP | não |
+| `int.gerenciar_conexoes_telematica` | Criar, alterar e desativar conexões de telemática, com credenciais (RF-INT-005) | Admin | F2 | não |
+| `int.operar_telematica` | Ler conexões e eventos de telemática; forçar coleta; casar veículos; manter regras de DTC (RF-INT-004 a RF-INT-006) | Gestão | F2 | não |
+| `int.gerenciar_erp` | Manter conectores de ERP, mapeamentos e execuções (RF-INT-008) | Admin | F2 | não |
+| **IA** | | | | |
+| `ia.usar` | Usar o assistente; sem ela, nenhuma rota de IA responde ao usuário. Os rascunhos exigem também a permissão do registro: `os.criar`, `sol.criar` ou `chk.gerenciar` (RF-IA-001, RF-IA-003, RF-IA-004) | Todos | F2 | não |
+| `ia.consultar` | Consultar manuais e histórico e avaliar a resposta (RF-IA-002) | Leitura | F2 | não |
+| `ia.gerenciar` | Ligar e desligar a IA por perfil e usuário, retenção e consumo de créditos (RF-IA-001) | Admin | F2 | não |
+| `ia.aprovar_acoes` | Aprovar ou rejeitar ações propostas por agentes (RF-IA-006) | Gestão | F3 | não |
+| **MOB** | | | | |
+| `mob.usar_app` | Entrar no app e sincronizar o escopo offline (RF-MOB-001, RF-MOB-002) | Todos, `prestador` | MVP | não |
+| **PRJ** | | | | |
+| `prj.ler` | Ler projetos, etapas, acompanhamento e termo de entrega (RF-PRJ-002 a RF-PRJ-005, RF-PRJ-007) | Leitura | F2 | não |
+| `prj.ler_medicoes` | Ler medições de etapas e o relatório (RF-PRJ-006) | Gestão, Compras | F2 | não |
+| `prj.gerenciar` | Manter modelos de projeto e projetos e ler modelos e lançamentos de custo; `iniciar`, `suspender`, `retomar`, `concluir`, `cancelar`; manter etapas, gerar OS, iniciar e concluir etapas; lançar custo; assinar o termo; gerar, apagar e fechar medição de etapas (RF-PRJ-001 a RF-PRJ-007) | Projetos | F2 | não |
+| `prj.dispensar_etapa` | Dispensar etapa `pendente` ou `disponivel`, com motivo (RF-PRJ-003) | Dispensa de etapa | F2 | não |
+| `prj.ajustar_medicao` | Ajustar, com motivo, o valor de uma linha da medição de etapas (RF-PRJ-006) | Ajuste de medição | F2 | não |
+| **CTR** | | | | |
+| `ctr.ler` | Ler contratos com clientes, itens, painel, medições e relatório (RF-CTR-001 a RF-CTR-005) | Gestão | F2 | não |
+| `ctr.gerenciar` | Manter contratos com clientes e itens; `ativar`, `encerrar`, `cancelar`; abrir medição (RF-CTR-001, RF-CTR-002, RF-CTR-004) | Contratos | F2 | não |
+| `ctr.fechar_medicao` | Decidir a exclusão de paradas com causa externa e fechar a medição (RF-CTR-003, RF-CTR-004) | Fechamento de medição | F2 | não |
+| `ctr.reabrir_medicao` | Reabrir medição `fechada`, com motivo (RF-CTR-004) | Reabertura de medição | F2 | sim |
+
+**Matriz dos perfis padrão** (● = a permissão está no perfil padrão). Colunas: Adm `administrador`, Ges `gestor`, Pla `planejador`, Téc `tecnico`, Alm `almoxarife`, Com `comprador`, PLH `plh`, Mot `motorista`, Sol `solicitante`, Vis `visualizador`, Pre `prestador`, Loc `locatario`.
+
+| Permissão | Adm | Ges | Pla | Téc | Alm | Com | PLH | Mot | Sol | Vis | Pre | Loc |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| **ADM** | | | | | | | | | | | | |
+| `adm.ler` | ● | ● | ● | ● | ● | ● | ● |  |  | ● |  |  |
+| `adm.gerenciar_empresa` | ● |  |  |  |  |  |  |  |  |  |  |  |
+| `adm.gerenciar_plano` | ● |  |  |  |  |  |  |  |  |  |  |  |
+| `adm.ler_pessoas` | ● | ● | ● |  |  |  |  |  |  |  |  |  |
+| `adm.gerenciar_pessoas` | ● | ● | ● |  |  |  |  |  |  |  |  |  |
+| `adm.ler_usuarios` | ● | ● | ● |  |  |  |  |  |  |  |  |  |
+| `adm.gerenciar_usuarios` | ● |  |  |  |  |  |  |  |  |  |  |  |
+| `adm.gerenciar_perfis` | ● |  |  |  |  |  |  |  |  |  |  |  |
+| `adm.ler_parametros` | ● | ● | ● |  |  |  |  |  |  |  |  |  |
+| `adm.gerenciar_parametros` | ● |  |  |  |  |  |  |  |  |  |  |  |
+| `adm.ler_auditoria` | ● | ● |  |  |  |  |  |  |  |  |  |  |
+| `adm.gerenciar_sso` | ● |  |  |  |  |  |  |  |  |  |  |  |
+| `adm.exportar` | ● |  |  |  |  |  |  |  |  |  |  |  |
+| `adm.ler_configuracao` | ● | ● | ● |  |  |  |  |  |  |  |  |  |
+| `adm.gerenciar_regras` | ● | ● |  |  |  |  |  |  |  |  |  |  |
+| `adm.gerenciar_configuracao` | ● | ● |  |  |  |  |  |  |  |  |  |  |
+| `pessoa.saude.ler` |  |  |  |  |  |  |  |  |  |  |  |  |
+| **ATV** | | | | | | | | | | | | |
+| `atv.ler` | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |
+| `atv.ler_tecnico` | ● | ● | ● | ● | ● | ● | ● |  |  | ● |  |  |
+| `atv.gerenciar` | ● | ● | ● |  |  |  |  |  |  |  |  |  |
+| `atv.colocar_em_operacao` | ● | ● | ● |  |  |  |  |  |  |  |  |  |
+| **MED** | | | | | | | | | | | | |
+| `med.ler` | ● | ● | ● | ● | ● | ● | ● | ● |  | ● | ● | ● |
+| `med.ler_leituras` | ● | ● | ● | ● | ● | ● | ● |  |  | ● |  | ● |
+| `med.registrar_leitura` | ● | ● | ● | ● |  |  |  | ● |  |  | ● |  |
+| `med.gerenciar` | ● | ● | ● |  |  |  |  |  |  |  |  |  |
+| `med.validar_leitura` | ● | ● | ● |  |  |  |  |  |  |  |  |  |
+| **SOL** | | | | | | | | | | | | |
+| `sol.ler` | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |  | ● |
+| `sol.criar` | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |  | ● |
+| `sol.triar` | ● | ● | ● |  |  |  |  |  |  |  |  |  |
+| **OS** | | | | | | | | | | | | |
+| `os.ler` | ● | ● | ● | ● | ● | ● | ● |  |  | ● | ● | ● |
+| `os.criar` | ● | ● | ● | ● |  |  |  |  |  |  |  |  |
+| `os.editar` | ● | ● | ● | ● |  |  |  |  |  |  |  |  |
+| `os.executar` | ● | ● | ● | ● |  |  |  |  |  |  | ● |  |
+| `os.comentar` | ● | ● | ● | ● |  |  |  |  |  |  | ● | ● |
+| `os.planejar` | ● | ● | ● |  |  |  |  |  |  |  |  |  |
+| `os.cancelar` | ● | ● | ● |  |  |  |  |  |  |  |  |  |
+| `os.alterar_responsavel_custo` | ● | ● | ● |  |  |  |  |  |  |  |  |  |
+| `os.ler_custos` | ● | ● | ● |  |  |  |  |  |  |  |  | ● |
+| `os.encerrar` |  | ● | ● |  |  |  |  |  |  |  |  |  |
+| `os.gerenciar_codigos_falha` | ● | ● | ● |  |  |  |  |  |  |  |  |  |
+| **PRE** | | | | | | | | | | | | |
+| `pre.ler` | ● | ● | ● | ● | ● | ● | ● |  |  | ● |  |  |
+| `pre.gerenciar` | ● | ● | ● |  |  |  |  |  |  |  |  |  |
+| **CHK** | | | | | | | | | | | | |
+| `chk.ler` | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |  |
+| `chk.ler_execucoes` | ● | ● | ● | ● | ● | ● | ● |  |  | ● | ● |  |
+| `chk.executar` | ● | ● | ● | ● |  |  |  | ● |  |  | ● |  |
+| `chk.gerenciar` | ● | ● | ● |  |  |  |  |  |  |  |  |  |
+| **EST** | | | | | | | | | | | | |
+| `est.ler` | ● | ● | ● | ● | ● | ● | ● |  |  | ● | ● |  |
+| `est.gerenciar` | ● | ● |  |  | ● |  |  |  |  |  |  |  |
+| `est.movimentar` | ● | ● |  |  | ● |  |  |  |  |  | ● |  |
+| `est.ajustar_saldo` | ● | ● |  |  | ● |  |  |  |  |  |  |  |
+| `est.reservar` | ● | ● | ● | ● | ● |  |  |  |  |  |  |  |
+| `est.decidir_destino` |  | ● | ● |  | ● |  |  |  |  |  |  |  |
+| `est.contar_inventario` | ● | ● |  |  | ● |  |  |  |  |  | ● |  |
+| `est.instalar_peca` | ● | ● | ● | ● |  |  |  |  |  |  | ● |  |
+| `est.gerenciar_reparo` | ● | ● |  |  | ● |  |  |  |  |  |  |  |
+| `est.cancelar_reparo` | ● | ● | ● |  | ● |  |  |  |  |  |  |  |
+| `est.requisitar` | ● | ● | ● | ● | ● | ● |  |  |  |  |  |  |
+| `est.aprovar_compra` | ● | ● | ● |  |  |  |  |  |  |  |  |  |
+| `est.criar_pedido` | ● | ● | ● |  | ● | ● |  |  |  |  |  |  |
+| `est.comprar` | ● | ● |  |  | ● | ● |  |  |  |  |  |  |
+| **TER** | | | | | | | | | | | | |
+| `ter.ler` | ● | ● | ● | ● | ● | ● | ● |  |  | ● | ● |  |
+| `ter.gerenciar` | ● | ● | ● |  | ● | ● |  |  |  |  |  |  |
+| `ter.manter_catalogo_proprio` |  |  |  |  |  |  |  |  |  |  | ● |  |
+| `ter.atribuir` | ● | ● | ● |  |  |  |  |  |  |  |  |  |
+| `ter.ler_contratos` | ● | ● | ● |  | ● | ● |  |  |  |  | ● |  |
+| `ter.gerenciar_contratos` | ● | ● | ● |  | ● | ● |  |  |  |  |  |  |
+| `ter.avaliar` | ● | ● | ● |  |  |  |  |  |  |  |  |  |
+| `ter.registrar_orcamento` | ● | ● | ● |  | ● | ● |  |  |  |  | ● |  |
+| `ter.aprovar_orcamento` | ● | ● | ● |  |  | ● |  |  |  |  |  |  |
+| **SRV** | | | | | | | | | | | | |
+| `srv.ler` | ● | ● | ● | ● | ● | ● | ● |  |  | ● |  |  |
+| `srv.gerenciar` | ● | ● | ● |  |  |  |  |  |  |  |  |  |
+| `srv.acompanhar_conexoes` | ● | ● | ● |  |  |  |  |  |  |  |  |  |
+| `srv.gerenciar_conexao` | ● | ● |  |  |  |  |  |  |  |  |  |  |
+| **LOC** | | | | | | | | | | | | |
+| `loc.ler` | ● | ● | ● |  |  |  |  |  |  |  |  | ● |
+| `loc.gerenciar` | ● | ● | ● |  |  |  |  |  |  |  |  |  |
+| `loc.ler_vistorias` | ● | ● | ● | ● |  |  |  |  |  |  |  | ● |
+| `loc.vistoriar` | ● | ● | ● | ● |  |  |  |  |  |  |  |  |
+| `loc.assinar_vistoria` | ● | ● | ● | ● |  |  |  |  |  |  |  | ● |
+| **FRO** | | | | | | | | | | | | |
+| `fro.ler_veiculo` | ● | ● | ● | ● | ● | ● | ● | ● |  | ● |  |  |
+| `fro.ler` | ● | ● | ● | ● | ● | ● | ● |  |  | ● |  |  |
+| `fro.gerenciar` | ● | ● | ● |  |  |  |  |  |  |  |  |  |
+| `fro.acoplar` | ● | ● | ● |  |  |  |  | ● |  |  |  |  |
+| `fro.gerenciar_pneus` | ● | ● | ● |  | ● |  |  |  |  |  |  |  |
+| `fro.operar_pneus` | ● | ● | ● | ● |  |  |  |  |  |  |  |  |
+| `fro.aferir_pneu` | ● | ● | ● | ● |  |  |  | ● |  |  |  |  |
+| `fro.abastecer` | ● | ● | ● | ● |  |  |  | ● |  |  |  |  |
+| `fro.registrar_sinistro` | ● | ● | ● |  |  |  |  | ● |  |  |  |  |
+| **CON** | | | | | | | | | | | | |
+| `con.ler` | ● | ● | ● | ● | ● | ● | ● |  |  | ● |  |  |
+| `con.gerenciar_tipos_documento` | ● |  |  |  |  |  |  |  |  |  |  |  |
+| `con.gerenciar_documentos` | ● | ● | ● |  |  |  |  |  |  |  |  |  |
+| `con.bloquear_ativo` | ● | ● | ● |  |  |  |  |  |  |  |  |  |
+| `con.gerenciar_capacitacoes` | ● | ● | ● |  |  |  |  |  |  |  |  |  |
+| `con.gerenciar_nr13` | ● | ● | ● |  |  |  | ● |  |  |  |  |  |
+| `con.gerenciar_loto` | ● | ● | ● |  |  |  |  |  |  |  |  |  |
+| **IND** | | | | | | | | | | | | |
+| `ind.ler` | ● | ● | ● | ● | ● | ● | ● |  |  | ● |  |  |
+| `ind.gerenciar_paineis` | ● | ● | ● |  |  |  |  |  |  |  |  |  |
+| `ind.exportar` | ● | ● | ● | ● | ● | ● | ● |  |  | ● |  |  |
+| **INT** | | | | | | | | | | | | |
+| `int.gerenciar_tokens` | ● |  |  |  |  |  |  |  |  |  |  |  |
+| `int.gerenciar_webhooks` | ● |  |  |  |  |  |  |  |  |  |  |  |
+| `int.importar` | ● | ● | ● |  | ● |  |  |  |  |  |  |  |
+| `int.gerenciar_conexoes_telematica` | ● |  |  |  |  |  |  |  |  |  |  |  |
+| `int.operar_telematica` | ● | ● | ● |  |  |  |  |  |  |  |  |  |
+| `int.gerenciar_erp` | ● |  |  |  |  |  |  |  |  |  |  |  |
+| **IA** | | | | | | | | | | | | |
+| `ia.usar` | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |  |  |
+| `ia.consultar` | ● | ● | ● | ● | ● | ● | ● |  |  | ● |  |  |
+| `ia.gerenciar` | ● |  |  |  |  |  |  |  |  |  |  |  |
+| `ia.aprovar_acoes` | ● | ● | ● |  |  |  |  |  |  |  |  |  |
+| **MOB** | | | | | | | | | | | | |
+| `mob.usar_app` | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● | ● |  |
+| **PRJ** | | | | | | | | | | | | |
+| `prj.ler` | ● | ● | ● | ● | ● | ● | ● |  |  | ● |  |  |
+| `prj.ler_medicoes` | ● | ● | ● |  | ● | ● |  |  |  |  |  |  |
+| `prj.gerenciar` | ● | ● | ● |  |  |  |  |  |  |  |  |  |
+| `prj.dispensar_etapa` | ● | ● |  |  |  |  |  |  |  |  |  |  |
+| `prj.ajustar_medicao` | ● | ● |  |  |  |  |  |  |  |  |  |  |
+| **CTR** | | | | | | | | | | | | |
+| `ctr.ler` | ● | ● | ● |  |  |  |  |  |  |  |  |  |
+| `ctr.gerenciar` | ● | ● |  |  |  |  |  |  |  |  |  |  |
+| `ctr.fechar_medicao` | ● | ● |  |  |  |  |  |  |  |  |  |  |
+| `ctr.reabrir_medicao` | ● | ● |  |  |  |  |  |  |  |  |  |  |
+
+**Totais por perfil padrão:** `administrador` 113, `gestor` 102, `planejador` 87, `almoxarife` 41, `tecnico` 38, `comprador` 32, `plh` 24, `visualizador` 23, `prestador` 18, `motorista` 14, `locatario` 11, `solicitante` 6, num catálogo de 117 permissões.
 
 #### RF-ADM-006 · Autenticação
 
 **Fase:** MVP · **Plano mínimo:** Essencial
 
-- **Descrição:** acesso por e-mail e senha, ou telefone e código, com segundo fator.
-- **Dados principais:** credenciais, fator TOTP, sessões ativas por dispositivo.
-- **Operações:** entrar, sair, recuperar senha, ativar MFA, tornar MFA obrigatório para a empresa, encerrar sessões.
+- **Descrição:** acesso por e-mail e senha, com segundo fator. O acesso por telefone e código fica adiado até a escolha do provedor de SMS (pendência **P11**); até lá, todo login é por e-mail e senha ou por SSO (RF-ADM-007).
+- **Dados principais:** credenciais (e-mail e senha), fator TOTP, sessões ativas por dispositivo e por canal (web ou app), tentativas de login com falha e bloqueio temporário, links enviados por e-mail (convite, redefinição de senha, verificação de e-mail).
+- **Operações:** entrar, sair, recuperar senha por link enviado ao e-mail, ativar MFA por TOTP, tornar MFA obrigatório para a empresa (`empresa.mfa_obrigatorio`), encerrar sessões.
 - **Validações:** política de senha (mínimo de 10 caracteres e verificação contra senhas vazadas) (proposta); bloqueio temporário após 5 tentativas erradas (proposta).
-- **Regras:** MFA é opcional para clientes e pode ser exigido pelo `administrador`; para a equipe interna da Tenaz é obrigatório (RNF-017). Todo login, falha de login e troca de senha gera evento de auditoria.
+- **Regras:** MFA é opcional para clientes e pode ser exigido pelo `administrador` no campo `empresa.mfa_obrigatorio`: ligado, o usuário sem MFA só entra depois de ativá-lo (sumário 3.6). O bloqueio temporário após falhas de login fica na identidade (`identidade.bloqueada_ate`) e não muda a situação do usuário. Para a equipe interna da Tenaz é obrigatório (RNF-017). Todo login, falha de login e troca de senha gera evento de auditoria. Quando a **P11** for decidida, o login por telefone e código entra neste requisito, sem mudar a fase.
 
 #### RF-ADM-007 · SSO OIDC
 
@@ -236,11 +543,56 @@ Requisitos movidos na versão 0.2:
 
 **Fase:** MVP · **Plano mínimo:** Essencial
 
-- **Descrição:** registro imutável de quem fez o quê, quando, com valores antes e depois (`evento_auditoria`).
-- **Dados principais:** usuário ou integração, ação, entidade e ID, valores antes e depois, data e hora do servidor, data e hora do dispositivo (para ações offline), IP, dispositivo, origem (web, app, API, sistema).
-- **Operações:** consultar com filtros (usuário, entidade, período, ação); ver o histórico de um registro na própria tela do registro; exportar em CSV.
-- **Validações:** nenhum perfil, inclusive `administrador`, altera ou exclui eventos.
-- **Regras:** cobre no mínimo OS, ativos, medidores, estoque, documentos, conformidade, permissões, parâmetros, configurações de integração e conexões entre contas. Cada gravação feita pelo processo de sincronização entre contas gera evento nas duas contas, com origem `sistema`, a conexão e o registro correspondente na outra conta (RF-SRV-014, RNF-041). Retenção mínima de 5 anos (RNF-019).
+- **Descrição:** registro imutável e verificável de quem fez o quê, quando, de onde e em qual tela, com valores antes e depois (`evento_auditoria`), captura configurável por tela da visualização, da impressão e da extração (`captura_auditoria`) e controle de integridade por hash e selo encadeado (`selo_auditoria`) (sumário 3.2 e 3.6). Ampliado na etapa E01 por pedido do dono do produto. Continua um requisito só: evento, captura, selo e telas são partes da mesma trilha e são entregues juntos.
+- **Dados de todo evento:**
+  - data e hora do servidor e, na ação feita offline, também a do aparelho;
+  - usuário, com id e nome no instante do evento, guardados no próprio evento para que a troca de nome não reescreva o histórico (proposta); sem usuário, a integração (token de API) ou o sistema;
+  - IP de origem visto pelo servidor; atrás do balanceador, o informado por ele, nunca um cabeçalho enviado pelo cliente (proposta);
+  - tipo de operação (tabela abaixo);
+  - tela de origem (`evento_auditoria.tela`) e módulo (`evento_auditoria.modulo`, código do sumário, seção 2, em minúsculas); chamada sem tela (API, job, sincronização) grava só o módulo;
+  - escopo de acesso da credencial (`interno`, `prestador`, `locatario`, `link`; RF-ADM-005), origem (web, app, API, sistema) e aparelho;
+  - entidade e id do registro e, em inclusão, alteração, exclusão e deleção, os valores antes e depois;
+  - hash do próprio conteúdo (`evento_auditoria.hash`).
+- **Tipos de operação** (lista fechada, sumário 3.6):
+
+  | Tipo | O que é | Gravação |
+  |---|---|---|
+  | `login` | Entrada na conta, com sucesso ou falha | Sempre |
+  | `logout` | Saída, inclusive por expiração ou revogação da sessão | Sempre |
+  | `inclusao` | Cadastro de registro | Sempre |
+  | `alteracao` | Mudança de campos de um registro existente | Sempre |
+  | `exclusao` | Exclusão lógica ou inativação; o registro continua no banco | Sempre |
+  | `delecao` | Remoção física de linha, como desfazer um vínculo | Sempre |
+  | `visualizacao` | Abrir o detalhe de um registro numa tela | Sempre quando mostra dado sensível; nas demais telas, só com a captura ligada |
+  | `impressao` | Gerar PDF ou imprimir um registro ou uma tela | Com a captura ligada na tela |
+  | `extracao` | Exportar lista, gerar relatório, baixar exportação | Com a captura ligada na tela |
+
+- **Dado sensível:** dados de saúde (lidos com `pessoa.saude.ler`), CPF completo, dados de vítimas de sinistro e CPF de locatário pessoa física (RNF-021). A visualização deles é sempre gravada, em qualquer tela, sem opção de desligar.
+- **Operações:**
+  - **Consulta da trilha:** filtros por usuário, tela ou módulo, tipo de operação, período e IP, além de entidade e registro; histórico de um registro na tela dele; detalhe do evento com antes e depois.
+  - **Exportação** da consulta em CSV, com os mesmos filtros; a própria exportação é uma `extracao`.
+  - **Verificação de integridade:** o usuário escolhe um período, e a tela mostra cada período selado como **íntegro** ou **violado**, apontando o primeiro evento ou selo divergente; o período ainda não selado aparece como **ainda não selado** (proposta).
+  - **Configuração das capturas por tela:** lista das telas do sistema por módulo, com uma chave para visualização, impressão e extração em cada tela; as operações sempre gravadas aparecem fixas, sem chave.
+- **Validações:** nenhum perfil, inclusive `administrador` e o suporte da Tenaz, altera ou exclui eventos ou selos; tipo de operação só da lista fechada; a configuração só aceita visualização, impressão e extração; consultar, exportar e verificar exige `adm.ler_auditoria`; configurar as capturas exige `adm.gerenciar_parametros` (RF-ADM-005).
+- **Regras:**
+  - Cobre no mínimo OS, ativos, medidores, estoque, documentos, conformidade, empresa e unidades (inclusive turnos e feriados), pessoas, usuários, perfis e permissões (inclusive a concessão de `pessoa.saude.ler` em `usuario_permissao`), login e falha de login (RF-ADM-006), parâmetros, configurações de integração e conexões entre contas.
+  - Os eventos de inclusão, alteração, exclusão e deleção são gravados na mesma transação do fato: se o fato é desfeito, o evento também é.
+  - Cada gravação feita pelo processo de sincronização entre contas gera evento nas duas contas, com origem `sistema`, a conexão e o registro correspondente na outra conta (RF-SRV-014, RNF-041).
+  - Ligar ou desligar uma captura é uma `alteracao` sempre gravada e só vale para eventos futuros. Padrão na criação da empresa: impressão e extração ligadas em todas as telas, visualização desligada (proposta).
+  - **Integridade:** o hash de cada evento cobre todos os campos dele. Um job encadeia, por empresa e por período, os hashes dos eventos do período, em ordem, com o selo do período anterior, e grava o resultado em `selo_auditoria` e fora do banco, em armazenamento imutável. Período do selo: um dia UTC (proposta, como no modelo de dados, seção 9.4). Armazenamento imutável em produção: bucket com bloqueio de objeto em modo de conformidade e retenção igual à da trilha (proposta); em desenvolvimento, o MinIO do compose local com bloqueio de objeto ligado (proposta). A verificação recalcula os hashes a partir dos eventos e compara com o selo do banco e com a cópia imutável; evento alterado, apagado ou incluído fora de ordem dá **violado**.
+  - **Dados pessoais e LGPD:** a visualização, a impressão e a extração guardam o que foi acessado (entidade, registro, tela, filtros), nunca o conteúdo mostrado. Valores antes e depois de campos de saúde não vão em claro para a trilha: o evento registra só que o campo mudou (proposta). A trilha é dado pessoal mantido para cumprir obrigação legal e defender direitos; pedido de eliminação do titular não apaga eventos dentro da retenção (RNF-019, RNF-021).
+  - **Retenção:** mínimo de 5 anos, configurável para mais por empresa, para eventos e selos (RNF-019). Depois de 24 meses os eventos saem do banco para o arquivo imutável (modelo de dados, seção 9.5), e a verificação de um período arquivado roda de forma assíncrona (proposta).
+  - **Exportação completa (RF-ADM-013):** o pacote inclui os eventos e os selos do período retido, para que o cliente verifique a integridade fora da Tenaz (proposta). Pedir e baixar a exportação completa é sempre gravado como `extracao`, mesmo com a captura desligada (proposta).
+- **Critérios de aceite:**
+  1. Para cada tipo de operação, o evento traz data e hora, usuário (id e nome), IP, tipo, tela ou módulo e hash; um teste automatizado por tipo.
+  2. Com todas as capturas desligadas, login, logout, inclusão, alteração, exclusão, deleção e visualização de dado sensível continuam gerando evento, e a tela de configuração não oferece chave para eles.
+  3. Com a captura de visualização desligada numa tela, abrir um registro nela não gera evento; ligada, gera um evento por registro aberto; a troca da chave aparece na trilha como `alteracao`.
+  4. Impressão e extração seguem a chave da tela, inclusive na exportação da própria trilha.
+  5. Alterar ou apagar um evento direto no banco, com o papel dono das tabelas, faz a verificação do período mostrar **violado** e apontar o evento; período intacto mostra **íntegro**. O selo existe também no armazenamento imutável, que recusa apagá-lo ou sobrescrevê-lo.
+  6. Os filtros por usuário, tela ou módulo, tipo, período e IP devolvem só os eventos que atendem a todos, e a exportação em CSV traz as mesmas linhas.
+  7. Nenhum perfil altera nem exclui evento ou selo pela API; usuário sem `adm.ler_auditoria` recebe `403`; sem `adm.gerenciar_parametros`, a configuração das capturas também.
+  8. O evento de visualização de um documento de saúde não contém o conteúdo do documento.
+  9. A trilha de uma empresa não mostra eventos de outra (RNF-013), e a verificação de integridade usa só os selos da própria empresa.
 
 #### RF-ADM-012 · Notificações
 
@@ -257,9 +609,9 @@ Requisitos movidos na versão 0.2:
 **Fase:** MVP · **Plano mínimo:** Essencial
 
 - **Descrição:** exportação de todos os dados da empresa, sob demanda ou agendada, e processo de saída do cliente.
-- **Dados principais:** pacote em JSON e CSV com anexos, manifesto com contagens e hashes.
+- **Dados principais:** pacote em JSON e CSV com anexos, manifesto com contagens e hashes; inclui a trilha de auditoria e os selos de integridade do período retido, para verificação fora da Tenaz (proposta, RF-ADM-011).
 - **Operações:** solicitar exportação; agendar exportação periódica; baixar pacote por link temporário; solicitar encerramento da conta.
-- **Validações:** só `administrador` solicita; link expira em 7 dias (proposta).
+- **Validações:** só `administrador` solicita; link expira em 7 dias (proposta); pedir e baixar o pacote sempre gera evento `extracao` na trilha (proposta, RF-ADM-011).
 - **Regras:** o pacote fica pronto em até 24 horas (RNF-023). Após o encerramento, os dados ficam disponíveis para exportação por 90 dias e depois são excluídos, com comprovante (RNF-024). O encerramento da conta encerra todas as suas conexões com outras contas (RF-SRV-019); a outra conta mantém as cópias que já recebeu.
 
 #### RF-ADM-014 · Banco dedicado opcional
@@ -275,10 +627,10 @@ Requisitos movidos na versão 0.2:
 **Fase:** MVP · **Plano mínimo:** Essencial
 
 - **Descrição:** cadastro de quem executa, conduz ou responde por algo (`pessoa`): técnico, motorista, condutor eventual, técnico de fornecedor, PLH e, na conta de uma subcontratada, os técnicos dela (RF-SRV-003). A pessoa pode ter ou não um `usuario`.
-- **Dados principais:** nome, CPF (protegido), matrícula, vínculo (`empregado`, `terceiro`) (proposta), fornecedor (quando for técnico de fornecedor), unidade, contato, foto, usuário vinculado (opcional), situação. Ligados à pessoa: CNH e demais documentos pessoais (RF-CON-005), capacitações (RF-CON-012), dados de saúde (ASO, exame toxicológico) e vínculos com veículo (RF-FRO-001).
+- **Dados principais:** nome, CPF (protegido), matrícula, vínculo (`pessoa.vinculo`: `empregado`, `terceiro` ou `autonomo`), fornecedor (quando for técnico de fornecedor), unidade, contato, foto, usuário vinculado (opcional), situação (`pessoa.situacao`: `ativa` ou `inativa`; não há `desligada`) (sumário 3.6). Ligados à pessoa: CNH e demais documentos pessoais (RF-CON-005), capacitações (RF-CON-012), dados de saúde (ASO, exame toxicológico) e vínculos com veículo (RF-FRO-001).
 - **Operações:** criar, editar, inativar, importar por planilha; criar o usuário a partir da pessoa ou ligar a um usuário existente; consultar documentos e capacitações da pessoa. Rota `/v1/pessoas`.
-- **Validações:** CPF válido e único na empresa, quando informado; uma pessoa tem no máximo um usuário por empresa; pessoa com `fornecedor` informado só pode ser ligada a usuário com perfil `prestador` daquele fornecedor.
-- **Regras:** pessoa sem login não é cobrada. Dados de saúde só são lidos com `pessoa.saude.ler` (RNF-021). Pessoa com histórico (condução, capacitação, assinatura, execução) não é excluída, só inativada. A pessoa não é modelada como usuário sem login.
+- **Validações:** CPF válido e único na empresa, quando informado; uma pessoa tem no máximo um usuário por empresa; pessoa com `fornecedor` informado tem vínculo `terceiro` e só pode ser ligada a usuário com perfil `prestador` daquele fornecedor.
+- **Regras:** pessoa sem login não é cobrada. Dados de saúde só são lidos com `pessoa.saude.ler` (RNF-021). Pessoa com histórico (condução, capacitação, assinatura, execução) não é excluída, só inativada. A pessoa não é modelada como usuário sem login. Vínculo `autonomo` é o profissional sem empregador nem fornecedor, como o condutor eventual contratado por serviço (sumário 3.6). Pessoa inativa nunca é excluída: continua no banco, ligada ao histórico dos serviços de que participou (por exemplo, o motorista temporário de um transporte de equipamento), e volta por reativação, não por novo cadastro. Enquanto a **P11** estiver aberta, técnico ou motorista sem e-mail fica como pessoa sem usuário e é ligado a um usuário quando passar a ter e-mail ou quando o login por telefone existir (RF-ADM-004).
 
 #### RF-ADM-016 · Regras configuráveis de condição e efeito
 
@@ -1329,6 +1681,7 @@ Módulo da **conta própria da subcontratada** ou assistência técnica (sumári
 - **Operações:** criar a conta pelo site escolhendo *Tenaz Serviços*; seguir o roteiro de primeiros passos (cadastrar especialidades e técnicos, cadastrar ou importar clientes e equipamentos, montar o catálogo de serviços, abrir e distribuir a primeira OS, emitir o primeiro relatório, aceitar o primeiro convite de cliente quando houver); habilitar o SRV numa conta já existente da mesma empresa; contratar ou cancelar plano adicional; consultar uso e faturas (RF-ADM-009).
 - **Validações:** CNPJ válido; o SRV é habilitado na conta existente do CNPJ, nunca numa segunda conta da mesma empresa (proposta, coerente com o CNPJ único de RF-ADM-001); recursos fora do plano Serviços ficam visíveis com a indicação do plano que os libera.
 - **Regras:**
+  - A conta nasce com os mesmos doze perfis padrão e a mesma matriz de permissões das demais contas (RF-ADM-005), com o significado do lado de quem presta o serviço (seção 2). Conexões com clientes exigem `srv.gerenciar_conexao`, padrão em `administrador` e `gestor`. Quem tem acesso à conta da subcontratada e a outra empresa escolhe a empresa ao entrar (RF-ADM-004, RF-MOB-001).
   - O plano Serviços inclui (sumário 2.2): SRV completo (técnicos, clientes, equipamentos de clientes, OS de serviço, catálogo de serviços, componentes, app offline, assinatura do cliente na OS, relatório de serviços por cliente, conexão com clientes Tenaz), estoque básico (RF-EST-001 a RF-EST-004, RF-EST-006) e indicadores essenciais (RF-IND-001 a RF-IND-005, RF-IND-007, aplicados à conta). Inclui também o que a OS e o app já trazem: checklists (RF-CHK), documentos com vencimento (RF-CON-005, RF-CON-006), assinatura eletrônica avançada (RF-CON-014) e importação e exportação (RF-INT-003, RF-ADM-013).
   - Não inclui API pública, webhooks e SSO (Profissional) nem planos preventivos (PRE) sobre equipamentos de clientes, que o sumário 2.2 não cita (seção 8).
   - **Técnico cobrado:** usuário ativo com perfil `tecnico` na conta da subcontratada, pelo maior número diário no ciclo; `gestor` e `planejador` não pagam. Preço proposto R$ 59 (anual) e R$ 69 (mensal) por técnico/mês; mínimo de 1 técnico (proposta). Preço e mínimo dependem de **P4**.
@@ -1352,7 +1705,7 @@ Módulo da **conta própria da subcontratada** ou assistência técnica (sumári
 
 - **Descrição:** cadastro dos técnicos como `pessoa` com `usuario` de perfil `tecnico`, com especialidades, capacitações e documentos.
 - **Dados principais:** pessoa (RF-ADM-015: nome, CPF protegido, matrícula, contato, foto, situação); usuário com perfil `tecnico` (RF-ADM-004); especialidades (`pessoa_especialidade`: especialidade e, opcionalmente, nível `auxiliar`, `pleno` ou `especialista`, proposta); capacitações (`capacitacao`: tipo, data de realização, validade, carga horária, instituição, certificado); documentos pessoais com vencimento (`documento_vencimento`: CNH, ASO e outros, RF-CON-005); custo por hora (para custo e indicadores internos); região de atendimento (proposta); calendário de trabalho (o da unidade, por padrão).
-- **Operações:** criar, editar, inativar; criar o usuário e convidar para o app por e-mail ou telefone; vincular e desvincular especialidades; cadastrar e renovar capacitações e documentos, com alertas D-60, D-30 e D-7 (RF-CON-006); importar por planilha; ver agenda, OS e horas do técnico; ver a matriz de técnicos por especialidade e capacitação.
+- **Operações:** criar, editar, inativar; criar o usuário e convidar para o app por e-mail (o convite por telefone depende da **P11**, RF-ADM-004); vincular e desvincular especialidades; cadastrar e renovar capacitações e documentos, com alertas D-60, D-30 e D-7 (RF-CON-006); importar por planilha; ver agenda, OS e horas do técnico; ver a matriz de técnicos por especialidade e capacitação.
 - **Validações:** CPF válido e único na conta, quando informado; técnico precisa de pelo menos uma especialidade para aparecer como sugestão na distribuição (proposta); capacitação com validade posterior à realização; dados de saúde (ASO) só com `pessoa.saude.ler` (RNF-021).
 - **Regras:** técnico ativo com perfil `tecnico` é cobrado (RF-SRV-001); técnico inativado perde o acesso e tem o cache do app limpo (RF-MOB-010). No MVP, capacitação vencida ou ausente gera **aviso** na atribuição, sem bloquear; o bloqueio de atribuição por capacitação (RF-CON-013) chega na Fase 2 (proposta). O cadastro de capacitações do técnico usa a mesma entidade `capacitacao` de RF-CON-012, entregue no MVP só para contas com SRV (proposta). Para o cliente conectado, a conexão compartilha só o nome do técnico e, se o campo estiver liberado, as capacitações exigidas pela OS e sua validade (RF-SRV-014); CPF, documentos pessoais, custo por hora e dados de saúde nunca saem da conta.
 
@@ -2247,8 +2600,8 @@ Referências exibidas ao lado dos KPIs, sempre com a fonte: CMF até 4% do fatur
 **Fase:** MVP · **Plano mínimo:** Essencial
 
 - **Descrição:** login e perfis no app Android e iOS.
-- **Operações:** entrar por e-mail e senha, telefone e código, ou SSO (quando contratado); escolher a empresa; desbloquear rapidamente por PIN ou biometria do aparelho (proposta).
-- **Regras:** o app mostra as telas conforme o perfil: `tecnico` (inclusive o técnico da conta de uma subcontratada, RF-SRV-011), `prestador` (só OS do seu fornecedor), `motorista`, `solicitante`, `almoxarife` (Fase 2) e `gestor` (consulta e aprovações). O `locatario` usa só o portal web (RF-LOC-008), sem acesso ao app (sumário 3.6). Quem tem acesso a mais de uma empresa (por exemplo, à conta da subcontratada e à conta própria de um cliente) escolhe a empresa ao entrar e troca sem sair; o cache de cada empresa fica separado no aparelho. A versão do app aparece na tela de login e na tela principal (RNF-039). O desbloqueio local funciona offline; o token é renovado ao reconectar.
+- **Operações:** entrar por e-mail e senha, com o segundo fator TOTP quando ativado, ou por SSO (quando contratado), sempre pelo navegador do sistema (RF-ADM-006); escolher a empresa; desbloquear rapidamente por PIN ou biometria do aparelho (proposta). A entrada por telefone e código fica adiada até a escolha do provedor de SMS (**P11**).
+- **Regras:** entra no app quem tem a permissão `mob.usar_app` (RF-ADM-005). O app mostra as telas conforme o perfil: `tecnico` (inclusive o técnico da conta de uma subcontratada, RF-SRV-011), `prestador` (só OS do seu fornecedor), `motorista`, `solicitante`, `almoxarife` (Fase 2) e `gestor` (consulta e aprovações). O `locatario` usa só o portal web (RF-LOC-008), sem acesso ao app (sumário 3.6). Quem tem acesso a mais de uma empresa (por exemplo, à conta da subcontratada e à conta própria de um cliente) escolhe a empresa ao entrar e troca sem sair; o cache de cada empresa fica separado no aparelho. A versão do app aparece na tela de login e na tela principal (RNF-039). O desbloqueio local funciona offline; o token é renovado ao reconectar.
 
 #### RF-MOB-002 · Cache offline e sincronização
 
@@ -2495,7 +2848,7 @@ Até a decisão, vale a regra: dados primários sempre em São Paulo; cópia de 
 | RNF-016 | Criptografia | TLS 1.2 ou superior em trânsito (preferir 1.3); AES-256 em repouso com chaves gerenciadas por KMS; dados locais do app criptografados | Estudo |
 | RNF-017 | Autenticação e sessão | MFA obrigatório para a equipe interna da Tenaz e opcional (exigível pelo cliente) para usuários; sessão web expira após 12 h de inatividade e token do app é renovável por até 30 dias offline (proposta); senhas com hash resistente (Argon2id ou bcrypt) (proposta) | Estudo; proposta |
 | RNF-018 | Segurança no desenvolvimento | SAST, DAST e SCA no CI; **pentest externo anual** com sumário disponível ao cliente; programa de divulgação responsável; correção de vulnerabilidade crítica em até 7 dias e alta em até 30 dias (proposta) | Estudo; proposta |
-| RNF-019 | Trilha de auditoria | Imutável (só acréscimo), com quem, o quê, quando, antes e depois, IP e dispositivo em OS, ativos, estoque e permissões; exportável; retenção mínima de **5 anos**, configurável por empresa | Estudo (o prazo é proposta do estudo) |
+| RNF-019 | Trilha de auditoria | Imutável (só acréscimo), com quem, o quê, quando, antes e depois, IP, dispositivo, tela ou módulo e tipo de operação em OS, ativos, estoque e permissões; integridade verificável por hash de cada evento e selo encadeado guardado fora do banco (RF-ADM-011); exportável; retenção mínima de **5 anos**, configurável por empresa | Estudo (o prazo é proposta do estudo) |
 | RNF-020 | Observabilidade | OpenTelemetry com identificador da empresa (`empresa_id`) em traces, métricas e logs; alertas por consumo do orçamento de erro do SLO; **página de status pública com histórico de 90 dias** | Sumário 1.2; estudo |
 | RNF-037 | Isolamento do prestador | Usuário `prestador` lê e grava só OS com `fornecedor_id` igual ao seu `usuario.fornecedor_id`, os ativos dessas OS (campos permitidos) e o almoxarifado `em_terceiro` do seu fornecedor; filtro aplicado no servidor **além** do RLS por empresa, em web, API, sincronização do app, exportação, busca e webhooks; teste automatizado a cada build com dois fornecedores na mesma empresa e o mesmo fornecedor em duas empresas, com **zero** vazamento; OS reatribuída sai do cache do prestador na sincronização seguinte. Link de uso único: token aleatório de pelo menos 128 bits guardado só como hash, levado no fragmento da URL (`/l/#<token>`) e enviado só no corpo de `POST /v1/publico/links-execucao/ativar`, nunca no caminho nem na query; sessão curta com escopo `link`; uso único, expiração (padrão 7 dias), revogável, limitado a uma OS, sem custos nem histórico, com limite de tentativas por origem | Sumário 2.1 e R4; proposta (valores) |
 | RNF-038 | Isolamento do locatário | Usuário `locatario` lê só ativos com item entregue em contrato `cedido` vigente do seu `locatario`, o resumo das OS e solicitações desses ativos e as vistorias e relatórios do seu contrato; cria só solicitações sobre esses ativos; nunca vê custos internos, outros locatários ou histórico anterior ao contrato; filtro no servidor além do RLS por empresa; teste automatizado a cada build com dois locatários do mesmo ativo em períodos diferentes, com **zero** vazamento | Sumário 3.1; proposta (casos de teste) |
@@ -2621,6 +2974,7 @@ Requisitos não funcionais: 42 (RNF-001 a RNF-042), válidos desde o MVP, exceto
 | P8 — CFOPs e tratamento fiscal de remessa e retorno a subcontratada, envio para conserto e locação | RF-EST-015, RF-EST-018, RF-EST-019, RF-LOC-002, RF-LOC-009 |
 | P9 — regras metrológicas de medidores de velocidade (verificação, reparo, lacres) | RF-ADM-017 (pacote `fiscalizacao_eletronica`), RF-CON-005 |
 | P10 — acesso do cliente final de um contrato | RF-CTR-005 |
+| P11 — provedor de SMS para o login por telefone e código | RF-ADM-004, RF-ADM-006, RF-ADM-015, RF-MOB-001, RF-SRV-003 (até a decisão, login só por e-mail e senha, com MFA por TOTP, ou SSO) |
 
 ---
 
@@ -2691,6 +3045,24 @@ Requisitos não funcionais: 42 (RNF-001 a RNF-042), válidos desde o MVP, exceto
 | 36 | O documento de design prevê a visão "Mapa" na lista de ativos, sem requisito que a garanta | Necessária para pontos espalhados em cidades; requisito a criar quando a tela de ativos for desenhada (proposta) |
 | 37 | Regras configuráveis no plano Serviços (contas de subcontratadas) | Campos extras da OS e regras disponíveis também no plano Serviços (proposta), dependente de P4 |
 | 38 | Campo extra da OS que dispara regra no cliente (ex.: "Rompeu lacre?") não chega quando a OS é executada por subcontratada conectada, porque campos extras não trafegam na conexão | Em aberto, para decisão no sumário. Opções: (a) grupo novo da conexão para campos extras marcados pelo cliente como compartilháveis, com revisão do risco R5; (b) o cliente confirma o campo ao liberar a OS; (c) a regra fica restrita a OS executadas sem conexão |
+| 45 | A tabela de permissões típicas do documento 9 (seção 5.4) difere dos grupos do documento 3: deixa o `planejador` sem executar OS nem checklist, o `visualizador` sem abrir solicitação e o `tecnico` e o `almoxarife` sem ver indicadores | A matriz de RF-ADM-005 segue o documento 3 (Execução inclui `planejador`; Todos abre solicitação; Leitura vê indicadores). O documento 9 precisa remeter à matriz em vez de manter tabela própria |
+
+### 8.4 Resolvidos pelo sumário 0.6 (etapa E01)
+
+| # | Ponto | Como foi resolvido |
+|---|---|---|
+| 40 | O `administrador` tem `os.encerrar` e `est.decidir_destino`? | Não: tem todas as permissões, menos `pessoa.saude.ler`, `os.encerrar`, `est.decidir_destino` e `ter.manter_catalogo_proprio`; quem administra e libera OS recebe também `gestor` ou `planejador`, e o responsável pela conta nasce `administrador` e `gestor` (sumário 3.6; RF-ADM-001, RF-ADM-005). Só o administrador concede as três permissões internas que não tem, sempre a outro usuário (proposta, RN-ADM-026). O documento 9 ainda precisa alinhar a tabela da seção 5.4 e a regra anti-escalada |
+| 41 | Permissão avulsa sem lugar no modelo de dados | Entidade `usuario_permissao` (sumário 3.6; RF-ADM-004, RF-ADM-005) |
+| 46 | Códigos de permissão fora do sumário | O sumário 3.6 declara canônico o catálogo de RF-ADM-005, sem repetir a lista |
+| — | Situação do usuário divergente entre os documentos 1 e 2 | `usuario.situacao`: `convidado`, `ativo`, `inativo`; o bloqueio por falhas de login é da identidade (RF-ADM-004, RF-ADM-006) |
+| — | MFA obrigatório por empresa sem campo | `empresa.mfa_obrigatorio` (RF-ADM-006) |
+| — | Calendário padrão da unidade | Sem padrão imposto: o responsável informa os turnos na criação; modelos só preenchem o formulário (RF-ADM-001, RF-ADM-002) |
+| 39 | Perfis padrão de `srv.gerenciar_conexao`: o documento 3 punha as ações de conexão no grupo Admin | Documento 3, versão 0.5: grupo **Conexão** (`srv.gerenciar_conexao`, padrão `administrador` e `gestor`), com o lado de cada ação conferido pelo servidor |
+| 42 | O catálogo de endpoints do documento 3 não nomeava o `prestador` nas rotas de checklist | Documento 3, versão 0.5: `prestador` nomeado nas rotas de modelos e execuções de checklist, com o alcance das OS do seu fornecedor (`chk.ler`, `chk.ler_execucoes`, `chk.executar`) |
+| 43 | O `plh` só aparecia no grupo Leitura do documento 3 | Documento 3, versão 0.5: `plh` nomeado em `PUT /v1/ativos/{id}/enquadramento-nr13` (`con.gerenciar_nr13`, Fase 2) |
+| 44 | Grupo divergente no registro do orçamento da ordem de reparo | Documento 3, versão 0.5: `registrar-orcamento` e `aprovar` da ordem de reparo usam os grupos de `ter.registrar_orcamento` e `ter.aprovar_orcamento` |
+| 47 | Vínculo e situação da `pessoa` sem nome no sumário; `desligada` sem comportamento definido (lacuna L-42 do documento 4) | `pessoa.vinculo`: `empregado`, `terceiro`, `autonomo`; `pessoa.situacao`: só `ativa` ou `inativa`, sem `desligada`; pessoa inativa nunca é excluída e continua ligada ao histórico (sumário 3.6; RF-ADM-015). O documento 2 já tirou `desligada` de `ck_pessoa_situacao` (ponto S39) |
+| — | Troca de CNPJ só pelo suporte (proposta do documento 4) | Recusada: o `administrador` altera o CNPJ, com registro na trilha; a troca numa conta com conexões é tratada na etapa da conexão (RF-ADM-001) |
 
 ---
 
@@ -2700,3 +3072,4 @@ Requisitos não funcionais: 42 (RNF-001 a RNF-042), válidos desde o MVP, exceto
 - v0.2 (12/11/2026): alinhada ao sumário executivo 0.3. Novos módulos TER e LOC; EST estendido (estoque em terceiro, remessa e retorno, peças serializadas, reparáveis, quarentena, ordem de reparo, NF-e de remessa e retorno); RF-ADM-015 (pessoas); RF-EST-010 movido para RF-TER-001 e RF-FRO-012 para RF-TER-008; reserva no MVP e inventário na Fase 2; assinatura avançada no MVP; prioridades, reconhecimento, transições da OS, status do ativo, perfis, cobrança, webhooks, SLA e SOC 2 conforme o sumário; RNF-037 a RNF-039.
 - v0.3 (12/11/2026): alinhada ao sumário executivo 0.4. Novo módulo SRV (RF-SRV-001 a RF-SRV-021, MVP, plano Serviços) e conexão entre contas; RNF-041 e RNF-042 (risco R5); decisões do sumário 3.6 aplicadas (`os.encerrar`, escopos, `assumir`, link com token no fragmento, solicitação, locação, matriz, campos da OS, papéis de fornecedor, peça em trânsito, `est.decidir_destino`, bloqueios, locatário só na web); MVP com 126 requisitos e total de 204; seção 8 dividida em resolvidos pelo 0.3, resolvidos pelo 0.4 e em aberto.
 - v0.4 (12/11/2026): alinhada ao sumário executivo 0.5. Configuração por segmento: RF-ADM-016 (regras configuráveis), RF-ATV-013 (fase de ciclo de vida), RF-OS-021 (campos extras da OS) e o tipo de OS `implantacao` no MVP; RF-ADM-017 (pacotes de segmento) e os módulos PRJ (RF-PRJ-001 a RF-PRJ-007) e CTR (RF-CTR-001 a RF-CTR-005) na Fase 2; origens `projeto` e `regra`, causa externa da parada, origem do bloqueio de ativo e tipo de documento "verificação metrológica"; MVP com 129 requisitos e total de 220; pendências P9 e P10; pontos 35 a 37 em aberto.
+- v0.5 (12/11/2026): alinhada ao sumário executivo 0.6 (etapa E01). Catálogo de 117 permissões e matriz dos doze perfis padrão como subseção de RF-ADM-005, com as regras do `administrador`, dos perfis externos e da conta da subcontratada (`srv.gerenciar_conexao`); calendário da unidade em `turno_unidade` e `feriado_unidade` (RF-ADM-002); login por telefone e código adiado pela P11 (RF-ADM-004, RF-ADM-006, RF-ADM-015, RF-MOB-001, RF-SRV-003); perfis padrão criados com a empresa (RF-ADM-001, RF-SRV-001); escopo de acesso e cadastros de acesso na auditoria (RF-ADM-011); usuário externo só com o perfil do seu tipo (RF-ADM-004); P11 na seção 7. Decisões do sumário 0.6, seção 3.6: catálogo de permissões canônico, regra do `administrador`, responsável `administrador` e `gestor`, turnos da unidade inicial sem padrão imposto, CNPJ único entre todas as empresas com reativação (proposta) e alterável pelo `administrador`, `usuario.situacao`, `usuario_permissao` e RN-ADM-026, `empresa.mfa_obrigatorio`; vínculo e situação da `pessoa`, sem `desligada` (RF-ADM-015). Trilha de auditoria configurável (RF-ADM-011 ampliado, com critérios de aceite; RF-ADM-013 e RNF-019 coerentes). `srv.gerenciar_conexao` no grupo Conexão. Pontos 39, 40, 41, 42, 43, 44, 46 e 47 resolvidos (nova seção 8.4); fica em aberto o 45. Escopo ampliado só em RF-ADM-011, por decisão do dono do produto; sem mudança de fase, de plano ou de contagem.

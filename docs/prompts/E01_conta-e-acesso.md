@@ -62,4 +62,30 @@ Nenhuma trava esta etapa. A tabela de planos depende de **P4**, mas a cobrança 
 
 ## Ajustes durante a etapa
 
-Nenhum até agora.
+**2026-11-12 — Decisões do dono do produto no início da etapa.**
+
+| Assunto | Decisão |
+|---|---|
+| Tabelas de autenticação, ausentes do documento 2 | Aprovados os nomes `sessao` (campo `canal`), `token_renovacao`, `codigo_autorizacao`, `desafio_mfa` e `token_email` (campo `finalidade`), no esquema da plataforma, e os campos `identidade.falhas_login`, `identidade.bloqueada_ate` e `identidade.mfa_ativado_em`. Entraram no sumário 0.6, seção 3.2 |
+| Calendário de trabalho da unidade (RF-ADM-002), ausente do DDL de `unidade` | Tabelas próprias: `turno_unidade` e `feriado_unidade` |
+| Login por telefone e código (RF-ADM-006, proposta) | Adiado até a escolha do provedor de SMS: pendência **P11** do sumário. E01 entrega e-mail e senha com MFA por TOTP |
+
+| Catálogo de permissões (a matriz não existia em nenhum documento) | O catálogo e a matriz escritos em RF-ADM-005 (documento 1, versão 0.5) passam a ser canônicos por uma linha no sumário 3.6, sem repetir a lista |
+| Permissão avulsa, como `pessoa.saude.ler` (sem lugar no banco) | Nova entidade `usuario_permissao` |
+| Permissões do `administrador` | Todas, menos `pessoa.saude.ler`, `os.encerrar`, `est.decidir_destino` e `ter.manter_catalogo_proprio` |
+| `usuario.situacao` (divergência entre os documentos 1 e 2) | `convidado`, `ativo`, `inativo` |
+| MFA obrigatório por empresa (RF-ADM-006), não implementado na primeira passada | Implementar em E01, com o campo `empresa.mfa_obrigatorio`. Retificação do dono do produto: "o MFA obrigatório no login também deverá ser requisito configurável" — confirmado como um único interruptor por empresa, ligado ou desligado pelo `administrador`; sem exigência por perfil nem por usuário |
+| Vínculo e situação da pessoa (lacuna L-42, valores do DDL sem nome no sumário) | Vínculo `empregado`, `terceiro` ou `autonomo`. Situação só `ativa` ou `inativa`, sem `desligada`: "quando inativo permanece no banco de dados [...] se houver vínculo com algum tipo de serviço que foi feito. Ex: transporte de equipamentos, pode estar vinculado a um motorista temporário" |
+| Trilha de auditoria configurável (pedido do dono do produto: "um sistema de captura de logs e auditoria bem robusto que possibilitasse a configuração dos tipos de captura nas telas do sistema (login, logout, visualização, cadastro, alteração, deleção, exclusão, impressão e extração) sempre com data/hora, nome do usuário, IP da máquina, tipo da operação, nome da tela ou módulo, e controle da integridade por hash") | **Entra em E01**, ampliando RF-ADM-011. Login, logout, cadastro, alteração, exclusão, deleção e visualização de dado sensível são sempre gravados; o administrador liga ou desliga por tela visualização, impressão e extração. Integridade por hash de cada evento e selo encadeado por empresa e período, guardado fora do banco. Telas de consulta (com verificação de integridade do período) e de configuração entram na etapa |
+| Detalhes da trilha (perguntas do `tenaz-produto` sobre RF-ADM-011) | Falha de login, acesso do suporte, revisão de leitura e sincronização viram atributos do evento, sem tipo próprio. Impressão e extração de dado sensível e a exportação completa da empresa são sempre gravadas. Aceitas: capturas padrão (impressão e extração ligadas, visualização desligada), visualização = registro aberto em detalhe, selo diário por dia UTC, armazenamento imutável com bloqueio de objeto, estado "ainda não selado", configuração com `adm.gerenciar_parametros` |
+| Ferramentas e recursos | **Requisito do dono do produto: não usar nenhuma ferramenta ou recurso que não seja 100% gratuito ou open source.** O MinIO sai (deixou de ser open source na prática); buscar substituto compatível com S3 e com bloqueio de objeto. Toda a stack e os serviços citados nos documentos (inclusive nuvem paga, como AWS, KMS e GuardDuty) precisam ser auditados contra essa regra |
+| Dados de saúde | **A Tenaz não guarda dado de saúde.** ASO e exame toxicológico saem do escopo, com a permissão `pessoa.saude.ler` e as regras de dado sensível de saúde. Aplicar no sumário, nos documentos 1, 2, 3, 4, 9, no catálogo de permissões e no código |
+| Troca de CNPJ da empresa (proposta RN-ADM-031: só pelo suporte) | Recusada: o `administrador` altera o CNPJ. A conexão entre contas trata a troca na sua etapa |
+| Perfis do responsável pela conta (lacuna L-43) | `administrador` e `gestor` |
+| Calendário padrão da unidade (lacuna L-40) | "A configuração de turnos deve ser item configurável": o responsável informa os turnos na criação; o sistema não impõe padrão, só oferece modelos para preencher |
+
+Decisões técnicas tomadas pelo orquestrador, sem mudança de escopo:
+
+- Validade do refresh token do app: **30 dias** de inatividade, como em RNF-017 (documento 1, dono do requisito). O documento 9 dizia 14 dias e é corrigido.
+- Envio de e-mail em desenvolvimento por um servidor SMTP de teste no compose local (Mailpit), sem provedor real.
+- Partições mensais de `evento_auditoria` criadas por função própria, sem `pg_partman`, que não acompanha a imagem oficial do PostgreSQL (pendência da etapa 011).

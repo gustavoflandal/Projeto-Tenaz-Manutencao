@@ -1,8 +1,8 @@
 # Arquitetura de Software — Tenaz
 
-**Versão:** 0.5 · **Data:** 12/11/2026 · **Status:** Em elaboração
+**Versão:** 0.6 · **Data:** 12/11/2026 · **Status:** Em elaboração
 **Produto:** Tenaz · Gestão de Manutenção e Frota
-Alinhado ao sumário executivo 0.5
+Alinhado ao sumário executivo 0.6
 
 Este documento descreve como a Tenaz é construída: stack, contêineres, estrutura do monólito modular, isolamento entre empresas e de acessos externos (prestador, locatário e link de uso único), conexão entre contas (cliente e subcontratada, módulo SRV), repositório, convenções, testes, app offline, telemática, IA, infraestrutura e observabilidade. As decisões estruturais estão registradas como ADRs na seção 15. O alinhamento com o sumário e as pendências abertas estão na seção 16.
 
@@ -13,6 +13,12 @@ Este documento descreve como a Tenaz é construída: stack, contêineres, estrut
 **Complemento na versão 0.5:** os três resíduos daquela troca apontados na seção 16 foram corrigidos — as seções 6.4 e 6.8 passaram a citar `app.empresas_ativas()`, `app.conexao_atual()` e `app.escopo = 'interno'`.
 
 **Mudanças da versão 0.5 deste documento:** configuração por segmento (sumário 0.5, seção 3.7; etapa 012). Novo [ADR-010](#adr-010--configuração-por-segmento-com-catálogos-fechados): núcleo canônico fixo e configuração por blocos de catálogo fechado, regras de condição e efeito avaliadas por evento interno e por rotina diária idempotente na fila River, com registro em `disparo_regra`, campos extras da OS em jsonb validados pela definição (também no app, antes de enfileirar o comando) e pacotes de segmento aplicados por cópia idempotente. Mecânica na nova seção 5.6. Pacotes Go `projetos` (PRJ), `contratos` (CTR) e `configuracao` no mapa de módulos e nas regras de dependência (seções 5.1 e 5.3); eventos citados pelos requisitos novos (seção 5.5); jobs novos na fila (seção 4.3); `campo_extra_os` na lista de tabelas com acesso externo (seção 6.6); repositório (seção 7); fluxos E2E 14 a 17 e verificações novas de isolamento (seções 9.2 e 9.3); cache de configuração, comandos e conflito de campo obrigatório no app offline (seções 10.2, 10.3 e 10.5); entitlements de PRJ e CTR (seção 13.4); alinhamento e pendências novas (seção 16). Fora a linha de versão, a de alinhamento e a frase de abertura da seção 16, nenhum texto das versões anteriores foi reescrito; só acréscimos.
+
+**Mudanças da versão 0.6 deste documento:** etapa E01 (conta e acesso), sumário 0.6. Novo [ADR-011](#adr-011--papel-de-banco-próprio-para-as-credenciais-de-autenticação), que resolve o achado ISO-E01-02 da revisão de isolamento: as tabelas de autenticação do esquema `plataforma` (`identidade`, `acesso_empresa`, `sessao`, `token_renovacao`, `codigo_autorizacao`, `desafio_mfa`, `token_email`) passam a ser alcançadas só pelo papel `tenaz_autenticacao`, com pool exclusivo do pacote de autenticação; o `tenaz_app` e o `tenaz_job` perdem todo privilégio nelas. Mecânica na nova seção 6.9; camadas de defesa (6.1), resolução da sessão no middleware (6.3), credencial por modo de execução (4.1), regra 12 de dependência (5.3), verificações da suíte (9.3) e pooler (13.1). Na mesma passada, a pendência E01-3 do documento 2: `app.escopo_id()` não é criada; a seção 6.6 passa a usar `app.fornecedor_atual()`, `app.locatario_atual()` e `app.link_hash_atual()`, e a política do link confere que o link não está revogado, expirado nem usado. A sessão do app passa a durar 30 dias de inatividade, como em RNF-017 (seção 10.6), e o modelo de identidade do login único no app deixa de ser pendência (seção 10.8). Alinhamento ao sumário 0.6 na seção 16.
+
+**Emenda na versão 0.6 (mesma etapa E01, achado ISO-E01-08):** o ADR-011 passa a fixar também o **dono** das tabelas de credencial. Sem RLS, o dono lê tudo, e com dono `tenaz_dono` o `tenaz_manutencao`, membro dele com herança, lia todas as credenciais. As sete tabelas e as duas funções `SECURITY DEFINER` que as tocam pertencem agora ao papel `tenaz_credencial`, sem membros de runtime (decisões 1 e 9, alternativas, risco residual). Seções 6.1, 6.4, 6.9 e 9.3; pendências E01-14 (`conexao_empresa`) e herança do `tenaz_manutencao` na seção 16. Na mesma emenda, a tabela da seção 9.3 passa a descrever exatamente o que a suíte de isolamento de `backend/testes/vazamento/` verifica: linhas novas "Visões", "Papéis e relações de membro", "Moldes da trilha", "Corrida de atribuição", "Contexto no pool" e "Portão de achados"; linhas "Mapa de privilégios", "Dono das credenciais" e "Ataques do achado ISO-E01-02" reescritas conforme os testes.
+
+**Alinhamento ao código de E01 na versão 0.6:** o layout de módulo validado no ADM vira regra (seção 5.2): casos de uso no pacote raiz, HTTP em `<modulo>/rotas`, composição única em `internal/servidor` (seções 2.5 e 7); o desvio do código sqlc do ADM fica como pendência. A seção 2.5 passa a descrever a geração real do contrato (`tenaz openapi`) e marca `oasdiff` e a documentação pública como ainda não implantados. A seção 8.2 passa ao formato de erro real (códigos `snake_case` do documento 3, `type` em `https://api.tenaz.com.br/erros/<codigo>`, `id_rastreio`, `erros[]`). A seção 9.5 fixa a posição na divergência A-38 (`ambiente` não sai de `GET /v1/versao`).
 
 Os nomes de módulos (ADM, ATV, OS...) e de entidades (`empresa`, `ativo`, `ordem_servico`...) seguem o [Sumário Executivo](0_SUMARIO_EXECUTIVO.md). As metas de disponibilidade, recuperação e segurança estão em [9_SEGURANCA_CONFIABILIDADE.md](9_SEGURANCA_CONFIABILIDADE.md).
 
@@ -112,11 +118,11 @@ Os nomes de módulos (ADM, ATV, OS...) e de entidades (`empresa`, `ativo`, `orde
 
 A API é a única fronteira entre os clientes e o backend.
 
-1. Os tipos de requisição e resposta são structs Go anotadas. O Huma gera `backend/api/openapi.yaml` (OpenAPI 3.1) a cada build.
-2. O arquivo gerado é versionado no repositório. O CI falha se o arquivo gerado diferir do versionado (alguém mudou a API sem regenerar).
-3. O CI compara o contrato com o da branch principal usando `oasdiff`. Mudança incompatível em `/v1` bloqueia o merge.
-4. O pacote `pacotes/api-tipos` gera os tipos TypeScript a partir do arquivo. Web e app importam dali. Um campo renomeado no Go quebra a compilação do TypeScript no mesmo PR.
-5. A documentação pública da API é gerada do mesmo arquivo.
+1. Os tipos de requisição e resposta são structs Go anotadas, registradas no Huma (v2). As rotas de todos os pacotes são montadas num ponto só, `internal/servidor` (`servidor.Montar`), usado pelo processo `tenaz api`, pela geração do contrato e pelos testes de rota: o contrato gerado é exatamente o que o servidor atende. O subcomando `tenaz openapi` escreve `backend/api/openapi.yaml` (OpenAPI 3.1); a tarefa `contrato` de `ferramentas/tarefas.sh` o regrava e regera os tipos TypeScript.
+2. O arquivo gerado é versionado no repositório. O CI (tarefa `conferir-contrato`) falha se o arquivo gerado diferir do versionado (alguém mudou a API sem regenerar).
+3. O CI compara o contrato com o da branch principal usando `oasdiff`, e mudança incompatível em `/v1` bloqueia o merge. **(proposta: ainda não está na esteira; pendência na seção 16)**
+4. O pacote `pacotes/api-tipos` gera os tipos TypeScript a partir do arquivo, e o CI confere que os tipos versionados estão em dia. A web importa dali (`@tenaz/api-tipos`); o app passa a importar quando tiver chamadas à API. Um campo renomeado no Go quebra a compilação do TypeScript no mesmo PR.
+5. A documentação pública da API é gerada do mesmo arquivo. **(proposta: ainda não implantada)**
 
 ---
 
@@ -267,6 +273,16 @@ Motivos: uma imagem só para construir, assinar e escanear; versões sempre coer
 
 O `sincronizador` é um modo separado, e não uma fila a mais dentro do `worker`, por um motivo de segurança: ele é o único que conecta ao banco com o papel `tenaz_sinc`. A credencial desse papel fica num segredo que só a tarefa do sincronizador lê (política IAM própria). Uma falha na API ou nos workers não dá acesso ao papel que atravessa contas, e o papel `tenaz_app` nunca grava em duas empresas no mesmo processo de requisição.
 
+**Credencial de banco por modo (versão 0.6).** Cada modo recebe só as credenciais de que precisa, cada uma num segredo próprio lido pela política IAM daquela tarefa:
+
+| Modo | Papéis de banco | Observação |
+|---|---|---|
+| `api` | `tenaz_app` (pool da aplicação, réplica com `tenaz_leitura`) e `tenaz_autenticacao` (pool pequeno, só do pacote de autenticação) | O segundo pool existe só neste modo ([ADR-011](#adr-011--papel-de-banco-próprio-para-as-credenciais-de-autenticação), seção 6.9) |
+| `worker` | `tenaz_app` e `tenaz_job` | Não recebe a credencial de autenticação: a purga das credenciais vencidas é uma função `SECURITY DEFINER` estreita (seção 6.9) |
+| `sincronizador` | `tenaz_sinc` | Seção 6.8 |
+| `ingestor` | `tenaz_app` | Fase 2 |
+| `migrate` | `tenaz_migrador` | Só no pipeline de deploy |
+
 ### 4.2 Uso da réplica de leitura
 
 - Vão para a réplica: painéis de IND, relatórios, exportações e consultas da IA que só leem.
@@ -323,33 +339,49 @@ Cada módulo do sumário vira um pacote Go em `backend/internal/modulos/`. Três
 | CTR | `contratos` | Nome por extenso, como no sumário (seção 3.4). Fase 2. Dono de `contrato_cliente`, `item_contrato_cliente`, `faixa_desconto_contrato` e `medicao_contrato`. Os contratos de prestação e de locação continuam em `terceiros` e `locacao` |
 | (ADM) | `configuracao` | Sem código de módulo próprio: é o pacote das regras configuráveis e dos pacotes de segmento, que o sumário põe no escopo de ADM (seções 2 e 3.4). Separado de `adm` para não criar ciclo, porque depende de ATV, CON, SOL e OS, que dependem de ADM. Dono de `regra_automacao`, `disparo_regra`, `pacote_segmento` e `aplicacao_pacote`. **Não** é dono de `campo_extra_os`: a definição do campo extra é de OS (RF-OS-021), que valida os valores na própria transação (seção 5.6) |
 
-Código transversal fica em `backend/internal/plataforma/`: banco e transação, contexto de empresa e de escopo externo (seção 6.6), autenticação, autorização, entitlements, outbox e eventos, auditoria, armazenamento de arquivos, erros, observabilidade e configuração. A plataforma não importa nenhum módulo.
+Código transversal fica em `backend/internal/plataforma/`: banco e transação, contexto de empresa e de escopo externo (seção 6.6), autenticação, autorização, entitlements, outbox e eventos, auditoria, armazenamento de arquivos, erros, observabilidade e configuração. A plataforma não importa nenhum módulo. A autenticação (`plataforma/autenticacao`) é o único pacote com papel de banco e pool próprios dentro da API: só ele lê e grava as tabelas de credencial (seção 6.9, regra 12 da seção 5.3).
 
 ### 5.2 Camadas dentro de um módulo
 
+Layout validado em código pelo ADM (etapa E01) e adotado como regra para os módulos seguintes (versão 0.6):
+
 ```
-backend/internal/modulos/ordemservico/
-├── ordemservico.go        # API pública do módulo: interface Servico, DTOs exportados
-├── eventos.go             # Eventos que o módulo publica (tipos e payloads)
+backend/internal/modulos/adm/
+├── adm.go                 # API pública: interface Servico, DTOs de entrada e saída
+├── servico.go             # Novo(Dependencias), o tipo não exportado que implementa Servico
+│                          # e os erros próprios do módulo (ex.: ErrUltimoAdministrador)
+├── unidades.go, pessoas.go, usuarios.go, conta.go, auditoria.go
+│                          # casos de uso, um arquivo por assunto: orquestram domínio,
+│                          # repositório, auditoria, autorização e outros módulos
+├── eventos.go             # eventos que o módulo publica (quando houver; regra 6 da seção 5.3)
+├── rotas/                 # camada HTTP: handlers Huma que mapeiam a requisição para o Servico;
+│                          # importado só pela composição em internal/servidor
+├── jobs/                  # workers River do módulo, registrados pela composição do modo
+│                          # worker (proposta: nenhum módulo tem job ainda)
 └── internal/
-    ├── dominio/           # Entidades, máquina de estados da OS, regras. Sem IO.
-    ├── app/               # Casos de uso: orquestram domínio, repositório, outbox e outros módulos
-    ├── repo/
-    │   ├── consultas.sql  # Consultas sqlc do módulo
-    │   └── gerado/        # Código gerado pelo sqlc (não editar)
-    ├── http/              # Handlers Huma: mapeiam requisição para caso de uso
-    └── jobs/              # Workers River do módulo
+    ├── dominio/           # entidades, regras, máquina de estados. Sem IO
+    └── repo/
+        ├── adm.sql        # consultas sqlc do módulo
+        ├── repo.go        # consultas na transação de NaEmpresa; violação do banco vira erro de domínio
+        └── gerado/        # regra: código gerado pelo sqlc (não editar); no ADM, ainda em
+                           # plataforma/db/consultas (desvio abaixo)
 ```
 
-O diretório `internal/` dentro do módulo é imposto pelo compilador Go: nenhum outro módulo consegue importar `ordemservico/internal/...`. O único ponto de entrada é o pacote raiz `ordemservico`.
+O diretório `internal/` dentro do módulo é imposto pelo compilador Go: nenhum pacote fora de `adm/` importa `adm/internal/...`. Para outros módulos, o único ponto de entrada é o pacote raiz `adm`.
+
+**Por que os casos de uso ficam no pacote raiz e o HTTP fica em `rotas/`, fora de `internal/`.** Os DTOs da API pública ficam no pacote raiz, e quem implementa o `Servico` precisa deles. Com os casos de uso em `internal/app`, o construtor `Novo`, no pacote raiz, importaria `internal/app`, que importaria o pacote raiz pelos DTOs: ciclo de importação. Com o HTTP em `internal/http`, a composição em `internal/servidor` não poderia importá-lo (o compilador só deixa `adm/...` importar `adm/internal/...`), e o pacote raiz teria de registrá-lo, de novo em ciclo. Alternativas descartadas: pôr os DTOs num subpacote `tipos` (um pacote a mais por módulo, sem ganho de fronteira) e registrar as rotas a partir do pacote raiz (o domínio passaria a depender de HTTP). A implementação continua escondida: só os identificadores exportados do pacote raiz são API, e o tipo que implementa `Servico` não é exportado. Os workers River seguem o mesmo raciocínio em `jobs/`.
 
 | Camada | Pode importar | Não pode importar |
 |---|---|---|
-| `dominio` | Biblioteca padrão, tipos da plataforma (IDs, erros, dinheiro, tempo) | Banco, HTTP, outros módulos |
-| `app` | `dominio`, `repo`, plataforma, **API pública** de outros módulos | `internal/` de outros módulos |
-| `repo` | Código gerado do sqlc, plataforma/db | `app`, `http` |
-| `http` | `app`, plataforma/http | `repo` diretamente |
-| `jobs` | `app`, plataforma/fila | `repo` diretamente |
+| `internal/dominio` | Biblioteca padrão, tipos da plataforma (IDs, erros, autorização, tempo) | Banco, HTTP, outros módulos |
+| Pacote raiz (API pública e casos de uso) | `internal/dominio`, `internal/repo`, plataforma, **API pública** de outros módulos | `internal/` de outros módulos, `rotas` e `jobs` de qualquer módulo |
+| `internal/repo` | Código gerado do sqlc, `plataforma/db`, `plataforma/erros` | Pacote raiz, `rotas`, `jobs` |
+| `rotas` | Pacote raiz do próprio módulo, `plataforma/api`, `plataforma/autorizacao`, `plataforma/erros` e as interfaces de serviços da plataforma (ex.: convites de `plataforma/autenticacao`) | `internal/` do módulo (o compilador já impede), outros módulos |
+| `jobs` **(proposta)** | Pacote raiz do próprio módulo, `plataforma/fila` | `internal/` do módulo, outros módulos |
+
+Só `internal/servidor` importa `<modulo>/rotas`, e só a composição do worker importará `<modulo>/jobs`. Hoje isso vale por construção (só existe `adm/rotas`, importado só por `internal/servidor`); a regra do `depguard` entra com o segundo módulo (pendência na seção 16).
+
+**Desvio atual do ADM: código sqlc compartilhado.** O `sqlc.yaml` gera as consultas de `adm/internal/repo/adm.sql` em `internal/plataforma/db/consultas`, o mesmo pacote das consultas de auditoria e de autorização, e `db.Q(ctx)` devolve esse tipo único. Como o pacote fica na plataforma, qualquer módulo poderia importá-lo e chamar uma consulta de ADM, e a regra 2 da seção 5.3 (nenhum módulo lê ou grava tabela de outro) passaria a depender só de revisão. A regra continua sendo a do layout acima, já seguida por `plataforma/autenticacao` (`autenticacao/internal/repo/gerado`): o código gerado de cada módulo fica no `internal/repo/gerado` dele, criado sobre a transação de `db.Tx(ctx)`. Correção antes do primeiro módulo de E02 (pendência na seção 16).
 
 ### 5.3 Regras de dependência entre módulos
 
@@ -490,6 +522,7 @@ Regras:
 9. **Exceção estreita à regra 7 (versão 0.5).** O sumário (seção 3.1) faz `cliente_servico` existir nas contas com SRV e nas contas com CTR. Enquanto o dono da tabela continuar sendo SRV (pendência na seção 16), CTR e PRJ podem chamar de `servicos` **só** a leitura e o cadastro de `cliente_servico` (`servicos.Servico.ClienteAtendido`), que não toca conexão, vínculo nem sincronizador. O `depguard` restringe essa importação a esse arquivo de API. **(proposta)**
 10. **`configuracao` é pacote de borda**, como INT, IA e MOB (regra 4): depende de ATV, MED, SOL, CHK, PRE, CON, OS, PRJ e ADM, e ninguém depende dele. Reage por eventos e grava sempre pela API pública do módulo dono do dado; nunca grava em tabela de outro módulo (regra 2). **(proposta)**
 11. **Verificação sem importação.** Quando um módulo de baixo precisa confirmar uma condição de um módulo de cima antes de uma ação síncrona, ele declara uma interface no seu pacote raiz e o módulo de cima a implementa; a ligação é feita em `cmd/tenaz`, na inicialização. Primeiro caso: `colocar_em_operacao` (RF-ATV-013) exige que não haja OS `implantacao` não encerrada e que os documentos críticos da classe estejam válidos. ATV declara `atv.VerificadorEntradaOperacao`; OS e CON o implementam. As importações continuam OS → ATV e CON → ATV, a chamada roda na mesma transação e o grafo continua sem ciclo. **(proposta, validar em código)**
+12. **Credenciais só pela autenticação (versão 0.6).** Só `plataforma/autenticacao` alcança as tabelas `identidade`, `acesso_empresa`, `sessao`, `token_renovacao`, `codigo_autorizacao`, `desafio_mfa` e `token_email`, pelo repositório em `autenticacao/internal/repo` (o compilador impede outro importador) e pelo pool do papel `tenaz_autenticacao`. Módulos de negócio, inclusive ADM, chamam a API do serviço de autenticação (`EmitirConvite`, `EncerrarSessoesUsuario`...) **fora** da própria transação, depois do `COMMIT`; o repositório recusa ser chamado dentro de `NaEmpresa`. Um teste falha se algum arquivo `.sql` fora desse repositório citar uma das sete tabelas ([ADR-011](#adr-011--papel-de-banco-próprio-para-as-credenciais-de-autenticação), seção 6.9). Não é dependência nova entre módulos: módulos já podem importar a plataforma; a regra só fecha o caminho até o banco.
 
 ### 5.4 Como um módulo chama outro
 
@@ -639,7 +672,8 @@ O modelo é pool (tabelas compartilhadas) com RLS. A decisão e as alternativas 
 | Camada | Mecanismo |
 |---|---|
 | Esquema | Toda tabela de dados de cliente tem `empresa_id uuid NOT NULL`, índice começando por `empresa_id` e chaves estrangeiras compostas `(empresa_id, id)`. Uma OS não consegue apontar para um ativo de outra empresa nem por erro de código. |
-| Papéis do banco | Migrações rodam com `tenaz_dono`, dono das tabelas. A aplicação conecta como `tenaz_app`: sem `BYPASSRLS`, sem superusuário, sem ser dona de tabela. |
+| Papéis do banco | Migrações rodam com `tenaz_dono`, dono das tabelas, exceto as de credencial de `plataforma`, que pertencem a `tenaz_credencial`, sem membros de runtime (seção 6.9). A aplicação conecta como `tenaz_app`: sem `BYPASSRLS`, sem superusuário, sem ser dona de tabela. Dois papéis de propósito único ficam fora dos privilégios padrão e têm credencial própria: `tenaz_sinc` (seção 6.8) e `tenaz_autenticacao` (seção 6.9). |
+| Credenciais de login (versão 0.6) | As tabelas de autenticação do esquema `plataforma` ficam fora do RLS, porque são lidas antes de a empresa ser conhecida. Sem RLS, o privilégio é a defesa: só o papel `tenaz_autenticacao`, usado só pelo pacote de autenticação, as alcança; `tenaz_app`, `tenaz_job`, `tenaz_leitura` e `tenaz_sinc` recebem "permissão negada". O dono também é defesa: é `tenaz_credencial`, e não `tenaz_dono`, para que o `tenaz_manutencao`, que herda do dono comum, não as leia (achado ISO-E01-08) ([ADR-011](#adr-011--papel-de-banco-próprio-para-as-credenciais-de-autenticação)). |
 | RLS | `ENABLE` e `FORCE ROW LEVEL SECURITY` em todas as tabelas com `empresa_id`, com política de leitura (`USING`) e de escrita (`WITH CHECK`). |
 | Transação | O contexto de empresa é definido com `set_config('app.empresa_id', $1, true)` dentro da transação. Nunca `SET` de sessão, que vazaria entre requisições no pool. |
 | Repositório | Toda consulta sqlc recebe `empresa_id` como parâmetro e filtra por ele, mesmo com RLS. Um teste lê os arquivos `.sql` e falha se alguma consulta sobre tabela de cliente não tiver `empresa_id`. |
@@ -684,7 +718,15 @@ func (db *DB) NaEmpresa(ctx context.Context, empresaID uuid.UUID, fn func(ctx co
 }
 ```
 
-O middleware HTTP extrai a empresa **e o escopo** (seção 6.6) da sessão autenticada e chama `NaEmpresa`. Nenhum handler recebe `empresa_id`, `fornecedor_id` ou `locatario_id` do corpo ou da URL para decidir o escopo. Na versão com escopo, `NaEmpresa` recebe também um `Escopo{Tipo, ID}` e define `app.escopo` e `app.escopo_id` na mesma transação, com o mesmo `set_config(..., true)`.
+O middleware HTTP extrai a empresa **e o escopo** (seção 6.6) da sessão autenticada e chama `NaEmpresa`. Nenhum handler recebe `empresa_id`, `fornecedor_id` ou `locatario_id` do corpo ou da URL para decidir o escopo. Na versão com escopo, `NaEmpresa` recebe também um `Escopo` (tipo, usuário e, conforme o tipo, fornecedor, locatário ou hash do link) e define `app.escopo`, `app.usuario_id`, `app.fornecedor_id`, `app.locatario_id` e `app.link_hash` na mesma transação, com o mesmo `set_config(..., true)`, seguido de `app.conferir_escopo()` (documento 2, seções 2.4 e 2.9.3). Não existe uma variável genérica `app.escopo_id` (versão 0.6, seção 6.6).
+
+**De onde vem a empresa (versão 0.6).** A sessão é resolvida em três passos, nunca na mesma transação, porque o primeiro usa outro papel de banco (seção 6.9):
+
+1. **Pool da autenticação** (`tenaz_autenticacao`), transação curta sem empresa: acha a sessão pelo sha256 do cookie (web) ou pelo `sid` do access token (app), confere canal, revogação, expiração e inatividade e atualiza `ultimo_uso_em`. Devolve só `sessao_id`, `empresa_id`, `usuario_id`, `identidade_id` e `canal`.
+2. **Pool da aplicação** (`tenaz_app`), `NaEmpresa(empresa da sessão, escopo interno, sem usuário)`: lê o usuário, os perfis, as permissões e a empresa (documento 2, seção 2.9.2) e confere que `usuario.identidade_id` é a identidade da sessão e que o usuário está `ativo`. Divergência: 401.
+3. **Pool da aplicação**, `NaEmpresa(empresa da sessão, escopo do cadastro, com usuário)`: o caso de uso, com `app.conferir_escopo()` conferindo de novo.
+
+O `tenaz_app` nunca lê a tabela de onde a empresa veio; recebe a empresa já resolvida, do mesmo processo.
 
 ### 6.4 Rotinas que atravessam empresas
 
@@ -694,7 +736,7 @@ Algumas rotinas precisam percorrer todas as empresas (exemplo: verificar planos 
 2. Para cada empresa, enfileira um job com `empresa_id`.
 3. Cada job roda dentro de `NaEmpresa`, com RLS ativo.
 
-As únicas exceções com acesso amplo são as migrações (papel `tenaz_dono`) e o suporte de banco em emergência, com acesso registrado (ver 9_SEGURANCA_CONFIABILIDADE.md).
+As únicas exceções com acesso amplo são as migrações (usuário `tenaz_migrador`, que assume `tenaz_dono` e, para as credenciais, `tenaz_credencial`) e o suporte de banco em emergência, com acesso registrado (ver 9_SEGURANCA_CONFIABILIDADE.md).
 
 A sincronização entre contas conectadas (SRV) segue o mesmo padrão e **não** é exceção: ela toca duas empresas, mas nunca na mesma transação. Lê na conta de origem numa transação com o contexto da origem e grava na conta de destino em outra transação, com o contexto do destino (seção 6.8).
 
@@ -708,12 +750,14 @@ Risco R4 do sumário. O RLS por empresa impede que uma empresa veja outra, mas n
 
 **Escopos.**
 
-| `app.escopo` | Quem | `app.escopo_id` | De onde vem |
+| `app.escopo` | Quem | Variável do escopo (versão 0.6) | De onde vem |
 |---|---|---|---|
-| `interno` | Usuários com perfis da empresa, jobs, chaves de API | vazio | Sessão, job ou chave |
-| `prestador` | Usuário com perfil `prestador` | `usuario.fornecedor_id` | Cadastro do usuário no banco |
-| `locatario` | Usuário com perfil `locatario` | `usuario.locatario_id` | Cadastro do usuário no banco |
-| `link` | Portador de um link de uso único | `ordem_servico.id` da OS do link | `link_execucao` validado (6.7) |
+| `interno` | Usuários com perfis da empresa, jobs, chaves de API | nenhuma (`app.usuario_id` vazio em jobs) | Sessão, job ou chave |
+| `prestador` | Usuário com perfil `prestador` | `app.fornecedor_id` = `usuario.fornecedor_id`, lida por `app.fornecedor_atual()` | Cadastro do usuário no banco |
+| `locatario` | Usuário com perfil `locatario` | `app.locatario_id` = `usuario.locatario_id`, lida por `app.locatario_atual()` | Cadastro do usuário no banco |
+| `link` | Portador de um link de uso único | `app.link_hash` = sha256 do segredo apresentado, lida por `app.link_hash_atual()`; sem usuário | `link_execucao` validado (6.7) |
+
+**Por que não há `app.escopo_id` (versão 0.6).** As versões até 0.5 usavam uma variável genérica `app.escopo_id`. Ela não existe no banco: cada escopo tem a sua variável e a sua função, já nas migrações (documento 2, seção 2.9.2). Motivos: `app.conferir_escopo()` compara cada uma com a coluna própria do cadastro do usuário, e um identificador genérico misturaria fornecedor, locatário e OS no mesmo campo, de modo que um erro de tipo de escopo passaria despercebido; e o escopo `link` é resolvido pelo hash do segredo apresentado, sem um segundo identificador de OS no contexto, que o código poderia definir sem ter o segredo. Decisão aprovada pela revisão de isolamento (pendência E01-3 do documento 2), com duas condições, ambas aplicadas aqui: esta seção cita as três funções, e a política do link confere, na própria subconsulta, que o link não está revogado, expirado nem usado.
 
 Regras:
 
@@ -731,9 +775,18 @@ CREATE FUNCTION app.escopo_atual() RETURNS text
   LANGUAGE sql STABLE
   AS $$ SELECT NULLIF(current_setting('app.escopo', true), '') $$;
 
-CREATE FUNCTION app.escopo_id() RETURNS uuid
+-- Versão 0.6: uma função por escopo, como no documento 2 (seção 2.9.2); não existe app.escopo_id()
+CREATE FUNCTION app.fornecedor_atual() RETURNS uuid
   LANGUAGE sql STABLE
-  AS $$ SELECT NULLIF(current_setting('app.escopo_id', true), '')::uuid $$;
+  AS $$ SELECT NULLIF(current_setting('app.fornecedor_id', true), '')::uuid $$;
+
+CREATE FUNCTION app.locatario_atual() RETURNS uuid
+  LANGUAGE sql STABLE
+  AS $$ SELECT NULLIF(current_setting('app.locatario_id', true), '')::uuid $$;
+
+CREATE FUNCTION app.link_hash_atual() RETURNS bytea   -- sha256 do segredo do link
+  LANGUAGE sql STABLE
+  AS $$ SELECT decode(NULLIF(current_setting('app.link_hash', true), ''), 'hex') $$;
 
 -- Padrão para tabelas sem acesso externo (ex.: pedido_compra)
 CREATE POLICY escopo_externo ON pedido_compra AS RESTRICTIVE
@@ -746,8 +799,13 @@ CREATE POLICY escopo_externo ON ordem_servico AS RESTRICTIVE
     CASE (SELECT app.escopo_atual())
       WHEN 'interno'    THEN true
       WHEN 'prestador'  THEN executor_tipo = 'fornecedor'
-                         AND fornecedor_id = (SELECT app.escopo_id())
-      WHEN 'link'       THEN id = (SELECT app.escopo_id())
+                         AND fornecedor_id = (SELECT app.fornecedor_atual())
+      WHEN 'link'       THEN id IN (SELECT l.ordem_servico_id FROM link_execucao l
+                                     WHERE l.token_hash  = (SELECT app.link_hash_atual())
+                                       AND l.revogado_em IS NULL      -- não revogado
+                                       AND l.usado_em    IS NULL      -- não consumido
+                                       AND l.expira_em   > now()      -- não expirado
+                                       AND l.excluido_em IS NULL)
       WHEN 'locatario'  THEN app.ativo_locado_ao_escopo(ativo_id, data_abertura)
       ELSE false
     END)
@@ -755,14 +813,20 @@ CREATE POLICY escopo_externo ON ordem_servico AS RESTRICTIVE
     CASE (SELECT app.escopo_atual())
       WHEN 'interno'    THEN true
       WHEN 'prestador'  THEN executor_tipo = 'fornecedor'
-                         AND fornecedor_id = (SELECT app.escopo_id())
-      WHEN 'link'       THEN id = (SELECT app.escopo_id())
+                         AND fornecedor_id = (SELECT app.fornecedor_atual())
+      WHEN 'link'       THEN id IN (SELECT l.ordem_servico_id FROM link_execucao l
+                                     WHERE l.token_hash  = (SELECT app.link_hash_atual())
+                                       AND l.revogado_em IS NULL
+                                       AND l.usado_em    IS NULL
+                                       AND l.expira_em   > now()
+                                       AND l.excluido_em IS NULL)
       ELSE false        -- locatário não grava OS; abre solicitação
     END);
 ```
 
 - O `WITH CHECK` impede que o prestador reatribua a OS a outro fornecedor ou a converta em execução interna.
-- `app.ativo_locado_ao_escopo(ativo_id, data)` é uma função SQL `STABLE` (não `SECURITY DEFINER`, portanto sujeita ao RLS) que verifica em `item_contrato_locacao` e `contrato_locacao` se o ativo estava cedido ao locatário do escopo naquela data, entre a entrega e a devolução. Índice `(empresa_id, ativo_id)` em `item_contrato_locacao`. Se o custo da consulta pesar, a alternativa é gravar o locatário na OS no momento da criação (campo a propor no documento 2). **(proposta)**
+- **Link (versão 0.6).** A subconsulta passa também pelas políticas de `link_execucao` (empresa da transação e escopo `link`), e a unicidade `(empresa_id, token_hash)` garante no máximo uma linha. Como a política confere revogação, expiração e consumo a cada consulta, um link revogado deixa de ver a OS na hora, sem depender do código da rota. Consequência para `registrar-execucao`: marcar `link_execucao.usado_em` tem de ser a **última** escrita da transação, depois das escritas na OS, nos apontamentos e nos anexos; antes disso, as escritas seguintes falhariam no `WITH CHECK`. As mesmas quatro condições valem para as demais tabelas da lista abaixo que aceitam o escopo `link`. O texto definitivo da política é do documento 2, na etapa do link (TER).
+- `app.ativo_locado_ao_escopo(ativo_id, data)` é uma função SQL `STABLE` (não `SECURITY DEFINER`, portanto sujeita ao RLS) que verifica em `item_contrato_locacao` e `contrato_locacao` se o ativo estava cedido ao locatário do escopo (`app.locatario_atual()`) naquela data, entre a entrega e a devolução. Índice `(empresa_id, ativo_id)` em `item_contrato_locacao`. Se o custo da consulta pesar, a alternativa é gravar o locatário na OS no momento da criação (campo a propor no documento 2). **(proposta)**
 
 **Tabelas com acesso externo** (lista fechada, revisada em code review e conferida pelo teste da seção 9.3; qualquer outra tabela devolve zero linhas a escopo externo):
 
@@ -785,7 +849,7 @@ CREATE POLICY escopo_externo ON ordem_servico AS RESTRICTIVE
 | Projeção | DTOs próprios para escopo externo: sem custos internos, sem preços de outros fornecedores, sem histórico de outras OS do ativo, sem dados de pessoas da empresa além do nome do responsável pela OS. |
 | Funções indisponíveis | Busca global, IA, indicadores, exportação, relatórios, webhooks e chaves de API não existem para escopo externo. **(proposta)** |
 | Sincronização do app | O escopo de sincronização é calculado sob o mesmo escopo (seção 10.2); o pull roda dentro de `NaEmpresa` com o escopo, então o RLS restritivo também protege o aparelho. |
-| Arquivos e cache | URL assinada só depois de ler a linha sob o escopo. Chave de cache inclui `empresa_id`, tipo e ID do escopo. |
+| Arquivos e cache | URL assinada só depois de ler a linha sob o escopo. Chave de cache inclui `empresa_id`, o tipo do escopo e o identificador correspondente (fornecedor, locatário ou hash do link). |
 | Fim do acesso | Fornecedor inativado ou sem o papel, usuário desativado, ou locatário sem contrato vigente há mais de 90 dias **(proposta)**: a versão de sessão muda e os tokens anteriores deixam de valer. |
 | Cobrança | Usuário `prestador` que executa OS conta como técnico (entitlement de quantidade, seção 13.4); `locatario` e link de uso único não contam. O técnico da subcontratada conectada, que tem usuário só na conta dela, não conta no cliente (sumário 2.2). |
 | Liberação | A permissão `os.encerrar` nunca é concedida a `prestador` nem a `locatario`; o link de uso único também não encerra. A regra anti-escalada recusa a concessão. |
@@ -968,6 +1032,70 @@ Nunca trafegam: CPF, contatos pessoais, documentos, capacitações e dados de sa
 | Logs e traces | `conexao_empresa_id`, `empresa_origem_id`, `empresa_destino_id`, `vinculo_os_id`, `mensagem_id`, `sequencia`. O contexto de trace viaja em `envio_conexao`, ligando T1 a T5 num mesmo trace. Nunca o valor dos campos |
 | Visível ao usuário | Cada OS vinculada mostra o estado de sincronização e o horário da última entrega nas duas contas |
 
+### 6.9 Credenciais de autenticação (versão 0.6)
+
+Achado ISO-E01-02 da revisão de isolamento da etapa E01: as tabelas de autenticação do esquema `plataforma` (nomes do sumário 0.6, seção 3.2) não têm RLS, porque são lidas antes de a empresa ser conhecida, e estavam ao alcance do `tenaz_app`. Com o contexto da empresa A, o `tenaz_app` lia e-mail, `senha_hash` e `mfa_segredo_cifrado` de todas as identidades, lia `acesso_empresa` inteiro (que revela quais clientes cada subcontratada atende), lia sessões de outra empresa com IP e user agent, criava sessão web válida para um usuário de outra empresa com o cookie que escolhesse, criava código OAuth e trocava a senha de qualquer identidade. As três regras do desenho inicial (só hash, empresa fixada na criação, chave estrangeira composta) impediam mover uma credencial de empresa, mas não lê-la nem forjá-la. Decisão no [ADR-011](#adr-011--papel-de-banco-próprio-para-as-credenciais-de-autenticação). O DDL e os `GRANT` são do documento 2 (seções 2.2, 2.11 e 5.1).
+
+**Papel `tenaz_autenticacao`.** `NOLOGIN`, `NOBYPASSRLS`, não é dono de objeto, não é membro de `tenaz_dono`, `tenaz_app` nem `tenaz_job`, e nenhum deles é membro dele. A conexão usa o usuário `tenaz_autenticacao_conexao` (`LOGIN`, herda o papel), no mesmo par que `tenaz_sinc` e `tenaz_sinc_conexao`. Fica fora dos privilégios padrão do esquema `app`.
+
+**Dono das credenciais: `tenaz_credencial` (emenda ISO-E01-08).** Numa tabela sem RLS, o dono lê tudo, e quem herda do dono também. Com as sete tabelas de dono `tenaz_dono`, o `tenaz_manutencao` (`LOGIN`, membro de `tenaz_dono` com herança, para partições e `VACUUM`) lia `senha_hash` e o segredo de MFA de todas as identidades. Por isso as sete tabelas e as duas funções `SECURITY DEFINER` que as tocam (`plataforma.tg_acesso_empresa()` e `plataforma.purgar_credenciais_vencidas()`) pertencem a `tenaz_credencial`: `NOLOGIN`, `NOBYPASSRLS`, cujo único membro possível é o papel que aplica migração: a `00004` concede a pertença a quem a executa, se ainda não a tiver. Em homologação e produção é o `tenaz_migrador`, que vira membro; em desenvolvimento e nos testes o `tenaz_migrador` é superusuário (imagem oficial do PostgreSQL), não recebe a pertença e o papel fica sem membros. Não é membro de `tenaz_dono` nem tem como membro `tenaz_dono`, `tenaz_manutencao` ou qualquer papel de runtime. As migrações criam esses objetos com `SET ROLE tenaz_credencial` e, no `Up`, voltam a `tenaz_dono` antes de terminar (documento 2, seção 14.2). Os privilégios cruzados entre os dois donos são só os necessários a criar os objetos, às chaves estrangeiras e ao trigger, todos concedidos na `00004`:
+
+| Concedente → beneficiário | Privilégio | Para quê |
+|---|---|---|
+| `tenaz_credencial` → `tenaz_dono` | `REFERENCES (id)` em `plataforma.identidade` | Chave estrangeira de `app.usuario.identidade_id`; não dá leitura |
+| `tenaz_credencial` → `tenaz_dono` | `EXECUTE` em `plataforma.tg_acesso_empresa()` | Criar o trigger em `app.usuario`; função de trigger não se chama diretamente |
+| `tenaz_dono` → `tenaz_credencial` | `REFERENCES (empresa_id, id, identidade_id)` em `app.usuario` | Chaves estrangeiras compostas das tabelas de credencial; não dá leitura |
+| Esquemas de `tenaz_dono` → `tenaz_credencial` | `USAGE` e `CREATE` em `plataforma`; `USAGE` em `app` | Criar as tabelas e funções em `plataforma` e resolver `app.usuario` e `app.uuid_v7()`; nenhum privilégio em tabela de `app` além do `REFERENCES` acima |
+| Esquema `public` → `tenaz_credencial` | `USAGE` | Tipo `citext` de `identidade.email` |
+
+Nenhum outro privilégio entre os dois donos. A regra vale para toda tabela futura de `plataforma` sem RLS que não seja catálogo global de leitura: o dono não é `tenaz_dono` (pendência E01-14 do documento 2, a primeira é `conexao_empresa`; seção 16).
+
+| Objeto | `tenaz_autenticacao` | `tenaz_app` | `tenaz_job` |
+|---|---|---|---|
+| `plataforma.identidade` | `SELECT`, `INSERT`, `UPDATE (email, senha_hash, mfa_segredo_cifrado, mfa_ativado_em, mfa_ultimo_passo, email_verificado_em, falhas_login, bloqueada_ate, bloqueada_em, ultimo_login_em, atualizado_em)` | — | — |
+| `plataforma.acesso_empresa` | `SELECT` (a escrita continua só do trigger) | — | — |
+| `plataforma.sessao` | `SELECT`, `INSERT`, `UPDATE (ultimo_uso_em, expira_em, revogada_em)` | — | — |
+| `plataforma.token_renovacao` | `SELECT`, `INSERT`, `UPDATE (usado_em, revogado_em)` | — | — |
+| `plataforma.codigo_autorizacao` | `SELECT`, `INSERT`, `UPDATE (usado_em, sessao_id)` | — | — |
+| `plataforma.desafio_mfa` | `SELECT`, `INSERT`, `UPDATE (tentativas, concluido_em)` | — | — |
+| `plataforma.token_email` | `SELECT`, `INSERT`, `UPDATE (usado_em, revogado_em)` | — | — |
+| `app.evento_auditoria` | `INSERT` só nas colunas `empresa_id`, `ator_tipo`, `usuario_id`, `acao`, `entidade`, `entidade_id`, `depois`, `campos_alterados`, `origem`, `ip`, `dispositivo_id`, `user_agent`, `request_id`; sem `SELECT` | inalterado | inalterado |
+| Função `plataforma.purgar_credenciais_vencidas()` | — | — | `EXECUTE` |
+| Esquemas e funções de apoio | `USAGE` em `plataforma`, `app` e `public` (o tipo `citext` de `email` mora em `public`); `EXECUTE` em `app.uuid_v7()` e `app.empresa_atual()` | `USAGE` em `plataforma` mantido, para as funções seguras da conexão e os catálogos globais | `USAGE` em `plataforma`, para a purga |
+
+Fora o dono `tenaz_credencial`, nenhum papel tem `DELETE` nem `TRUNCATE` nas sete tabelas; a purga apaga com o privilégio do dono, dentro da função. `tenaz_leitura`, `tenaz_sinc`, `tenaz_dono` e `tenaz_manutencao` não têm privilégio nelas, salvo o `REFERENCES (id)` do `tenaz_dono` acima. Qualquer acesso fora da tabela acima responde "permissão negada", não zero linhas.
+
+**Quem usa o pool.** Só o pacote `internal/plataforma/autenticacao`, pelo repositório `autenticacao/internal/repo`, com o código sqlc gerado ali mesmo (regra 12 da seção 5.3). O middleware HTTP de sessão não toca o pool: chama o serviço. O pool é aberto só no modo `tenaz api` (seção 4.1), com poucas conexões. O repositório:
+
+- recusa ser chamado dentro de uma transação de `NaEmpresa` (erro de programação) e nunca chama `NaEmpresa` nem `app.conferir_escopo()`, que lê `app.usuario` e falharia por falta de privilégio;
+- abre dois tipos de transação: **sem empresa**, para achar credenciais por hash, e-mail ou id; e **na trilha de uma empresa**, que define só `app.empresa_id`, `app.origem`, `app.ip`, `app.user_agent` e `app.request_id` com `set_config(..., true)`, para gravar o evento de auditoria junto da mudança de credencial;
+- só tem consultas com filtro por hash, `id`, `identidade_id`, `(empresa_id, usuario_id)` ou e-mail exato. Um teste falha se alguma consulta do repositório ler uma das sete tabelas sem um desses filtros, para que nem o pacote de autenticação enumere credenciais.
+
+**Resolução da sessão.** Três passos em dois pools, descritos na seção 6.3. A empresa da transação de negócio vem sempre da linha da sessão, lida pelo `tenaz_autenticacao`.
+
+**Auditoria de autenticação.** Login, falha de login, logout, troca de senha e ativação ou desativação de MFA vão para `app.evento_auditoria` de cada empresa em que a identidade tem acesso (documento 2, seção 9.1), gravados pelo próprio `tenaz_autenticacao`, no molde do `tenaz_sinc`: `INSERT` por coluna e sem leitura da trilha; o papel entra na política permissiva de inserção (empresa da transação) e ganha uma política **restritiva** própria, que só aceita `ator_tipo = 'usuario'`, `entidade = 'identidade'`, `acao` em `login`, `login_falho`, `logout` e `alteracao`, e um `usuario_id` que seja, em `acesso_empresa`, o usuário daquela identidade naquela empresa. Com isso:
+
+- a sessão, o zerar das falhas de login e o evento de login na empresa da sessão são uma transação só, no pool da autenticação;
+- o evento nas demais empresas da identidade é uma transação por empresa, que não cita as outras (a empresa B não fica sabendo que a pessoa também entra na empresa A);
+- o `tenaz_app` não grava evento de autenticação, e o `tenaz_autenticacao` não grava nenhum outro tipo de evento.
+
+**`acesso_empresa` e o trigger.** `plataforma.tg_acesso_empresa()` continua `SECURITY DEFINER`, agora de dono `tenaz_credencial` (roda com o privilégio do dono das credenciais, que o `tenaz_dono` não tem), disparado pelo `INSERT` ou `UPDATE` em `app.usuario` feito pelo `tenaz_app` na transação do ADM; ele nunca dependeu de privilégio do `tenaz_app` em `acesso_empresa`, então continua funcionando sem mudança. Ganha uma responsabilidade: quando o acesso fica desabilitado (usuário `inativo` ou excluído), revoga, na mesma transação, as sessões abertas daquele usuário naquela empresa e os refresh tokens das famílias revogadas. A inativação passa a revogar as credenciais de forma atômica sem que o ADM toque tabela de credencial; `app.conferir_escopo()` continua recusando o usuário inativo na requisição seguinte, como segunda barreira.
+
+**Purga.** `plataforma.purgar_credenciais_vencidas()`, `SECURITY DEFINER`, dono `tenaz_credencial`, `search_path` fixo, sem parâmetro, apaga das cinco tabelas de credencial as linhas com `expira_em` há mais de 30 dias **(proposta**, o prazo da investigação de incidente) e devolve a contagem. Só o `tenaz_job` executa, por um job diário. Não recebe nenhum dado da requisição, por isso é o caso certo para uma função estreita.
+
+**Operações que atravessam os dois papéis.** São sequências de transações, nunca uma, na ordem que torna a repetição segura: a credencial de uso único é consumida por último.
+
+| Operação | Sequência |
+|---|---|
+| Login web | (1) autenticação: identidade por e-mail, senha, bloqueio, desafio de MFA, lista de acessos; (2) aplicação: `NaEmpresa(empresa escolhida, interno, sem usuário)` lê usuário, perfis e nome da empresa; (3) autenticação, na trilha da empresa: cria a sessão, zera as falhas, grava o evento `login`; (4) autenticação: evento `login` em cada outra empresa da identidade, sem derrubar o login se falhar |
+| Troca de empresa | (1) autenticação: acesso à empresa pedida; (2) aplicação: carrega o ator na empresa nova; (3) autenticação, na trilha da empresa nova: revoga a sessão atual e a família, cria a nova, grava o evento |
+| Convite de usuário (ADM) | (1) aplicação: o ADM cria o usuário `convidado` e confirma; (2) autenticação: `EmitirConvite` grava `token_email` com a empresa do ator autenticado (a chave estrangeira composta garante que o usuário é daquela empresa) e envia o e-mail. Falha em (2) deixa o usuário convidado sem convite válido; a resposta diz isso e o administrador reenvia |
+| Aceite do convite | (1) autenticação: confere o token sem consumir e cria ou acha a identidade; (2) aplicação: liga `usuario.identidade_id` e ativa o usuário (o trigger cria o `acesso_empresa`); (3) autenticação: consome o token e grava o evento. Cada passo é idempotente |
+| Encerrar sessões a pedido do administrador | Autenticação, com a empresa do ator autenticado e o usuário alvo; evento na trilha da empresa |
+| Inativação de usuário | Só a aplicação; a revogação vem do trigger |
+
+**Configuração.** `TENAZ_BANCO_URL_AUTENTICACAO` (obrigatória no modo `api` quando houver banco) e `TENAZ_BANCO_AUTENTICACAO_MAX_CONN` (padrão 5, **proposta**). Em homologação e produção, a credencial de `tenaz_autenticacao_conexao` fica num segredo próprio do Secrets Manager, lido só pela tarefa da API, com rotação automática; o processo recusa subir se a URL for igual a `TENAZ_BANCO_URL`. Em desenvolvimento e nos testes, a URL pode ser a do migrador, com `SET ROLE tenaz_autenticacao` na conexão, como já acontece com `tenaz_app`.
+
 ---
 
 ## 7. Estrutura do repositório
@@ -979,14 +1107,18 @@ tenaz/
 ├── backend/
 │   ├── cmd/tenaz/                # main.go: subcomandos api, worker, sincronizador, ingestor, migrate
 │   ├── internal/
-│   │   ├── plataforma/           # db, empresa, auth, autorizacao, entitlements,
-│   │   │                         # eventos, fila, auditoria, arquivos, erros, obs, config
-│   │   └── modulos/              # adm, atv, med, sol, ordemservico, pre, chk, est,
+│   │   ├── servidor/             # composição única da API: plataforma/api + <modulo>/rotas;
+│   │   │                         # usada por tenaz api, tenaz openapi e testes de rota (seção 2.5)
+│   │   ├── plataforma/           # existentes: api, auditoria, autenticacao, autorizacao, config,
+│   │   │                         # db, email, erros, migracao, obs, paginacao, resiliencia, versao;
+│   │   │                         # a seguir: empresa, entitlements, eventos, fila, arquivos
+│   │   └── modulos/              # cada um no layout da seção 5.2 (raiz, rotas/, jobs/, internal/)
+│   │                             # adm, atv, med, sol, ordemservico, pre, chk, est,
 │   │                             # terceiros, servicos, locacao, fro, con, ind, integracoes, ia, mob
 │   │                             # + projetos, contratos, configuracao (versão 0.5;
 │   │                             # configuracao/pacotes/: pacotes de segmento em YAML)
 │   ├── db/
-│   │   ├── migracoes/            # goose: NNNN_descricao.sql
+│   │   ├── migracoes/            # goose: NNNNN_descricao.sql (cinco dígitos)
 │   │   └── sementes/             # dados de desenvolvimento e de teste (empresas fictícias)
 │   ├── api/openapi.yaml          # contrato gerado e versionado
 │   ├── testes/
@@ -1072,21 +1204,37 @@ tenaz/
 - `context.Context` é sempre o primeiro parâmetro de funções com IO.
 - Sem estado global mutável. Dependências entram pelo construtor.
 - Erros com contexto: `fmt.Errorf("baixar consumo da OS %s: %w", id, err)`.
-- Erros de domínio são tipados e têm código estável: `ErrTransicaoInvalida` → `OS_TRANSICAO_INVALIDA`. O handler traduz para RFC 9457 (`application/problem+json`) com o campo `codigo`.
+- Erros de domínio são valores `*erros.Erro` criados com `erros.Novo(codigo, titulo, status)`, com código estável em `snake_case` e português, da tabela da seção 3.2 de `3_ESPECIFICACAO_APIS.md` (código novo entra primeiro lá). Os gerais ficam em `plataforma/erros` (ex.: `erros.TransicaoInvalida` → `transicao_invalida`, 409); os de um módulo, no pacote raiz dele (ex.: `adm.ErrUltimoAdministrador` → `ultimo_administrador`). O caso de uso preenche a ocorrência com `.Com(detalhe)`, `.ComCampo(campo, codigo, mensagem)` e `.ComDado(membro, valor)`; a camada HTTP traduz para RFC 9457 (`application/problem+json`).
 - `panic` só para erro de programação na inicialização. Um middleware recupera panics em requisições, registra o erro e devolve 500.
 - Sem SQL concatenado. Ordenação dinâmica só por lista fechada de colunas.
 - Toda chamada externa (LLM, telemática, ERP) tem timeout, retry com backoff e disjuntor (circuit breaker).
 
-Formato de erro:
+Formato de erro (o dono é a seção 3.1 de `3_ESPECIFICACAO_APIS.md`; o tipo Go é `erros.Problema`). `type` é `https://api.tenaz.com.br/erros/<codigo>` (o domínio depende da P5); `codigo` é o que o cliente trata, e `title` e `detail` são texto para pessoas; `id_rastreio` repete o `X-Request-Id`; `erros[]` lista os erros por campo, com `campo` em notação de ponto, `codigo` do vocabulário curto (`obrigatorio`, `valor_invalido`, `formato_invalido`...) e `mensagem`; membros adicionais do código (ex.: `estado_atual` em `transicao_invalida`) saem no nível de cima. Exemplo real de E01, reativar uma unidade que já está ativa:
 
 ```json
 {
-  "type": "https://docs.tenaz.com.br/erros/os-transicao-invalida",
-  "title": "Transição de estado inválida",
+  "type": "https://api.tenaz.com.br/erros/transicao_invalida",
+  "title": "Ação não permitida no estado atual",
   "status": 409,
-  "codigo": "OS_TRANSICAO_INVALIDA",
-  "detail": "A OS OS-2026-004812 está cancelada e não pode ser concluída.",
-  "instance": "/v1/ordens-servico/0193f2a1-7c3e-7b10-9a2e-5d1c3f0a8b77/concluir"
+  "detail": "a unidade já está ativa",
+  "instance": "/v1/unidades/0193f2a1-7c3e-7b10-9a2e-5d1c3f0a8b77/reativar",
+  "codigo": "transicao_invalida",
+  "id_rastreio": "0193f2a1-80aa-7c55-b1d2-6e3f4a5b6c7d",
+  "estado_atual": "ativa"
+}
+```
+
+E de validação, com erro por campo:
+
+```json
+{
+  "type": "https://api.tenaz.com.br/erros/validacao_falhou",
+  "title": "Os dados enviados não passaram na validação",
+  "status": 422,
+  "codigo": "validacao_falhou",
+  "erros": [
+    { "campo": "responsavel.email", "codigo": "obrigatorio", "mensagem": "Informe o e-mail." }
+  ]
 }
 ```
 
@@ -1172,6 +1320,18 @@ Roda em todo build, com duas empresas fictícias, A e B, populadas com dados em 
 | Consultas sqlc | Toda consulta sobre tabela de cliente contém filtro por `empresa_id`. |
 | Catálogos globais só leitura (versão 0.5) | Conectado como `tenaz_app`, `INSERT`, `UPDATE` e `DELETE` em `pacote_segmento` falham. A aplicação de um pacote em A não cria nem altera nada em B. |
 | Regras e disparos (versão 0.5) | A rotina diária de regras de A não lê candidatos nem grava `disparo_regra`, bloqueio ou solicitação em B. |
+| Visões (versão 0.6) | Em todo esquema que não seja do sistema (fora de `pg_catalog`, `information_schema` e `pg_*`): nenhuma visão materializada, e toda visão com `security_invoker = true`. Uma visão comum roda com os privilégios do dono e, sobre `plataforma.identidade`, entregaria `senha_hash` a quem tivesse `SELECT` nela. |
+| Papéis e relações de membro (versão 0.6) | As relações de membro de e para os papéis de execução (`tenaz_app`, `tenaz_job`, `tenaz_leitura`, `tenaz_sinc`, `tenaz_sinc_conexao`, `tenaz_autenticacao`, `tenaz_autenticacao_conexao` e `tenaz_manutencao`) batem, nos dois sentidos e com as opções `INHERIT` e `SET`, com o arquivo versionado da suíte `relacoes_de_membro.txt`: relação a mais ou a menos quebra o build. Fica de fora só a concessão pura de `ADMIN` (sem `INHERIT` nem `SET`), que não transfere privilégio. Hoje o arquivo declara três: `tenaz_sinc_conexao` em `tenaz_sinc`, `tenaz_autenticacao_conexao` em `tenaz_autenticacao` e `tenaz_manutencao` em `tenaz_dono`. Todo papel de execução existe, e nenhum, inclusive o `tenaz_manutencao`, tem `BYPASSRLS` ou é superusuário. O par da autenticação ([ADR-011](#adr-011--papel-de-banco-próprio-para-as-credenciais-de-autenticação)): `tenaz_autenticacao` é `NOLOGIN`, `tenaz_autenticacao_conexao` é `LOGIN` e membro só dele, com herança, e nenhum outro papel o herda ou assume; nenhum dos dois tem `BYPASSRLS`, `CREATEROLE`, `CREATEDB` ou `REPLICATION` nem é superusuário; nenhum é dono de tabela, função, esquema ou tipo; nenhuma relação de membro, em nenhum sentido, com `tenaz_dono`, `tenaz_app`, `tenaz_job`, `tenaz_leitura`, `tenaz_sinc`, `tenaz_sinc_conexao` ou `tenaz_manutencao`; `USAGE` exatamente em `app`, `plataforma` e `public`. |
+| Mapa de privilégios (versão 0.6) | O catálogo bate, nos dois sentidos e coluna a coluna, com o arquivo versionado da suíte `privilegios.txt`: privilégio a mais ou a menos quebra o build. Entram: todo privilégio em tabela, visão, sequência ou função **fora** de `app`, em qualquer esquema que não seja do sistema, concedido a um papel `tenaz_*` ou a `PUBLIC` (exceto o `EXECUTE` padrão de `PUBLIC` em função, coberto pela linha "Funções de credencial" e pela lista aprovada de funções `SECURITY DEFINER`); todo privilégio, em qualquer esquema, inclusive `app`, dos três papéis de lista fechada: sincronizador (`tenaz_sinc`, `tenaz_sinc_conexao`), autenticação (`tenaz_autenticacao`, `tenaz_autenticacao_conexao`) e `tenaz_credencial`; e todo privilégio de esquema (`USAGE`, `CREATE`) de papel `tenaz_*` ou de `PUBLIC` que não seja o dono do esquema. Nas sete tabelas de credencial, o arquivo declara só os privilégios do `tenaz_autenticacao` da seção 6.9 e o `REFERENCES (id)` do `tenaz_dono` em `identidade`; nele estão também os demais privilégios cruzados entre os dois donos (seção 6.9) e as colunas de `INSERT` do `tenaz_autenticacao` e do `tenaz_sinc` em `evento_auditoria`. Fora do mapa, para os papéis da aplicação (`tenaz_app`, `tenaz_job`, `tenaz_leitura` e os pares do sincronizador e da autenticação): nenhum `TRUNCATE`, `TRIGGER` ou `REFERENCES` em tabela de nenhum esquema, e nenhum `CREATE` em esquema nenhum. |
+| Dono das credenciais (emenda ISO-E01-08, versão 0.6) | Todo objeto de `app` e `plataforma` (tabela, visão, sequência, tabela externa, índice, tipo de linha e função) pertence a `tenaz_dono`, e os dois esquemas também, com uma exceção exata: as sete tabelas de credencial, com os seus índices e tipos de linha, e as funções `plataforma.tg_acesso_empresa()` e `plataforma.purgar_credenciais_vencidas()` pertencem a `tenaz_credencial`. Objeto a mais ou a menos na exceção, ou objeto de credencial ausente, quebra o build. `tenaz_credencial` existe, não faz login, não tem `BYPASSRLS` nem `CREATEROLE` e não é superusuário; não é membro de nenhum papel; não tem membro, com `INHERIT` ou `SET`, além de superusuário ou do `tenaz_migrador`; e nenhum papel de runtime o alcança, nem por herança transitiva: `tenaz_app`, `tenaz_job`, `tenaz_leitura`, `tenaz_sinc`, `tenaz_sinc_conexao`, `tenaz_autenticacao`, `tenaz_autenticacao_conexao`, `tenaz_manutencao` e `tenaz_dono`. Como `tenaz_manutencao` e como `tenaz_dono`, `SELECT` em cada uma das sete tabelas e a troca da senha da identidade de B recebem "permissão negada". O trigger `trg_acesso_empresa` existe em `app.usuario`, não está desabilitado e chama `plataforma.tg_acesso_empresa()`. Em `plataforma`, tabela da classe `credencial` em `tabelas_globais.txt` tem dono `tenaz_credencial`, e tabela sem RLS habilitado e forçado e de dono `tenaz_dono` só pode ser da classe `catalogo` ou `controle` (regra da pendência E01-14). |
+| Ataques do achado ISO-E01-02 (versão 0.6) | Como `tenaz_app`, `tenaz_job`, `tenaz_leitura`, `tenaz_sinc`, `tenaz_sinc_conexao`, `tenaz_dono` e `tenaz_manutencao`, com contexto interno de A: ler a identidade (com `senha_hash` e segredo de MFA), os acessos e as sessões de B, criar sessão web ou código OAuth para o usuário de B, trocar a senha da identidade de B e `SELECT`, `INSERT`, `UPDATE` e `DELETE` em cada uma das sete tabelas recebem "permissão negada", e não zero linhas. |
+| Auditoria pelo papel de autenticação (versão 0.6) | Como `tenaz_autenticacao`, com contexto A: evento de outra entidade ou ação, evento com o usuário de B ou com usuário que não é o da identidade em A, e qualquer `SELECT` na trilha são recusados. |
+| Consultas de credencial (versão 0.6) | Nenhum arquivo `.sql` fora do repositório da autenticação cita as sete tabelas; toda consulta do repositório filtra por hash, `id`, `identidade_id`, `(empresa_id, usuario_id)` ou e-mail exato. |
+| Funções de credencial (versão 0.6) | `plataforma.tg_acesso_empresa()` e `plataforma.purgar_credenciais_vencidas()` na lista aprovada de funções `SECURITY DEFINER`, de dono `tenaz_credencial`, com `search_path` fixo e `EXECUTE` revogado de `PUBLIC` (a purga, só para `tenaz_job`). Inativar um usuário em A revoga as sessões e os refresh tokens dele em A e não toca os do mesmo usuário em B. |
+| Moldes da trilha (versão 0.6) | As três restritivas de `INSERT` em `app.evento_auditoria`, cada uma com o seu molde (o que passa e o que a política recusa, conferido pela mensagem de RLS, e não por outro erro) e a sua prova (sem a política, o teste acusa). `auditoria_sem_autenticacao`: `tenaz_app`, `tenaz_job` e `tenaz_sinc` não gravam evento de `entidade = 'identidade'` (ISO-E01-07), e o `tenaz_app` grava evento de outra entidade. `escopo_externo_insercao`: prestador, locatário e link gravam só em nome de si e no próprio escopo (a coluna `escopo` do evento confere com o escopo da transação), sem atribuir o evento a outro usuário, a colega do mesmo fornecedor ou a ninguém; o interno grava evento de qualquer usuário da empresa. `conexao_sinc`: `tenaz_sinc` e `tenaz_sinc_conexao` gravam só evento da conexão em processamento, com ator `sincronizacao_conexao`, e não gravam evento de outra conexão, sem conexão, de outro ator, sem a conexão no contexto ou de B na transação de A; o sincronizador não lê a trilha. Como o `tenaz_sinc` ainda não tem `USAGE` em `app` (E04), o teste o concede só dentro da transação desfeita, para que a recusa venha da política e não do esquema. |
+| Corrida de atribuição (ISO-E01-06, versão 0.6) | Duas conexões reais, no isolamento padrão (READ COMMITTED), como `tenaz_app` com contexto interno de A: a primeira atribui a um usuário interno o perfil `gestor` ou a permissão avulsa vedada `pessoa.saude.ler` e não confirma; a segunda tenta trocar o `fornecedor_id` desse usuário com `lock_timeout` de 300 ms e precisa receber `55P03` (`lock_not_available`), pela trava `FOR SHARE` dos triggers de atribuição. A prova troca o trigger de atribuição de perfil por uma versão sem a trava, e a troca passa. |
+| Contexto no pool (versão 0.6) | Com o helper real `db.NaEmpresa`, num pool de uma conexão como `tenaz_app`: depois de uma transação confirmada, de uma abortada por erro de SQL, de uma desfeita pelo caso de uso e de uma de prestador, a mesma conexão, fora de `NaEmpresa`, tem `app.empresa_atual()`, `app.escopo_atual()`, `app.usuario_atual()` e `app.fornecedor_atual()` nulos e vê zero linhas em toda tabela de empresa; e `NaEmpresa` de B, logo depois de A na mesma conexão, não vê a unidade de A. Antes, o teste exige que `NaEmpresa` de A veja a unidade de A, para não passar por vacuidade. |
+| Portão de achados (versão 0.6) | Falha de isolamento já demonstrada por um teste e devolvida ao dono da migração fica no mapa `achadosAbertos` da suíte, com o ID do achado. Não é lista de exceções: no CI (variável `CI` definida), o teste do achado aberto falha e a suíte encerra com erro enquanto o mapa não estiver vazio; fora do CI, o teste aparece como SKIP com o ID. Numa execução completa (sem `-run`), chave do mapa que nenhum teste exercitou é erro (achado sem prova), e o achado que deixa de se reproduzir faz o teste falhar pedindo a retirada. |
 
 **Isolamento por fornecedor e por locatário** (risco R4), na mesma suíte e com a mesma regra de bloqueio. As sementes têm, na empresa A, os fornecedores F1 e F2 (com OS, almoxarifados `em_terceiro` e usuários `prestador`) e os locatários L1 e L2 (com contratos, vistorias e solicitações); na empresa B, um fornecedor F3 com o **mesmo CNPJ** de F1, para simular o prestador que atende duas contratantes.
 
@@ -1263,7 +1423,7 @@ Requisitos do dono do produto RNF-039 (versão visível) e RNF-040 (CHANGELOG.md
 | Backend Go | `go build -ldflags "-X tenaz/internal/plataforma/versao.Versao=1.4.2 -X tenaz/internal/plataforma/versao.Commit=a1b2c3d -X tenaz/internal/plataforma/versao.DataBuild=2026-11-12T14:05:00Z"`. O subcomando `tenaz versao` imprime os três valores; `debug.ReadBuildInfo` confere o commit gravado pelo próprio Go. A versão vai nos logs (campo `versao`, 14.3), nos traces e no cabeçalho `Tenaz-Versao` das respostas. |
 | Web | Variável de build do Vite (`define` com `__TENAZ_VERSAO__`, `__TENAZ_COMMIT__`, `__TENAZ_DATA_BUILD__`, `__TENAZ_AMBIENTE__`), preenchida pelo CI a partir da tag. O bundle publica também `versao.json` junto dos arquivos estáticos, usado para detectar que há versão mais nova. |
 | App | `app.config.ts` lê as variáveis do CI: `version` = versão do release que gerou o binário (`1.4.2`); `ios.buildNumber` e `android.versionCode` = inteiro crescente gerado pelo CI (ex.: número da execução), exigido pelas lojas; `runtimeVersion` com a política `fingerprint` do Expo, que muda só quando a parte nativa muda. A versão do release também é embutida no JavaScript (`extra.versaoRelease`), para o selo mostrar a versão que está de fato rodando. |
-| Endpoint | `GET /v1/versao`, público e sem autenticação, devolve só `versao`, `commit` (curto) e `data_build` da API. Nada de dependências, sistema operacional, região ou infraestrutura (controles em 9_SEGURANCA_CONFIABILIDADE.md). |
+| Endpoint | `GET /v1/versao`, público e sem autenticação, devolve só `versao`, `commit` (curto) e `data_build` da API. Nada de dependências, sistema operacional, região ou infraestrutura (controles em 9_SEGURANCA_CONFIABILIDADE.md). Não devolve `ambiente`: o ambiente que o selo e o "Sobre" mostram (RNF-039, itens 2 e 3) vem do build do próprio cliente (`__TENAZ_AMBIENTE__` na web, `TENAZ_AMBIENTE` no `app.config.ts`), que é publicado no mesmo ambiente da API. Posição deste documento na divergência A-38 de `3_ESPECIFICACAO_APIS.md` (seção 16). |
 
 **App nas lojas e atualização OTA**
 
@@ -1381,7 +1541,7 @@ Nenhum comando rejeitado desaparece em silêncio. O app mostra o motivo e o que 
 ### 10.6 Segurança e sessão offline
 
 - Banco local criptografado; chave no Keychain ou Keystore.
-- Sessão do app com token de atualização válido por 14 dias, rotativo e ligado ao aparelho. Sem conexão, o app continua funcionando até o fim desse prazo. **(proposta)**
+- Sessão do app com token de atualização válido por 30 dias de inatividade (RNF-017 em [1_ESPECIFICACAO_REQUISITOS.md](1_ESPECIFICACAO_REQUISITOS.md); até a versão 0.5 este documento dizia 14 dias, corrigido na etapa E01), rotativo, com detecção de reuso e ligado ao aparelho. Sem conexão, o app continua funcionando até o fim desse prazo. As credenciais ficam nas tabelas da seção 6.9.
 - Na reconexão, o servidor confere se o usuário e o aparelho continuam ativos. Se não, os comandos pendentes são aceitos ou recusados conforme a política da empresa e o banco local é apagado.
 - Apagamento remoto do aparelho pelo administrador.
 
@@ -1415,7 +1575,7 @@ O Tenaz Mobile é **o mesmo app** (mesmo binário, mesmas telas) para o técnico
 | Dados locais | **Um banco SQLite por conta** (`empresa_id` + `usuario_id`), cada um com sua chave no Keychain ou Keystore, sua outbox de comandos e seu cursor de pull. Nenhuma tabela local mistura duas contas; a troca de conta fecha um banco e abre outro |
 | Sincronização | Com conexão, todas as contas do aparelho sincronizam em segundo plano, cada uma com o próprio token; offline, as outboxes acumulam separadas. O servidor recusa comando cujo token não seja da empresa daquele banco |
 | Sair de uma conta | Envia a outbox pendente (ou avisa o que será perdido) e apaga o banco local daquela conta, sem afetar as outras. Desativação do usuário ou apagamento remoto atinge só a conta que o emitiu |
-| Login | Uma sessão por conta. Login único com lista de contas do mesmo e-mail depende do modelo de identidade do ADM (pendência na seção 16) |
+| Login | Uma sessão por conta. Login único por e-mail (versão 0.6): a `identidade` é global e `acesso_empresa` lista as contas em que ela entra (documento 2, seção 5.1); o app pede uma autorização por conta escolhida e guarda os tokens de cada uma separados (seção 6.9) |
 
 **Notificações push de tarefa nova.**
 
@@ -1584,7 +1744,7 @@ Proposta: **AWS `sa-east-1` (São Paulo)**, com 3 zonas de disponibilidade. Comp
 
 **Por que RDS e não Aurora no início:** custo menor na escala inicial. O Aurora PostgreSQL entra se o failover do Multi-AZ (tipicamente 1 a 2 minutos) passar a ameaçar o SLO, ou se o volume pedir várias réplicas. A troca é suportada pela própria AWS e não muda o código.
 
-**Pooler de conexões:** sem RDS Proxy nem PgBouncer no MVP. Cada tarefa mantém um pool `pgx` dimensionado. Se adotado depois, o pooler precisa funcionar em modo de transação com `set_config(..., true)` e com a fila River (a verificar no momento da adoção).
+**Pooler de conexões:** sem RDS Proxy nem PgBouncer no MVP. Cada tarefa mantém um pool `pgx` dimensionado por papel de banco: a API mantém o pool da aplicação e o pool pequeno da autenticação (versão 0.6, seção 6.9); o sincronizador, o seu. Se adotado depois, o pooler precisa funcionar em modo de transação com `set_config(..., true)` e com a fila River (a verificar no momento da adoção).
 
 ### 13.2 Infraestrutura como código
 
@@ -1741,6 +1901,7 @@ Formato: contexto, decisão, alternativas consideradas e consequências. Status 
 | [ADR-008](#adr-008--acesso-externo-por-escopo-restritivo-e-link-de-uso-único) | Acesso externo por escopo restritivo e link de uso único | Proposta |
 | [ADR-009](#adr-009--conexão-entre-contas) | Conexão entre contas | Proposta |
 | [ADR-010](#adr-010--configuração-por-segmento-com-catálogos-fechados) | Configuração por segmento com catálogos fechados | Proposta |
+| [ADR-011](#adr-011--papel-de-banco-próprio-para-as-credenciais-de-autenticação) | Papel de banco próprio para as credenciais de autenticação | Proposta |
 
 ---
 
@@ -2048,9 +2209,67 @@ Motivos:
 
 ---
 
+### ADR-011 — Papel de banco próprio para as credenciais de autenticação
+
+**Status:** Proposta · **Data:** 12/11/2026 · **Emenda:** 12/11/2026
+
+**Emenda de 12/11/2026 (mesma etapa E01).** A revisão do `tenaz-qa-automacao` encontrou o achado ISO-E01-08: as sete tabelas de credencial eram de dono `tenaz_dono`, e o `tenaz_manutencao` (`LOGIN`, membro de `tenaz_dono` com herança) as lia inteiras, com `senha_hash` e segredo de MFA. A decisão original fixava quem tem privilégio, mas não quem é o dono, e numa tabela sem RLS o dono é o privilégio mais amplo de todos. A emenda acrescenta o parágrafo final da decisão 1, a verificação de dono na decisão 9, duas alternativas descartadas e o risco residual do dono do esquema. Correção aplicada nas migrações `00004` e `00005` e no documento 2 (seções 2.2, 2.6, 2.7, 5.1, 14.2 e 17.3) pelo `tenaz-banco-dados`.
+
+**Contexto.** A etapa E01 criou no esquema `plataforma` as tabelas de autenticação: `identidade`, `acesso_empresa`, `sessao`, `token_renovacao`, `codigo_autorizacao`, `desafio_mfa` e `token_email` (nomes do sumário 0.6, seção 3.2). Elas ficam fora do RLS por empresa porque são lidas antes de a empresa ser conhecida: o e-mail do login, o cookie, o refresh token, o código OAuth e o link do e-mail chegam sem empresa, e uma identidade serve a várias empresas. O desenho inicial concedia os privilégios ao `tenaz_app` e se apoiava em três regras: só o hash dos segredos, empresa fixada na criação e chave estrangeira composta para `app.usuario`. A revisão de isolamento (achado ISO-E01-02) demonstrou que isso impede mover uma credencial de empresa, mas não lê-la nem forjá-la: o `tenaz_app`, papel de todo módulo de negócio, com o contexto da empresa A, lia `senha_hash` e `mfa_segredo_cifrado` de todas as identidades, lia `acesso_empresa` inteiro (quais clientes cada subcontratada atende), lia sessões de outra empresa com IP e user agent, criava sessão web válida para usuário de outra empresa com o cookie que escolhesse, criava código OAuth e trocava a senha de qualquer identidade. Um defeito em qualquer consulta de qualquer módulo viraria vazamento entre empresas (R2) e tomada de conta. Pelo princípio 1, um build assim não vai para produção. O precedente é o `tenaz_sinc` (ADR-009): quando a defesa não pode ser o RLS por empresa, ela é um papel próprio, com credencial própria e privilégio exato.
+
+**Decisão.**
+
+1. **Papel próprio `tenaz_autenticacao`.** `NOLOGIN`, `NOBYPASSRLS`, sem objetos, fora dos privilégios padrão de `app`, sem relação de membro com `tenaz_dono`, `tenaz_app` ou `tenaz_job` em nenhum sentido. Conexão pelo usuário `tenaz_autenticacao_conexao`, que herda o papel. Privilégios exatos, tabela a tabela, na seção 6.9: `SELECT` e `INSERT` nas sete tabelas (só `SELECT` em `acesso_empresa`), `UPDATE` só nas colunas de ciclo de vida, nenhum `DELETE`, e `INSERT` por coluna em `app.evento_auditoria`, sem leitura da trilha.
+
+   **Dono das credenciais (emenda ISO-E01-08).** As sete tabelas de credencial e as funções `SECURITY DEFINER` que as tocam (`plataforma.tg_acesso_empresa()` e `plataforma.purgar_credenciais_vencidas()`) pertencem ao papel `tenaz_credencial` (`NOLOGIN`, `NOBYPASSRLS`, sem membros além do papel que aplica migração), e não a `tenaz_dono`. Sem RLS, o dono lê tudo; com dono `tenaz_dono`, o `tenaz_manutencao`, membro do dono com herança, lia todas as credenciais. `tenaz_dono` recebe só `REFERENCES (id)` em `identidade` e `EXECUTE` em `tg_acesso_empresa()`; `tenaz_credencial` recebe `REFERENCES` nas colunas da chave composta de `app.usuario` (`empresa_id`, `id`, `identidade_id`), mais `USAGE` e `CREATE` em `plataforma` e `USAGE` em `app` e `public`, para criar os objetos; nenhum outro privilégio entre os dois (tabela na seção 6.9). A mesma regra vale para toda tabela futura de `plataforma` sem RLS que não seja catálogo global de leitura: o dono é um papel próprio `NOLOGIN` sem membros de runtime, nunca `tenaz_dono`.
+2. **Quem perde.** `tenaz_app` e `tenaz_job` perdem todo privilégio nas sete tabelas; `tenaz_leitura` e `tenaz_sinc` nunca tiveram. A purga das credenciais vencidas passa a ser a função `plataforma.purgar_credenciais_vencidas()`, `SECURITY DEFINER`, sem parâmetro, executada só pelo `tenaz_job`.
+3. **Quem usa o pool.** Só o pacote `plataforma/autenticacao`, pelo repositório interno a ele (regra 12 da seção 5.3). O pool existe só no modo `tenaz api`; o middleware de sessão chama o serviço e não toca o pool. O repositório recusa rodar dentro de `NaEmpresa` e nunca chama `NaEmpresa` nem `app.conferir_escopo()`.
+4. **Sessão primeiro, empresa depois.** A cada requisição: o pool da autenticação resolve a sessão e devolve só `empresa_id`, `usuario_id`, `identidade_id`, `canal` e `sessao_id`; o pool da aplicação carrega o ator em `NaEmpresa` com escopo interno e sem usuário e confere a identidade; o caso de uso roda em `NaEmpresa` com o escopo do cadastro (seção 6.3). Nunca na mesma transação.
+5. **Auditoria de autenticação pelo próprio papel.** Os eventos de login, falha, logout, troca de senha e MFA são gravados pelo `tenaz_autenticacao` em `app.evento_auditoria` de cada empresa da identidade, numa transação que define só `app.empresa_id` e os dados da requisição. A política permissiva de inserção passa a incluir o papel, e uma política restritiva própria limita a `entidade = 'identidade'`, às ações `login`, `login_falho`, `logout` e `alteracao` e ao usuário daquela identidade naquela empresa, conferido em `acesso_empresa`. Assim, sessão, zerar das falhas e evento de login na empresa da sessão continuam numa transação só.
+6. **`acesso_empresa` continua do trigger.** `plataforma.tg_acesso_empresa()`, `SECURITY DEFINER`, disparado pela escrita do `tenaz_app` em `app.usuario`, não depende de privilégio do `tenaz_app` na tabela e continua igual; passa a revogar também as sessões e os refresh tokens do usuário naquela empresa quando o acesso fica desabilitado.
+7. **Operações que atravessam os dois papéis são sequências de transações**, na ordem da seção 6.9 (convite, aceite, troca de empresa, encerrar sessões), com a credencial de uso único consumida por último e cada passo idempotente.
+8. **Credencial própria.** `TENAZ_BANCO_URL_AUTENTICACAO` e `TENAZ_BANCO_AUTENTICACAO_MAX_CONN`; segredo próprio lido só pela tarefa da API; recusa de partida se a URL for igual à da aplicação fora do desenvolvimento (seções 4.1 e 6.9).
+9. **Teste em todo build**, com a mesma regra de bloqueio da suíte de vazamento: mapa de privilégios nos dois sentidos, reprodução dos ataques do ISO-E01-02 esperando "permissão negada", molde da auditoria, consultas de credencial só no repositório, lista aprovada de funções `SECURITY DEFINER` e, desde a emenda, dono das sete tabelas e das duas funções igual a `tenaz_credencial`, sem membros de runtime, com `tenaz_manutencao` recebendo "permissão negada" nas credenciais (seção 9.3).
+
+**Alternativas consideradas.**
+
+| Alternativa | A favor | Contra | Resultado |
+|---|---|---|---|
+| **Manter o `tenaz_app`** com privilégio por coluna, só hash e chave estrangeira composta (desenho inicial de E01) | Um pool, nenhum papel novo | Demonstrado pelo ISO-E01-02: impede mover a credencial, não impede ler `senha_hash` e segredo de MFA de todas as identidades nem forjar sessão de outra empresa. Toda consulta de todo módulo vira superfície de tomada de conta | Descartada |
+| **RLS por variável `app.identidade_id`** com funções `SECURITY DEFINER` de busca por hash ou e-mail (opção B da revisão de isolamento) | Um pool; transações de negócio, sem a variável, não veem credenciais | A variável é definida pelo mesmo código que se quer conter; login e validação de sessão começam antes de haver identidade, então as funções de busca devolvem a credencial ao `tenaz_app` de qualquer forma; o `INSERT` da sessão continua com o `tenaz_app`, que escolhe o cookie: **não impede forjar sessão** | Descartada |
+| **Variante do papel próprio com funções `SECURITY DEFINER` estreitas como única interface** (login por e-mail exato, validar sessão por hash, rotacionar refresh token...), sem `SELECT` direto | Nem o pacote de autenticação enumera a tabela | O serviço inteiro, cerca de vinte operações (falhas e bloqueio, desafio de MFA, sessão web e do app, rotação com detecção de reuso, código PKCE, links de e-mail, troca de empresa), viraria PL/pgSQL rodando como o dono das tabelas; lógica duplicada entre Go e SQL, testes mais caros, e a lista aprovada de funções `SECURITY DEFINER` passaria de duas para mais de vinte, cada uma um ponto de escalada. O ganho é pequeno: "login por e-mail" devolve o hash ao chamador, que é o mesmo pacote; o papel próprio já garante que só esse pacote chama, e a enumeração é coberta por teste de consulta | Descartada como interface geral. **Adotada só onde a interface é fixa e não recebe dado da requisição**: o trigger de `acesso_empresa` e a purga dos vencidos |
+| **Credenciais no esquema `app`, com `empresa_id` e RLS** | A mesma defesa de todo o resto | A identidade é global (uma pessoa em várias empresas) e a busca acontece antes de a empresa ser conhecida | Descartada |
+| **Gravar a auditoria de login pelo `tenaz_app`**, no pool da aplicação, depois da transação da credencial | O `tenaz_autenticacao` não teria nenhum privilégio em `app` | Sessão e evento de login deixariam de ser atômicos (sessão sem evento, ou evento sem sessão), e o `tenaz_app` passaria a gravar fatos de identidade que não consegue conferir | Descartada: o papel grava, contido pela política restritiva, como o `tenaz_sinc` |
+| **Purga pelo `tenaz_autenticacao` no worker** | Nenhuma função nova | A credencial que lê `senha_hash` passaria a existir também na tarefa do worker | Descartada |
+| **Emenda ISO-E01-08: RLS forçado nas sete tabelas**, com política só para `tenaz_autenticacao`, mantendo o dono `tenaz_dono` | Nenhum papel novo | `FORCE ROW LEVEL SECURITY` vale para o dono, então as funções `SECURITY DEFINER` do trigger e da purga, que rodam como dono, seriam barradas; dar política ao dono para liberá-las reabriria o acesso ao `tenaz_manutencao`, que herda dele. E o dono pode desligar o `FORCE` com um `ALTER TABLE` | Descartada |
+| **Emenda ISO-E01-08: tirar a herança do `tenaz_manutencao`** (`NOINHERIT`) | Nenhum papel novo; corrige a causa imediata | Não resolve: o membro continua podendo `SET ROLE tenaz_dono` e ler como dono, e todo membro futuro de `tenaz_dono` reabre o achado. A defesa ficaria num atributo de papel, não na posse do objeto | Descartada |
+| **Provedor de identidade externo** (Cognito, Keycloak) ou serviço de autenticação separado | Isolamento físico; MFA e bloqueio prontos | Componente novo sem gatilho mensurável (princípio 2); segunda fonte de verdade de usuário e empresa; residência e custo. O SSO e o SAML de E10 federam o provedor do cliente e não exigem trocar o nosso | Descartada; gatilho (d) abaixo |
+
+**Consequências.**
+
+- Positivas: o achado ISO-E01-02 deixa de existir por construção, com "permissão negada" e não zero linhas; quem lê ou grava credencial passa de "todo módulo" para um pacote; o `tenaz_job` deixa de ler IP e user agent de todas as sessões; a inativação revoga as credenciais na mesma transação; o padrão é o mesmo do `tenaz_sinc`, já conhecido pela suíte.
+- Negativas: um segredo e um pool a mais na API; login, troca de empresa, convite e aceite viram sequências de transações em dois pools, com ordem definida e passos idempotentes; um convite pode ficar sem token se o segundo passo falhar, e o administrador reenvia; o `tenaz_autenticacao` tem `INSERT` em `app.evento_auditoria`, contido pela política restritiva; a política consulta `acesso_empresa` a cada evento (busca pela chave primária). Desde a emenda: um papel dono a mais, migrações que alternam `SET ROLE` entre os dois donos, e `VACUUM` e `ANALYZE` manuais nas sete tabelas só pelo papel de migração (o autovacuum continua valendo, e a purga diária mantém as tabelas pequenas).
+- Risco residual: o `tenaz_app` ainda grava `usuario.identidade_id`, que só pode ser preenchido uma vez. Ligar um usuário de A à identidade de outra pessoa não expõe dado de B, só faria A aparecer na lista de empresas dela; e o `tenaz_app` não consegue mais descobrir identificadores de identidade, porque não lê a tabela. A escrita fica restrita ao caso de uso de aceite e coberta por teste.
+- Risco residual da emenda: o esquema `plataforma` continua de dono `tenaz_dono`, e o dono do esquema pode apagar tabelas que não são dele. Com a credencial do `tenaz_manutencao` roubada, alguém não lê as credenciais, mas pode apagar as sete tabelas, recriá-las como `tenaz_dono` e conceder privilégio ao `tenaz_autenticacao`, capturando o que for gravado depois (hashes de sessão, nova senha), ou desligar o trigger `trg_acesso_empresa` em `app.usuario`, que é dele, e a inativação deixa de revogar sessões. É um ataque destrutivo e ruidoso (todo login quebra), mas é a mesma classe do achado: o `tenaz_manutencao` herda o poder de DDL do dono comum, e o dono de uma tabela de `app` também pode desligar o `FORCE ROW LEVEL SECURITY` dela. Pendência na seção 16, a resolver antes da primeira implantação em homologação.
+- Gatilhos de revisão: (a) outro pacote precisar das tabelas de credencial (SSO e SAML em E10, login por telefone da P11) → o código entra em `plataforma/autenticacao` ou este ADR é revisto; nunca por privilégio ao `tenaz_app`; (b) incidente, achado de pentest ou revisão que encontre leitura ampla pelo próprio pacote de autenticação → adotar a variante de funções estreitas para `identidade`; (c) espera por conexão do pool da autenticação com p95 acima de 50 ms na API **(proposta)** → aumentar o pool, nunca juntar os dois; (d) cliente Enterprise exigindo provedor de identidade próprio que o SSO de E10 não resolva → avaliar provedor externo num ADR novo.
+
+---
+
 ## 16. Alinhamento com o sumário e pendências
 
-Situação deste documento em relação ao sumário executivo 0.5.
+Situação deste documento em relação ao sumário executivo 0.6.
+
+**Resolvido na versão 0.6 (etapa E01, sumário 0.6) e aplicado aqui**
+
+| Tema | Como ficou |
+|---|---|
+| Nomes da autenticação (sumário 0.6, seção 3.2) | `identidade`, `acesso_empresa`, `sessao`, `token_renovacao`, `codigo_autorizacao`, `desafio_mfa` e `token_email` citados com os nomes aprovados (seção 6.9 e ADR-011). O calendário da unidade (`turno_unidade`, `feriado_unidade`), `usuario_permissao` e `usuario.situacao` não afetam a arquitetura. |
+| Achado ISO-E01-02: `tenaz_app` lia e forjava credenciais de qualquer empresa | [ADR-011](#adr-011--papel-de-banco-próprio-para-as-credenciais-de-autenticação) e seção 6.9: papel `tenaz_autenticacao` com pool exclusivo do pacote de autenticação; `tenaz_app` e `tenaz_job` sem privilégio nas tabelas de credencial; auditoria de login pelo próprio papel, contida por política restritiva; revogação pelo trigger na inativação; purga por função estreita. Seções 4.1, 5.1, 5.3 (regra 12), 6.1, 6.3, 9.3 e 13.1. |
+| Achado ISO-E01-08: `tenaz_manutencao`, membro de `tenaz_dono` com herança, lia todas as credenciais, porque o dono das sete tabelas sem RLS era `tenaz_dono` | Emenda do [ADR-011](#adr-011--papel-de-banco-próprio-para-as-credenciais-de-autenticação) (decisões 1 e 9): dono `tenaz_credencial`, `NOLOGIN`, sem membros de runtime, também das duas funções `SECURITY DEFINER`; privilégios cruzados só para as chaves estrangeiras e o trigger. Seções 6.1, 6.4, 6.9 e 9.3; documento 2, seções 2.2, 2.6, 2.7, 5.1, 14.2 e 17.3. |
+| Pendência E01-3 do documento 2: `app.escopo_id()` | Não é criada. A seção 6.6 usa `app.fornecedor_atual()`, `app.locatario_atual()` e `app.link_hash_atual()`, e a política do link confere, na subconsulta, revogação, expiração, consumo e exclusão do link. As duas condições da revisão de isolamento estão atendidas. |
+| Validade da sessão do app | 30 dias de inatividade, como em RNF-017; a seção 10.6 dizia 14 dias. |
+| Modelo de identidade do login único no app | Identidade global e `acesso_empresa` (documento 2, seção 5.1); seção 10.8. Sai da lista de pendências. |
+| P11 (login por telefone e código) | Não afeta a arquitetura; quando entrar, fica dentro de `plataforma/autenticacao` (gatilho (a) do ADR-011). |
 
 **Resolvido pelo sumário 0.5 e aplicado aqui**
 
@@ -2092,7 +2311,14 @@ Situação deste documento em relação ao sumário executivo 0.5.
 | — | Nome da permissão de gerenciar conexões (`srv.gerenciar_conexao`, proposta) e rotas exatas das ações de `/v1/conexoes-empresa` a registrar em `1_ESPECIFICACAO_REQUISITOS.md` e `3_ESPECIFICACAO_APIS.md`. | Seção 6.8 |
 | — | Prova de conceito do papel `tenaz_sinc`: privilégio por coluna combinado com RLS, chave estrangeira adiável na criação da OS vinculada, custo da política `conexao_sinc`. | Seção 6.8 |
 | — | Regras de transição remota (cancelamento no cliente com OS em execução na subcontratada, janela de 24 h após o encerramento) a fechar em `4_FLUXOS_PROCESSO.md`. | Seção 6.8 |
-| — | Modelo de identidade para login único com várias contas no app (um e-mail, vários `usuario`). | Seção 10.8 |
+| — | **ADR-011 a aplicar fora deste documento (versão 0.6):** papel `tenaz_autenticacao`, privilégios, política restritiva de auditoria, trigger de revogação e função de purga no documento 2 (seções 2.2, 2.6, 2.11, 5.1, 9.1, 9.2 e 17.3) e nas migrações; credencial própria, segredo lido só pela API e o novo papel no modelo de ameaças em `9_SEGURANCA_CONFIABILIDADE.md`; resposta de `POST /v1/usuarios` quando o convite não é emitido, em `3_ESPECIFICACAO_APIS.md`. | Seção 6.9 |
+| E01-14 | Pendência do documento 2, seção 17.3: toda tabela futura de `plataforma` sem RLS que não seja catálogo global de leitura segue a regra da emenda do ADR-011 (dono próprio `NOLOGIN` sem membros de runtime, nunca `tenaz_dono`). A primeira é `conexao_empresa`, lida pelo `tenaz_sinc` (ADR-009). Em E04 decidir, numa emenda do ADR-009, se ela usa o próprio `tenaz_credencial` ou um dono só da conexão, e estender a ela a verificação "Dono das credenciais" da seção 9.3. Até lá, a verificação de dono já quebra o build se a tabela nascer com dono `tenaz_dono` fora da lista de catálogos | Seções 6.8, 6.9 e 9.3; ADR-009 e ADR-011 |
+| — | **Herança do `tenaz_manutencao` (risco residual da emenda do ADR-011).** Membro de `tenaz_dono` com herança, ele não lê mais as credenciais, mas herda o DDL do dono comum: pode apagar e recriar as tabelas de credencial (o esquema `plataforma` é de `tenaz_dono`), desligar o trigger `trg_acesso_empresa` e, nas tabelas de `app`, desligar o `FORCE ROW LEVEL SECURITY` ou criar política para si e ler dado de qualquer empresa. Opções a avaliar pelo `tenaz-banco-dados` com o `tenaz-isolamento`: (a) tirar o `tenaz_manutencao` de `tenaz_dono` e dar a ele só `EXECUTE` em funções `SECURITY DEFINER` estreitas (criar e remover partição) mais o privilégio `MAINTAIN` do PostgreSQL 17 para `VACUUM` e `ANALYZE`; (b) mantê-lo membro, com credencial só no pipeline, como o `tenaz_migrador`, e sem uso fora dele. Prazo: antes da primeira implantação em homologação. Registrar o achado na lista do documento 2 | Seções 6.4 e 6.9; documento 2, seções 2.2 e 2.7 |
+| — | **Código sqlc do ADM fora do módulo (desvio da seção 5.2).** As consultas de `adm/internal/repo/adm.sql` são geradas em `internal/plataforma/db/consultas`, junto das de auditoria e de autorização, e qualquer módulo poderia chamá-las. Mover para `adm/internal/repo/gerado`, criado sobre `db.Tx(ctx)`, como já faz `plataforma/autenticacao`, antes do primeiro módulo de E02. Responsáveis: `tenaz-backend-go` com `tenaz-banco-dados` | Seções 5.2 e 5.3 (regra 2) |
+| — | Regra do `depguard` para a fronteira de pacotes da seção 5.2: só `internal/servidor` importa `<modulo>/rotas`, só a composição do worker importa `<modulo>/jobs`, e nenhum módulo importa o código gerado de outro. Entra com o segundo módulo, junto da lista de importações por módulo da regra 5 da seção 5.3 | Seções 5.2 e 5.3 |
+| — | Comparação do contrato com a branch principal por `oasdiff` e documentação pública gerada do contrato (seção 2.5, itens 3 e 5) ainda não estão na esteira. A primeira precisa estar antes do primeiro integrador externo usar `/v1` | Seção 2.5 |
+| A-38 | Divergência de `3_ESPECIFICACAO_APIS.md`: a seção 18.8 dele lista `ambiente` em `GET /v1/versao`. Posição deste documento (seção 9.5) e do servidor: o endpoint público devolve só `versao`, `commit` e `data_build`, como o item 6 de RNF-039; o ambiente do "Sobre" vem do build do cliente. Falta alinhar a seção 18.8 do documento 3 (`tenaz-api-contrato`) e decidir o destino do tipo `versao.Detalhe`, que tem `ambiente` e não é usado por nenhuma rota | Seção 9.5 |
+| — | Política do link com as quatro condições (revogado, usado, expirado, excluído) em todas as tabelas que aceitam o escopo `link`, e `usado_em` como última escrita de `registrar-execucao`, a escrever no documento 2 na etapa do link (TER). | Seção 6.6 |
 | — | Política `escopo_externo` e índices de `item_contrato_locacao` a registrar em `2_ARQUITETURA_BANCO_DADOS.md`; decidir se o locatário é gravado na OS. | Seção 6.6 |
 | — | Contrato de payload de eventos em `plataforma/eventos/contratos` (regra 6 da seção 5.3) a validar em código. | Seção 5.3 |
 | — | Escolha da ferramenta de release (release-please ou git-cliff) e da janela de versões de app aceitas pela API. | Seção 9.5 |

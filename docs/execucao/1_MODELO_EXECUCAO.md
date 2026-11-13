@@ -1,6 +1,6 @@
 # Modelo de Execução — Tenaz
 
-**Versão:** 0.1 · **Data:** 12/11/2026 · **Status:** Em elaboração
+**Versão:** 0.2 · **Data:** 12/11/2026 · **Status:** Em elaboração
 **Produto:** Tenaz · Gestão de Manutenção e Frota
 Alinhado ao sumário executivo 0.4 e ao roadmap 0.3.
 
@@ -24,7 +24,7 @@ Este documento define como o trabalho acontece. Quem decide o escopo é o [sumá
 
 ## 1. O problema que este modelo resolve
 
-A documentação da Tenaz especifica 220 requisitos funcionais e 42 não funcionais, com modelo de dados, contrato de API, 31 fluxos de negócio, 361 regras de negócio e 10 ADRs. O [roadmap](../6_ROADMAP.md) entrega isso com 15 pessoas em dedicação integral, sendo 129 requisitos funcionais no MVP (13 sprints na versão anterior do roadmap; o impacto da configuração por segmento está em aberto).
+A documentação da Tenaz especifica 220 requisitos funcionais e 42 não funcionais, com modelo de dados, contrato de API, 31 fluxos de negócio, 376 regras de negócio e 10 ADRs. O [roadmap](../6_ROADMAP.md) entrega isso com 15 pessoas em dedicação integral, sendo 129 requisitos funcionais no MVP (13 sprints na versão anterior do roadmap; o impacto da configuração por segmento está em aberto).
 
 A execução real não tem 15 pessoas. Tem o dono do produto e uma equipe de agentes. Isso muda três coisas e deixa duas intactas:
 
@@ -95,7 +95,7 @@ flowchart LR
 | **4. Verificação** | Suíte de testes, suíte de vazamento, contrato de API, acessibilidade, verificador de documentação. O portão da etapa é conferido com a saída dos comandos, não por opinião. | `tenaz-qa-automacao`, `tenaz-isolamento` |
 | **5. Evidência** | Toda tela nova ou alterada gera screenshot em [../screenshots/](../screenshots/), nos dois temas quando houver. Procedimento na skill `tenaz-evidencia-visual`. | `tenaz-design-sistema`, `tenaz-frontend-web`, `tenaz-mobile-offline` |
 | **6. Registro** | Documentos afetados, `CHANGELOG.md`, registro em [../etapas/](../etapas/) e sumário quando couber, tudo no mesmo commit. Procedimento na skill `tenaz-fechar-etapa`. | `tenaz-documentacao` |
-| **7. Aceite** | O dono do produto confere a etapa em execução, com a evidência visual e a saída dos testes à vista. Recusa volta ao passo 2 com o motivo escrito no prompt. | Dono do produto |
+| **7. Aceite** | O dono do produto confere a etapa em execução, com a evidência visual e a saída dos testes à vista. Recusa volta ao passo 2 com o motivo escrito no prompt. Aceita, a etapa ganha a entrega consolidada em [../entregas/](../entregas/README.md). | Dono do produto, com `tenaz-documentacao` |
 
 ---
 
@@ -186,6 +186,7 @@ Falha de portão de isolamento é tratada como incidente de segurança de severi
 | Prompt da etapa | [../prompts/](../prompts/) | Dono do produto e orquestrador | Antes da etapa começar; nunca reescrito depois, só anotado |
 | Evidência visual | [../screenshots/](../screenshots/) | Agentes de interface | Uma captura por tela entregue, nos temas aplicáveis |
 | Registro da etapa | [../etapas/](../etapas/) | `tenaz-documentacao` | Um arquivo por etapa, no mesmo commit das mudanças |
+| Entrega consolidada | [../entregas/](../entregas/README.md) | `tenaz-documentacao` | Um arquivo por etapa aceita e em `main`: o que ficou pronto, o portão item a item com a prova e o que foi para depois; nunca reescrito, só anotado |
 | Histórico de versões | [../../CHANGELOG.md](../../CHANGELOG.md) | `tenaz-documentacao` | Seção `[Não lançado]` no mesmo pull request (RNF-040) |
 | ADR | [../5_ARQUITETURA_SOFTWARE.md](../5_ARQUITETURA_SOFTWARE.md), seção 15 | `tenaz-arquiteto` | Único lugar onde um `ADR-` nasce |
 | Requisito | [../1_ESPECIFICACAO_REQUISITOS.md](../1_ESPECIFICACAO_REQUISITOS.md) | `tenaz-produto` | Único lugar onde um `RF-` ou `RNF-` nasce |
@@ -215,3 +216,4 @@ O efeito prático: as etapas de construção comprimem bem, e as de validação 
 **Histórico de versões**
 
 - v0.1 (12/11/2026): primeira versão. Papéis, lista do que não se delega, ciclo de sete passos, regras de orquestração, revisão cruzada, seis portões e limites do modelo.
+- v0.2 (12/11/2026): entrega consolidada em `docs/entregas/` no aceite (passo 7) e na tabela de artefatos (seção 8), por pedido do dono do produto na etapa E01; contagem de regras de negócio atualizada.
